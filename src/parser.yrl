@@ -3,20 +3,20 @@ Terminals
     symbol type_symbol
     integer float string
     open close
-    apply separator assign bar
-    endl.
+    apply comma newline assign bar.
 
 Nonterminals
     statements statement definition expression type_expression
     assignment function newtype
     symbols expression_list
-    literal application type_application.
+    literal application type_application
+    separator.
 
 Rootsymbol statements.
 
 
-statements -> statement             : ['$1'].
-statements -> statement statements  : ['$1' | '$2'].
+statements -> statement                     : ['$1'].
+statements -> statement newline statements  : ['$1' | '$2'].
 
 statement -> definition : '$1'.
 statement -> expression : '$1'.
@@ -26,20 +26,24 @@ definition -> function     : '$1'.
 definition -> newtype      : '$1'.
 
 assignment -> val symbol assign expression : {val, line('$1'), unwrap('$2'), '$4'}.
-
 function -> def symbols assign expression : {def, line('$1'), '$2', '$4'}.
-
 newtype -> type type_symbol assign type_expression : {type, line('$1'), unwrap('$2'), '$4'}.
 
 symbols -> symbol           : ['$1'].
 symbols -> symbol symbols   : ['$1' | '$2'].
 
+separator -> comma          : '$1'.
+separator -> comma newline  : '$1'.
+separator -> newline        : '$1'.
+
 expression_list -> expression                           : ['$1'].
+expression_list -> expression separator                 : ['$1'].
 expression_list -> expression separator expression_list : ['$1' | '$3'].
 
 expression -> literal           : '$1'.
 expression -> application       : '$1'.
 expression -> type_application  : '$1'.
+expression -> symbol            : '$1'.
 
 literal -> string   : '$1'.
 literal -> integer  : '$1'.
@@ -53,8 +57,8 @@ type_application -> type_symbol                             : {type_application,
 type_application -> type_symbol open close                  : {type_application, line('$1'), unwrap('$1'), []}.
 type_application -> type_symbol open expression_list close  : {type_application, line('$1'), unwrap('$1'), '$3'}.
 
-type_expression -> type_symbol                      : ['$1'].
 type_expression -> type_symbol bar type_expression  : ['$1' | '$3'].
+type_expression -> type_symbol                      : ['$1'].
 
 Erlang code.
 

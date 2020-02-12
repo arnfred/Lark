@@ -1,0 +1,3 @@
+src/lexer.erl
+src/parser.erl
+*.beam

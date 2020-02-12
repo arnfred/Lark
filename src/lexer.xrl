@@ -4,6 +4,7 @@ Symbol          = [a-z][a-zA-Z0-9_]*
 TypeSymbol      = [A-Z][a-zA-Z0-9_]*
 Number          = [0-9]
 String          = "(\\\^.|\\.|[^\"])*"
+Bar		= [|]
 
 Rules.
 
@@ -15,13 +16,13 @@ Rules.
 def                     : {token, {def,         TokenLine, list_to_atom(TokenChars)}}.
 val                     : {token, {val,         TokenLine, list_to_atom(TokenChars)}}.
 \.                      : {token, {apply,       TokenLine, list_to_atom(TokenChars)}}.
-,                       : {token, {separator,   TokenLine, list_to_atom(TokenChars)}}.
+,                       : {token, {comma,   	TokenLine, list_to_atom(TokenChars)}}.
 =                       : {token, {assign,      TokenLine, list_to_atom(TokenChars)}}.
 type                    : {token, {type,        TokenLine, list_to_atom(TokenChars)}}.
-{End}                   : {token, {endl,        TokenLine, list_to_atom(TokenChars)}}.
 {Symbol}                : {token, {symbol,      TokenLine, list_to_atom(TokenChars)}}.
 {TypeSymbol}            : {token, {type_symbol, TokenLine, list_to_atom(TokenChars)}}.
-[\s|\n]+                : skip_token.
+[\n]+			: {token, {newline,	TokenLine, list_to_atom(TokenChars)}}.
+[\s]+                   : skip_token.
 #.*                     : skip_token.
 {String}                : build_string(string, TokenChars, TokenLine, TokenLen).
 
