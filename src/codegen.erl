@@ -4,8 +4,8 @@
 -include_lib("eunit/include/eunit.hrl").
 
 gen({Name, Defs}) ->
+    io:format("Defs are ~p~n", [Defs]),
     Env = gen_module_env(Defs),
-    io:format("Defs are ~w~n", Defs),
     io:format("Env is ~w~n", [Env]),
     CompiledDefs = [gen_def(Env, D) || D <- Defs],
     CompiledExports = [cerl:c_fname(N, Arity) || {N, Arity} <- Env],
@@ -41,9 +41,32 @@ parse_and_gen(Code) ->
     {ok, Forms} = codegen:gen({"test", Parsed}),
     compile:forms(Forms, [report, verbose, from_core]).
 
+parse_and_run(Code, RunAsserts) ->
+    {ok, Mod, Bin} = parse_and_gen(Code),
+    {module, Mod} = code:load_binary(Mod, "test.beam", Bin),
+    RunAsserts(Mod),
+    true = code:soft_purge(Mod),
+    true = code:delete(Mod).
+
 identity_compile_test() ->
-    Code =
-        "def id a = a",
+    Code = "def id a = a",
     {ok, _, _Bin} = parse_and_gen(Code).
+
+identity_run_test() ->
+    Code = "def id a = a",
+    RunAsserts = fun(Mod) ->
+                         ?assertEqual(2, Mod:id(2)),
+                         ?assertEqual(1.3, Mod:id(1.3)),
+                         ?assertEqual("string", Mod:id("string")),
+                         ?assertEqual(atom, Mod:id(atom))
+                 end,
+    parse_and_run(Code, RunAsserts).
+
+function_call_test() ->
+    Code = 
+        "def id a = a\n"
+        "def callId b = b.id",
+    RunAsserts = fun(Mod) -> ?assertEqual(2, Mod:callId(2)) end,
+    parse_and_run(Code, RunAsserts).
 
 -endif.

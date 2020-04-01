@@ -16,7 +16,7 @@ Rootsymbol statements.
 
 
 statements -> statement                     : ['$1'].
-statements -> statement newline statements  : ['$1' | '$2'].
+statements -> statement newline statements  : ['$1' | '$3'].
 
 statement -> definition : '$1'.
 statement -> expression : '$1'.
