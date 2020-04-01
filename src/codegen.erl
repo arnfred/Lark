@@ -35,14 +35,14 @@ gen_expr(Env, {application, _, Name, Args}) ->
 
 -ifdef(TEST).
 
-parse_and_gen(Code) ->
+binary(Code) ->
     {ok, Tokens, _} = lexer:string(Code),
     {ok, Parsed} = parser:parse(Tokens),
-    {ok, Forms} = codegen:gen({"test", Parsed}),
+    {ok, Forms} = gen({"test", Parsed}),
     compile:forms(Forms, [report, verbose, from_core]).
 
-parse_and_run(Code, RunAsserts) ->
-    {ok, Mod, Bin} = parse_and_gen(Code),
+run(Code, RunAsserts) ->
+    {ok, Mod, Bin} = binary(Code),
     {module, Mod} = code:load_binary(Mod, "test.beam", Bin),
     RunAsserts(Mod),
     true = code:soft_purge(Mod),
@@ -50,7 +50,7 @@ parse_and_run(Code, RunAsserts) ->
 
 identity_compile_test() ->
     Code = "def id a = a",
-    {ok, _, _Bin} = parse_and_gen(Code).
+    {ok, _, _Bin} = binary(Code).
 
 identity_run_test() ->
     Code = "def id a = a",
@@ -60,13 +60,20 @@ identity_run_test() ->
                          ?assertEqual("string", Mod:id("string")),
                          ?assertEqual(atom, Mod:id(atom))
                  end,
-    parse_and_run(Code, RunAsserts).
+    run(Code, RunAsserts).
 
 function_call_test() ->
     Code = 
         "def id a = a\n"
         "def callId b = b.id",
     RunAsserts = fun(Mod) -> ?assertEqual(2, Mod:callId(2)) end,
-    parse_and_run(Code, RunAsserts).
+    run(Code, RunAsserts).
+
+function_call_multiple_args_test() ->
+    Code = 
+        "def firstId a b c = a\n"
+        "def callId a b = b.firstId(b, a)",
+    RunAsserts = fun(Mod) -> ?assertEqual(3, Mod:callId(2, 3)) end,
+    run(Code, RunAsserts).
 
 -endif.

@@ -78,3 +78,18 @@ dializer --src src
 ```
 
 More info here: https://learnyousomeerlang.com/dialyzer
+
+## Next Steps
+
+This is currently very unfinished. Instead of a Trello board, I'm keeping this section as way to think about next steps.
+
+### 2020-04-01
+
+* Code generation support for type enum declarations (e.g. `type Bool = True | False`)
+* Parser module to sanitise AST into something more intuitive
+* guards and matching
+* type inference
+* Figure out an FFI so that I can add support for lists and numbers without hard-coding it in to the code-gen
+* lists
+* infix functions
+* numbers?
