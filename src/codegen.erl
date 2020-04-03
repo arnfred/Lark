@@ -16,21 +16,50 @@ gen({Name, Defs}) ->
 	   CompiledDefs)
     }.
 
-gen_module_env(Defs) -> [{Name, length(Args)} || {def, _, [{symbol, _, Name}|Args], _} <- Defs].
+gen_module_env(Defs) -> [{Name, length(Args)} || {_, _, [{symbol, _, Name}|Args], _} <- Defs].
 
 gen_def(Env, {def, _, [{symbol, _, Name}|Args], Body}) ->
     io:format("~nCompiling definition ~s~n", [Name]),
     FName = cerl:c_fname(Name, length(Args)),
     CompiledArgs = [cerl:c_var(A) || {symbol, _, A} <- Args],
     CompiledBody = gen_expr(Env, Body),
-    {FName, cerl:c_fun(CompiledArgs, CompiledBody)}.
+    {FName, cerl:c_fun(CompiledArgs, CompiledBody)};
 
-gen_expr(_, {symbol, _, S}) ->
-    cerl:c_var(S);
+gen_def(Env, {def_pattern_match, _, [{symbol, _, Name}|Args], {pattern_match, Clauses}}) ->
+    io:format("~nCompiling pattern definition ~s~n", [Name]),
+    FName = cerl:c_fname(Name, length(Args)),
+    CompiledArgs = [cerl:c_var(A) || {symbol, _, A} <- Args],
+    io:format("Args: ~p~n", [Args]),
+    io:format("Clauses: ~p~n", [Clauses]),
+    CompiledBody = gen_pattern_match(Env, Args, Clauses),
+    {FName, cerl:c_fun(CompiledArgs, CompiledBody)};
+
+gen_def(Env, {type, _, Name, Body}) ->
+    io:format("~nCompiling type ~s with body ~p ~n", [Name, Body]),
+    FName = cerl:c_fname(Name, 0),
+    CompiledBody = gen_type_fun(Env, Body),
+    {FName, cerl:c_fun([], CompiledBody)}.
+
+gen_pattern_match(Env, [{symbol, _, Arg}], Clauses) ->
+    CompiledClauses = [gen_clause(Env, [Pattern], Expr) || {pattern_clause, _, Pattern, Expr} <- Clauses],
+    cerl:c_case(cerl:c_var(Arg), CompiledClauses). 
+
+gen_clause(Env, Patterns, Expr) ->
+    CompiledPatterns = [gen_expr(Env, P) || P <- Patterns],
+    cerl:c_clause(CompiledPatterns, gen_expr(Env, Expr)).
+
+gen_type_fun(_, Values) ->
+    Instances = [cerl:c_map_pair(cerl:c_atom(S), cerl:c_atom(true)) ||{type_symbol, _, S} <- Values],
+    cerl:c_map(Instances).
+
+gen_expr(_, {symbol, _, S}) -> cerl:c_var(S);
+
 gen_expr(Env, {application, _, Name, Args}) ->
     Arity = length(Args),
     FName = cerl:c_fname(Name, Arity),
-    cerl:c_apply(FName, [gen_expr(Env, E) || E <- Args]).
+    cerl:c_apply(FName, [gen_expr(Env, E) || E <- Args]);
+
+gen_expr(_, {type_application, _, S, []}) -> cerl:c_atom(S).
 
 
 -ifdef(TEST).
@@ -74,6 +103,25 @@ function_call_multiple_args_test() ->
         "def firstId a b c = a\n"
         "def callId a b = b.firstId(b, a)",
     RunAsserts = fun(Mod) -> ?assertEqual(3, Mod:callId(2, 3)) end,
+    run(Code, RunAsserts).
+
+always_true_test() ->
+    Code = 
+        "type Bool = True | False\n"
+        "def alwaysTrue a = True",
+    RunAsserts = fun(Mod) -> ?assertEqual('True', Mod:alwaysTrue(2)) end,
+    run(Code, RunAsserts).
+
+pattern_match_test() ->
+    Code = 
+        "type Bool = True | False\n"
+        "def rexor a\n"
+        " | True -> False\n"
+        " | False -> True",
+    RunAsserts = fun(Mod) -> 
+                         ?assertEqual('True', Mod:rexor('False')),
+                         ?assertEqual('False', Mod:rexor('True'))
+                 end,
     run(Code, RunAsserts).
 
 -endif.

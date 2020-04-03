@@ -3,11 +3,13 @@ Terminals
     symbol type_symbol
     integer float string
     open close
-    apply comma newline assign bar.
+    apply comma newline assign
+    bar implies.
 
 Nonterminals
     statements statement definition expression type_expression
     assignment function newtype
+    pattern_match pattern_clauses pattern_clause pattern
     symbols expression_list
     literal application type_application
     separator.
@@ -27,6 +29,7 @@ definition -> newtype      : '$1'.
 
 assignment -> val symbol assign expression : {val, line('$1'), unwrap('$2'), '$4'}.
 function -> def symbols assign expression : {def, line('$1'), '$2', '$4'}.
+function -> def symbols newline pattern_match : {def_pattern_match, line('$1'), '$2', '$4'}.
 newtype -> type type_symbol assign type_expression : {type, line('$1'), unwrap('$2'), '$4'}.
 
 symbols -> symbol           : ['$1'].
@@ -40,10 +43,10 @@ expression_list -> expression                           : ['$1'].
 expression_list -> expression separator                 : ['$1'].
 expression_list -> expression separator expression_list : ['$1' | '$3'].
 
-expression -> literal           : '$1'.
-expression -> application       : '$1'.
-expression -> type_application  : '$1'.
-expression -> symbol            : '$1'.
+expression -> literal       	    	: '$1'.
+expression -> application    	   	: '$1'.
+expression -> type_application		: '$1'.
+expression -> symbol 			: '$1'.
 
 literal -> string   : '$1'.
 literal -> integer  : '$1'.
@@ -59,6 +62,12 @@ type_application -> type_symbol open expression_list close  : {type_application,
 
 type_expression -> type_symbol bar type_expression  : ['$1' | '$3'].
 type_expression -> type_symbol                      : ['$1'].
+
+pattern_match -> pattern_clauses		    	    : {pattern_match, '$1'}.
+pattern_clauses -> pattern_clause 		            : ['$1'].
+pattern_clauses -> pattern_clause newline pattern_clauses   : ['$1' | '$3'].
+pattern_clause -> bar pattern implies expression 	    : {pattern_clause, line('$1'), '$2', '$4'}.
+pattern -> expression 				            : '$1'.
 
 Erlang code.
 

@@ -79,6 +79,15 @@ dializer --src src
 
 More info here: https://learnyousomeerlang.com/dialyzer
 
+## Type representation
+
+How do I represent a line containing e.g. `type Bool = True | False`?
+
+The answer probably depends on what I need to do with the type afterwards:
+* I'd like for a match to know that it is complete
+* I'd like for the type-checker to understand that the values belong to a type
+* I'd like to be able to qualify the type values so that True always refer to the same atom
+
 ## Next Steps
 
 This is currently very unfinished. Instead of a Trello board, I'm keeping this section as way to think about next steps.
