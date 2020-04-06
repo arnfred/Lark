@@ -96,7 +96,7 @@ This is currently very unfinished. Instead of a Trello board, I'm keeping this s
 
 * Code generation support for type enum declarations (e.g. `type Bool = True | False`)
 * Parser module to sanitise AST into something more intuitive
-* guards and matching
+* ~guards and matching~
 * type inference
 * Figure out an FFI so that I can add support for lists and numbers without hard-coding it in to the code-gen
 * lists

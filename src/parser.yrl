@@ -9,7 +9,7 @@ Terminals
 Nonterminals
     statements statement definition expression type_expression
     assignment function newtype
-    pattern_match pattern_clauses pattern_clause pattern
+    pattern_match pattern_clauses pattern_clause patterns pattern
     symbols expression_list
     literal application type_application
     separator.
@@ -66,7 +66,9 @@ type_expression -> type_symbol                      : ['$1'].
 pattern_match -> pattern_clauses		    	    : {pattern_match, '$1'}.
 pattern_clauses -> pattern_clause 		            : ['$1'].
 pattern_clauses -> pattern_clause newline pattern_clauses   : ['$1' | '$3'].
-pattern_clause -> bar pattern implies expression 	    : {pattern_clause, line('$1'), '$2', '$4'}.
+pattern_clause -> bar patterns implies expression 	    : {pattern_clause, line('$1'), '$2', '$4'}.
+patterns -> pattern					    : ['$1'].
+patterns -> pattern patterns                                : ['$1' | '$2'].
 pattern -> expression 				            : '$1'.
 
 Erlang code.

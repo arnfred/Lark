@@ -1,7 +1,7 @@
 Definitions.
 
-Symbol          = [a-z][a-zA-Z0-9_]*
-TypeSymbol      = [A-Z][a-zA-Z0-9_]*
+Symbol          = [a-z_][a-zA-Z0-9_-]*
+TypeSymbol      = [A-Z_][a-zA-Z0-9_-]*
 Number          = [0-9]
 String          = "(\\\^.|\\.|[^\"])*"
 Implies         = ->

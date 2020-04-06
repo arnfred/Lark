@@ -9,26 +9,31 @@ gen({Name, Defs}) ->
     io:format("Env is ~w~n", [Env]),
     CompiledDefs = [gen_def(Env, D) || D <- Defs],
     CompiledExports = [cerl:c_fname(N, Arity) || {N, Arity} <- Env],
-    {ok, cerl:c_module(
-	   cerl:c_atom(Name),
-	   CompiledExports,
-	   [],
-	   CompiledDefs)
-    }.
+    {ok, cerl:c_module(cerl:c_atom(Name), CompiledExports, [], CompiledDefs)}.
 
-gen_module_env(Defs) -> [{Name, length(Args)} || {_, _, [{symbol, _, Name}|Args], _} <- Defs].
+substitute_underscore('_') -> 
+    N = case get('_') of
+            undefined -> 0;
+            S -> S
+        end,
+    put('_', N+1),
+    list_to_atom(lists:flatten(io_lib:format("_q~w", [N])));
+substitute_underscore(Var) -> Var.
+
+gen_module_env(Defs) -> 
+    [{Name, length(Args)} || {_, _, [{symbol, _, Name}|Args], _} <- Defs].
 
 gen_def(Env, {def, _, [{symbol, _, Name}|Args], Body}) ->
     io:format("~nCompiling definition ~s~n", [Name]),
     FName = cerl:c_fname(Name, length(Args)),
-    CompiledArgs = [cerl:c_var(A) || {symbol, _, A} <- Args],
+    CompiledArgs = [gen_var(A) || {symbol, _, A} <- Args],
     CompiledBody = gen_expr(Env, Body),
     {FName, cerl:c_fun(CompiledArgs, CompiledBody)};
 
 gen_def(Env, {def_pattern_match, _, [{symbol, _, Name}|Args], {pattern_match, Clauses}}) ->
     io:format("~nCompiling pattern definition ~s~n", [Name]),
     FName = cerl:c_fname(Name, length(Args)),
-    CompiledArgs = [cerl:c_var(A) || {symbol, _, A} <- Args],
+    CompiledArgs = [gen_var(A) || {symbol, _, A} <- Args],
     io:format("Args: ~p~n", [Args]),
     io:format("Clauses: ~p~n", [Clauses]),
     CompiledBody = gen_pattern_match(Env, Args, Clauses),
@@ -40,9 +45,10 @@ gen_def(Env, {type, _, Name, Body}) ->
     CompiledBody = gen_type_fun(Env, Body),
     {FName, cerl:c_fun([], CompiledBody)}.
 
-gen_pattern_match(Env, [{symbol, _, Arg}], Clauses) ->
-    CompiledClauses = [gen_clause(Env, [Pattern], Expr) || {pattern_clause, _, Pattern, Expr} <- Clauses],
-    cerl:c_case(cerl:c_var(Arg), CompiledClauses). 
+gen_pattern_match(Env, Args, Clauses) ->
+    CompiledClauses = [gen_clause(Env, Patterns, Expr) || {pattern_clause, _, Patterns, Expr} <- Clauses],
+    CompiledArgs = cerl:c_values([gen_var(A) || {symbol, _, A} <- Args]),
+    cerl:c_case(CompiledArgs, CompiledClauses). 
 
 gen_clause(Env, Patterns, Expr) ->
     CompiledPatterns = [gen_expr(Env, P) || P <- Patterns],
@@ -52,7 +58,9 @@ gen_type_fun(_, Values) ->
     Instances = [cerl:c_map_pair(cerl:c_atom(S), cerl:c_atom(true)) ||{type_symbol, _, S} <- Values],
     cerl:c_map(Instances).
 
-gen_expr(_, {symbol, _, S}) -> cerl:c_var(S);
+gen_var(Var) -> cerl:c_var(substitute_underscore(Var)).
+
+gen_expr(_, {symbol, _, S}) -> gen_var(S);
 
 gen_expr(Env, {application, _, Name, Args}) ->
     Arity = length(Args),
@@ -107,14 +115,12 @@ function_call_multiple_args_test() ->
 
 always_true_test() ->
     Code = 
-        "type Bool = True | False\n"
         "def alwaysTrue a = True",
     RunAsserts = fun(Mod) -> ?assertEqual('True', Mod:alwaysTrue(2)) end,
     run(Code, RunAsserts).
 
 pattern_match_test() ->
     Code = 
-        "type Bool = True | False\n"
         "def rexor a\n"
         " | True -> False\n"
         " | False -> True",
@@ -122,6 +128,24 @@ pattern_match_test() ->
                          ?assertEqual('True', Mod:rexor('False')),
                          ?assertEqual('False', Mod:rexor('True'))
                  end,
+    run(Code, RunAsserts).
+
+pattern_match_multivariate_test() ->
+    Code = 
+        "def rexor a b\n"
+        " | True False -> True\n"
+        " | False True -> True\n"
+        " | _ _ -> False",
+    RunAsserts = fun(Mod) -> 
+                         ?assertEqual('True', Mod:rexor('True', 'False')),
+                         ?assertEqual('False', Mod:rexor('True', 'True'))
+                 end,
+    run(Code, RunAsserts).
+
+underscore_arg_test() ->
+    Code = 
+        "def blip _ _ c = c",
+    RunAsserts = fun(Mod) -> ?assertEqual(blop, Mod:blip(blip, blab, blop)) end,
     run(Code, RunAsserts).
 
 -endif.
