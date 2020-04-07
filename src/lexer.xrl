@@ -12,6 +12,8 @@ Rules.
 {Number}+\.{Number}+    : {token, {float,       TokenLine, list_to_float(TokenChars)}}.
 \(                      : {token, {open,        TokenLine, list_to_atom(TokenChars)}}.
 \)                      : {token, {close,       TokenLine, list_to_atom(TokenChars)}}.
+\{                      : {token, {curly_open,  TokenLine, list_to_atom(TokenChars)}}.
+\}                      : {token, {curly_close, TokenLine, list_to_atom(TokenChars)}}.
 \|                      : {token, {bar,         TokenLine, list_to_atom(TokenChars)}}.
 def                     : {token, {def,         TokenLine, list_to_atom(TokenChars)}}.
 val                     : {token, {val,         TokenLine, list_to_atom(TokenChars)}}.
@@ -20,6 +22,7 @@ val                     : {token, {val,         TokenLine, list_to_atom(TokenCha
 =                       : {token, {assign,      TokenLine, list_to_atom(TokenChars)}}.
 {Implies}               : {token, {implies,     TokenLine, list_to_atom(TokenChars)}}.
 type                    : {token, {type,        TokenLine, list_to_atom(TokenChars)}}.
+match                   : {token, {match,       TokenLine, list_to_atom(TokenChars)}}.
 {Symbol}                : {token, {symbol,      TokenLine, list_to_atom(TokenChars)}}.
 {TypeSymbol}            : {token, {type_symbol, TokenLine, list_to_atom(TokenChars)}}.
 [\n]+                   : {token, {newline,	TokenLine, list_to_atom(TokenChars)}}.

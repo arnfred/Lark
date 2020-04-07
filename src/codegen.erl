@@ -27,16 +27,7 @@ gen_def(Env, {def, _, [{symbol, _, Name}|Args], Body}) ->
     io:format("~nCompiling definition ~s~n", [Name]),
     FName = cerl:c_fname(Name, length(Args)),
     CompiledArgs = [gen_var(A) || {symbol, _, A} <- Args],
-    CompiledBody = gen_expr(Env, Body),
-    {FName, cerl:c_fun(CompiledArgs, CompiledBody)};
-
-gen_def(Env, {def_pattern_match, _, [{symbol, _, Name}|Args], {pattern_match, Clauses}}) ->
-    io:format("~nCompiling pattern definition ~s~n", [Name]),
-    FName = cerl:c_fname(Name, length(Args)),
-    CompiledArgs = [gen_var(A) || {symbol, _, A} <- Args],
-    io:format("Args: ~p~n", [Args]),
-    io:format("Clauses: ~p~n", [Clauses]),
-    CompiledBody = gen_pattern_match(Env, Args, Clauses),
+    CompiledBody = gen_expr(Env, {def_body, Args, Body}),
     {FName, cerl:c_fun(CompiledArgs, CompiledBody)};
 
 gen_def(Env, {type, _, Name, Body}) ->
@@ -67,13 +58,23 @@ gen_expr(Env, {application, _, Name, Args}) ->
     FName = cerl:c_fname(Name, Arity),
     cerl:c_apply(FName, [gen_expr(Env, E) || E <- Args]);
 
-gen_expr(_, {type_application, _, S, []}) -> cerl:c_atom(S).
+gen_expr(_, {type_application, _, S, []}) -> cerl:c_atom(S);
+
+gen_expr(Env, {expr_match, _, Expr, Clauses}) ->
+    CompiledClauses = [gen_clause(Env, Patterns, E) || {pattern_clause, _, Patterns, E} <- Clauses],
+    cerl:c_case(gen_expr(Env, Expr), CompiledClauses);
+
+gen_expr(Env, {def_body, Args, {def_match, Clauses}}) ->
+    gen_pattern_match(Env, Args, Clauses);
+
+gen_expr(Env, {def_body, _, Body}) -> gen_expr(Env, Body).
 
 
 -ifdef(TEST).
 
 binary(Code) ->
     {ok, Tokens, _} = lexer:string(Code),
+    io:format("Tokens are ~p~n", [Tokens]),
     {ok, Parsed} = parser:parse(Tokens),
     {ok, Forms} = gen({"test", Parsed}),
     compile:forms(Forms, [report, verbose, from_core]).
@@ -139,6 +140,37 @@ pattern_match_multivariate_test() ->
     RunAsserts = fun(Mod) -> 
                          ?assertEqual('True', Mod:rexor('True', 'False')),
                          ?assertEqual('False', Mod:rexor('True', 'True'))
+                 end,
+    run(Code, RunAsserts).
+
+pattern_match_expr_syntax1_test() ->
+    Code = 
+        "def test1 a = a.match(False -> True | True -> False)",
+    RunAsserts = fun(Mod) -> 
+                         ?assertEqual('True', Mod:test1('False'))
+                 end,
+    run(Code, RunAsserts).
+pattern_match_expr_syntax2_test() ->
+    Code = 
+        "def test2 a = a.match(False -> True, True -> False)",
+    RunAsserts = fun(Mod) -> 
+                         ?assertEqual('True', Mod:test2('False'))
+                 end,
+    run(Code, RunAsserts).
+pattern_match_expr_syntax3_test() ->
+    Code = 
+        "def test3 a = a.match(False -> True\n"
+        "                      True -> False)",
+    RunAsserts = fun(Mod) -> 
+                         ?assertEqual('True', Mod:test3('False'))
+                 end,
+    run(Code, RunAsserts).
+pattern_match_expr_syntax4_test() ->
+    Code = 
+        "def test4 a = a.match(False -> True,\n"
+        "                      True -> False)",
+    RunAsserts = fun(Mod) -> 
+                         ?assertEqual('True', Mod:test4('False'))
                  end,
     run(Code, RunAsserts).
 
