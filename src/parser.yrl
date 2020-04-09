@@ -2,35 +2,36 @@ Terminals
     def type val 
     symbol type_symbol match
     integer float string
-    open close
+    open close square_open square_close curly_open curly_close
     apply comma newline assign
     bar implies.
 
 Nonterminals
-    statements statement definition expression type_expression
+    definitions definition expression
     assignment function newtype
-    def_match expr_match pattern_clauses pattern_clause patterns pattern pattern_separator
-    symbols expression_list
-    literal application type_application
-    separator.
+    expr_match clause patterns pattern
+    application callable
+    symbols newlines elements
+    collection tuple list dict
+    literal element separator.
 
-Rootsymbol statements.
+Rootsymbol definitions.
 
 
-statements -> statement                     : ['$1'].
-statements -> statement newline statements  : ['$1' | '$3'].
+definitions -> definition                       : ['$1'].
+definitions -> definition newlines definitions  : ['$1' | '$3'].
 
-statement -> definition : '$1'.
-statement -> expression : '$1'.
+newlines -> newline : '$1'.
+newlines -> newline newlines : '$1'.
 
 definition -> assignment   : '$1'.
 definition -> function     : '$1'.
 definition -> newtype      : '$1'.
 
-assignment -> val symbol assign expression         : {val, line('$1'), unwrap('$2'), '$4'}.
-function -> def symbols assign expression          : {def, line('$1'), '$2', '$4'}.
-function -> def symbols def_match                  : {def, line('$1'), '$2', '$3'}.
-newtype -> type type_symbol assign type_expression : {type, line('$1'), unwrap('$2'), '$4'}.
+assignment -> val symbol assign expression      : {val, line('$1'), unwrap('$2'), '$4'}.
+function -> def symbols implies expression      : {def, line('$1'), '$2', {body, '$4'}}.
+function -> def symbols separator elements      : {def, line('$1'), '$2', {clauses, '$4'}}.
+newtype -> type type_symbol assign elements     : {type, line('$1'), unwrap('$2'), '$4'}.
 
 symbols -> symbol           : ['$1'].
 symbols -> symbol symbols   : ['$1' | '$2'].
@@ -38,43 +39,51 @@ symbols -> symbol symbols   : ['$1' | '$2'].
 separator -> comma          : '$1'.
 separator -> comma newline  : '$1'.
 separator -> newline        : '$1'.
-
-expression_list -> expression                           : ['$1'].
-expression_list -> expression separator                 : ['$1'].
-expression_list -> expression separator expression_list : ['$1' | '$3'].
+separator -> newline bar    : '$2'.
 
 expression -> literal       	    	: '$1'.
 expression -> application    	   	: '$1'.
-expression -> type_application		: '$1'.
 expression -> expr_match	        : '$1'.
 expression -> symbol 			: '$1'.
+expression -> type_symbol               : '$1'.
 
 literal -> string   : '$1'.
 literal -> integer  : '$1'.
 literal -> float    : '$1'.
 
-application -> expression apply symbol                              : {application, line('$1'), unwrap('$3'), ['$1']}.
-application -> expression apply symbol open close                   : {application, line('$1'), unwrap('$3'), ['$1']}.
-application -> expression apply symbol open expression_list close   : {application, line('$1'), unwrap('$3'), ['$1' | '$5' ]}.
+callable -> symbol : '$1'.
+callable -> type_symbol : '$1'.
 
-type_application -> type_symbol                             : {type_application, line('$1'), unwrap('$1'), []}.
-type_application -> type_symbol open close                  : {type_application, line('$1'), unwrap('$1'), []}.
-type_application -> type_symbol open expression_list close  : {type_application, line('$1'), unwrap('$1'), '$3'}.
+application -> callable collection                : {application, line('$1'), '$1', '$2'}.
+application -> expression apply symbol            : {application, line('$1'), unwrap('$3'), ['$1']}.
+application -> expression apply symbol collection : {application, line('$1'), unwrap('$3'), build_args('$1', '$4')}.
 
-type_expression -> type_symbol bar type_expression  : ['$1' | '$3'].
-type_expression -> type_symbol                      : ['$1'].
+expr_match -> expression apply match tuple      : {expr_match, line('$1'), '$1', '$4'}.
+clause -> patterns implies expression 	        : {clause, line('$2'), '$1', '$3'}.
+patterns -> pattern                             : ['$1'].
+patterns -> pattern patterns                    : ['$1' | '$2'].
+pattern -> expression 				: '$1'.
 
-expr_match -> expression apply match open pattern_clauses close	        : {expr_match, line('$1'), '$1', '$5'}.
-def_match -> pattern_separator pattern_clauses			        : {def_match, '$2'}.
-pattern_clauses -> pattern_clause 		                        : ['$1'].
-pattern_clauses -> pattern_clause pattern_separator pattern_clauses     : ['$1' | '$3'].
-pattern_clause -> patterns implies expression 	                        : {pattern_clause, line('$2'), '$1', '$3'}.
-patterns -> pattern					                : ['$1'].
-patterns -> pattern patterns                                            : ['$1' | '$2'].
-pattern -> expression 				                        : '$1'.
-pattern_separator -> newline bar			                : '$2'.
-pattern_separator -> bar			                        : '$1'.
-pattern_separator -> separator			    	                : '$1'.
+collection -> tuple : '$1'.
+collection -> list : '$1'.
+collection -> dict : '$1'.
+
+tuple -> open close                               : {tuple, line('$1'), []}.
+tuple -> open elements close                      : {tuple, line('$1'), '$2'}.
+tuple -> open separator elements close              : {tuple, line('$1'), '$3'}.
+list -> square_open square_close                  : {list, line('$1'), []}.
+list -> square_open elements square_close         : {list, line('$1'), '$2'}.
+list -> square_open separator elements square_close : {list, line('$1'), '$3'}.
+dict -> curly_open curly_close                    : {dict, line('$1'), []}.
+dict -> curly_open elements curly_close           : {dict, line('$1'), '$2'}.
+dict -> curly_open separator elements curly_close   : {dict, line('$1'), '$3'}.
+
+elements -> element : ['$1'].
+elements -> element separator elements : ['$1' | '$3'].
+
+element -> expression : '$1'.
+element -> clause : '$1'.
+element -> definition : '$1'.
 
 Erlang code.
 
@@ -84,3 +93,6 @@ unwrap({_,_,V}) -> V.
 line({_, Line})         -> Line;
 line({_, Line, _})      -> Line;
 line({_, Line, _, _})   -> Line.
+
+build_args(Elem, {tuple, _, Elems}) -> [ Elem | Elems ];
+build_args(Elem, Collection) -> [ Elem, Collection ].
