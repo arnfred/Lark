@@ -8,24 +8,24 @@ Implies         = ->
 
 Rules.
 
-{Number}+               : {token, {integer,     TokenLine, list_to_integer(TokenChars)}}.
-{Number}+\.{Number}+    : {token, {float,       TokenLine, list_to_float(TokenChars)}}.
-\(                      : {token, {open,        TokenLine, list_to_atom(TokenChars)}}.
-\)                      : {token, {close,       TokenLine, list_to_atom(TokenChars)}}.
-\{                      : {token, {curly_open,  TokenLine, list_to_atom(TokenChars)}}.
-\}                      : {token, {curly_close, TokenLine, list_to_atom(TokenChars)}}.
-\|                      : {token, {bar,         TokenLine, list_to_atom(TokenChars)}}.
-def                     : {token, {def,         TokenLine, list_to_atom(TokenChars)}}.
-val                     : {token, {val,         TokenLine, list_to_atom(TokenChars)}}.
-\.                      : {token, {apply,       TokenLine, list_to_atom(TokenChars)}}.
-,                       : {token, {comma,   	TokenLine, list_to_atom(TokenChars)}}.
-=                       : {token, {assign,      TokenLine, list_to_atom(TokenChars)}}.
-{Implies}               : {token, {implies,     TokenLine, list_to_atom(TokenChars)}}.
-type                    : {token, {type,        TokenLine, list_to_atom(TokenChars)}}.
-match                   : {token, {match,       TokenLine, list_to_atom(TokenChars)}}.
-{Symbol}                : {token, {symbol,      TokenLine, list_to_atom(TokenChars)}}.
-{TypeSymbol}            : {token, {type_symbol, TokenLine, list_to_atom(TokenChars)}}.
-[\n]+                   : {token, {newline,	TokenLine, list_to_atom(TokenChars)}}.
+{Number}+               : {token, {integer,         TokenLine, list_to_integer(TokenChars)}}.
+{Number}+\.{Number}+    : {token, {float,           TokenLine, list_to_float(TokenChars)}}.
+\(                      : {token, {open,            TokenLine, list_to_atom(TokenChars)}}.
+\)                      : {token, {close,           TokenLine, list_to_atom(TokenChars)}}.
+\{                      : {token, {curly_open,      TokenLine, list_to_atom(TokenChars)}}.
+\}                      : {token, {curly_close,     TokenLine, list_to_atom(TokenChars)}}.
+\|                      : {token, {bar,             TokenLine, list_to_atom(TokenChars)}}.
+def                     : {token, {def,             TokenLine, list_to_atom(TokenChars)}}.
+val                     : {token, {val,             TokenLine, list_to_atom(TokenChars)}}.
+\.                      : {token, {apply,           TokenLine, list_to_atom(TokenChars)}}.
+,                       : {token, {comma,   	    TokenLine, list_to_atom(TokenChars)}}.
+=                       : {token, {assign,          TokenLine, list_to_atom(TokenChars)}}.
+{Implies}               : {token, {implies,         TokenLine, list_to_atom(TokenChars)}}.
+type                    : {token, {type,            TokenLine, list_to_atom(TokenChars)}}.
+match                   : {token, {match_keyword,   TokenLine, list_to_atom(TokenChars)}}.
+{Symbol}                : {token, {symbol,          TokenLine, list_to_atom(TokenChars)}}.
+{TypeSymbol}            : {token, {type_symbol,     TokenLine, list_to_atom(TokenChars)}}.
+[\n]+                   : {token, {newline,	        TokenLine, list_to_atom(TokenChars)}}.
 [\s]+                   : skip_token.
 #.*                     : skip_token.
 {String}                : build_string(string, TokenChars, TokenLine, TokenLen).

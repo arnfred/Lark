@@ -41,7 +41,7 @@ gen_def(Env, {type, _, Name, Body}) ->
 
 gen_pattern_match(Env, Args, Clauses) ->
     CompiledClauses = [gen_clause(Env, Patterns, Expr) || {clause, _, Patterns, Expr} <- Clauses],
-    CompiledArgs = cerl:c_values([gen_var(A) || {symbol, _, A} <- Args]),
+    CompiledArgs = cerl:c_values([gen_expr(Env, A) || A <- Args]),
     cerl:c_case(CompiledArgs, CompiledClauses). 
 
 gen_clause(Env, Patterns, Expr) ->
@@ -58,13 +58,20 @@ gen_expr(_, {symbol, _, S}) -> gen_var(S);
 gen_expr(_, {type_symbol, _, T}) -> cerl:c_atom(T);
 
 gen_expr(Env, {application, _, Name, Args}) ->
-    Arity = length(Args),
-    FName = cerl:c_fname(Name, Arity),
+    FName = case proplists:get_value(Name, Env) of
+        undefined -> cerl:c_var(Name);
+        Arity -> cerl:c_fname(Name, Arity)
+    end,
     cerl:c_apply(FName, [gen_expr(Env, E) || E <- Args]);
 
-gen_expr(Env, {expr_match, _, Expr, {tuple, _, Clauses}}) ->
-    CompiledClauses = [gen_clause(Env, Patterns, E) || {clause, _, Patterns, E} <- Clauses],
-    cerl:c_case(gen_expr(Env, Expr), CompiledClauses);
+gen_expr(Env, {match, _, Expr, {tuple, _, Clauses}}) -> gen_pattern_match(Env, [Expr], Clauses);
+
+gen_expr(Env, {lambda, Line, Clauses}) ->
+    [{clause, _, Patterns, _} | _Rest] = Clauses,
+    Args = [{symbol, Line, substitute_underscore('_')} || _ <- Patterns],
+    CompiledBody = gen_pattern_match(Env, Args, Clauses),
+    CompiledArgs = [cerl:c_var(A) || {_, _, A} <- Args],
+    cerl:c_fun(CompiledArgs, CompiledBody);
 
 gen_expr(_, {tuple, _, []}) -> cerl:c_atom('()');
 % This makes is so we can use parenthesis to group evaluation like `(1 + 3).match( ... )`
@@ -190,4 +197,33 @@ underscore_arg_test() ->
     RunAsserts = fun(Mod) -> ?assertEqual(blop, Mod:blip(blip, blab, blop)) end,
     run(Code, RunAsserts).
 
+anonymous_function1_test() ->
+    TestFunction = fun('True') -> 'False' end,
+    Code = 
+        "def blip f -> f(True)",
+    RunAsserts = fun(Mod) -> ?assertEqual('False', Mod:blip(TestFunction)) end,
+    run(Code, RunAsserts).
+
+anonymous_function2_test() ->
+    Code = 
+        "def blip a f -> f(a)\n"
+        "def blap a -> a.blip(False -> True\n"
+        "                     True -> False)",
+    RunAsserts = fun(Mod) -> ?assertEqual('False', Mod:blap('True')) end,
+    run(Code, RunAsserts).
+
+anonymous_function3_test() ->
+    Code = 
+        "def blip a f -> f(a)\n"
+        "def blap a -> a.blip(arg -> arg)",
+    RunAsserts = fun(Mod) -> ?assertEqual(whatevs, Mod:blap(whatevs)) end,
+    run(Code, RunAsserts).
+
+anonymous_function4_test() ->
+    Code = 
+        "def blip a f -> f(a, a)\n"
+        "def blap a -> a.blip(arg1 False -> False\n"
+        "                     arg1 True -> arg1)",
+    RunAsserts = fun(Mod) -> ?assertEqual('True', Mod:blap('True')) end,
+    run(Code, RunAsserts).
 -endif.
