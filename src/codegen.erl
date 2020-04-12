@@ -57,12 +57,20 @@ gen_var(Var) -> cerl:c_var(substitute_underscore(Var)).
 gen_expr(_, {symbol, _, S}) -> gen_var(S);
 gen_expr(_, {type_symbol, _, T}) -> cerl:c_atom(T);
 
-gen_expr(Env, {application, _, Name, Args}) ->
+gen_expr(Env, {application, _, {qualified_symbol, Symbols}, Args}) ->
+    CompiledArgs = [gen_expr(Env, E) || E <- Args],
+    case Symbols of
+        ['erlang', Module, Name] -> cerl:c_call(cerl:c_atom(Module), cerl:c_atom(Name), CompiledArgs);
+        ['erlang', Name]         -> cerl:c_call(cerl:c_atom('erlang'), cerl:c_atom(Name), CompiledArgs)
+    end;
+
+gen_expr(Env, {application, _, {symbol, _, Name}, Args}) ->
+    CompiledArgs = [gen_expr(Env, E) || E <- Args],
     FName = case proplists:get_value(Name, Env) of
         undefined -> cerl:c_var(Name);
         Arity -> cerl:c_fname(Name, Arity)
     end,
-    cerl:c_apply(FName, [gen_expr(Env, E) || E <- Args]);
+    cerl:c_apply(FName, CompiledArgs);
 
 gen_expr(Env, {match, _, Expr, {clauses, _, Clauses}}) -> gen_pattern_match(Env, [Expr], Clauses);
 
@@ -228,4 +236,20 @@ anonymous_function4_test() ->
         "                     arg1 True -> arg1)",
     RunAsserts = fun(Mod) -> ?assertEqual('True', Mod:blap('True')) end,
     run(Code, RunAsserts).
+
+erlang_module_call_test() ->
+    Code = "def get_last l -> l.erlang/lists/last",
+    RunAsserts = fun(Mod) -> ?assertEqual('last_item', Mod:get_last(['first_item', 'last_item'])) end,
+    run(Code, RunAsserts).
+
+erlang_module_call_erlang_test() ->
+    Code = "def test a -> a.erlang/atom_to_list",
+    RunAsserts = fun(Mod) -> ?assertEqual("an_atom", Mod:test('an_atom')) end,
+    run(Code, RunAsserts).
+
+erlang_module_call_no_dot_notation_test() ->
+    Code = "def test a -> erlang/atom_to_list(a)",
+    RunAsserts = fun(Mod) -> ?assertEqual("an_atom", Mod:test('an_atom')) end,
+    run(Code, RunAsserts).
+
 -endif.

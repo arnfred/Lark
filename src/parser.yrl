@@ -4,13 +4,13 @@ Terminals
     integer float string
     open close square_open square_close curly_open curly_close
     apply comma newline assign
-    bar implies.
+    bar implies qualifier.
 
 Nonterminals
     definitions definition expression
     assignment function newtype
     match clause patterns pattern
-    application callable
+    application callable terminal_callable qualified_callable
     symbols newlines elements
     collection tuple list dict
     literal element separator.
@@ -41,22 +41,25 @@ separator -> comma newline  : '$1'.
 separator -> newline        : '$1'.
 separator -> newline bar    : '$2'.
 
+callable -> terminal_callable       : '$1'.
+terminal_callable -> symbol         : '$1'.
+terminal_callable -> type_symbol    : '$1'.
+callable -> qualified_callable      : {qualified_symbol, '$1'}.
+qualified_callable -> terminal_callable qualifier terminal_callable  : [unwrap('$1'), unwrap('$3')].
+qualified_callable -> terminal_callable qualifier qualified_callable : [unwrap('$1') | '$3'].
+
 expression -> literal       : '$1'.
 expression -> application   : '$1'.
 expression -> match         : '$1'.
-expression -> symbol        : '$1'.
-expression -> type_symbol   : '$1'.
+expression -> callable      : '$1'.
 
 literal -> string   : '$1'.
 literal -> integer  : '$1'.
 literal -> float    : '$1'.
 
-callable -> symbol      : '$1'.
-callable -> type_symbol : '$1'.
-
-application -> callable collection                : {application, line('$1'), unwrap('$1'), build_args('$2')}.
-application -> expression apply symbol            : {application, line('$1'), unwrap('$3'), ['$1']}.
-application -> expression apply symbol collection : {application, line('$1'), unwrap('$3'), build_args('$1', '$4')}.
+application -> callable collection                  : {application, line('$1'), '$1', build_args('$2')}.
+application -> expression apply callable            : {application, line('$1'), '$3', ['$1']}.
+application -> expression apply callable collection : {application, line('$1'), '$3', build_args('$1', '$4')}.
 
 match -> expression apply match_keyword tuple   : {match, line('$1'), '$1', lists:nth(1,unwrap('$4'))}.
 clause -> patterns implies expression 	        : {clause, line('$2'), '$1', '$3'}.

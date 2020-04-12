@@ -5,6 +5,7 @@ TypeSymbol      = [A-Z_][a-zA-Z0-9_-]*
 Number          = [0-9]
 String          = "(\\\^.|\\.|[^\"])*"
 Implies         = ->
+Qualifier       = blup
 
 Rules.
 
@@ -15,6 +16,7 @@ Rules.
 \{                      : {token, {curly_open,      TokenLine, list_to_atom(TokenChars)}}.
 \}                      : {token, {curly_close,     TokenLine, list_to_atom(TokenChars)}}.
 \|                      : {token, {bar,             TokenLine, list_to_atom(TokenChars)}}.
+\/                      : {token, {qualifier,       TokenLine, list_to_atom(TokenChars)}}.
 def                     : {token, {def,             TokenLine, list_to_atom(TokenChars)}}.
 val                     : {token, {val,             TokenLine, list_to_atom(TokenChars)}}.
 \.                      : {token, {apply,           TokenLine, list_to_atom(TokenChars)}}.
