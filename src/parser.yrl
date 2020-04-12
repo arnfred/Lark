@@ -58,7 +58,7 @@ application -> callable collection                : {application, line('$1'), un
 application -> expression apply symbol            : {application, line('$1'), unwrap('$3'), ['$1']}.
 application -> expression apply symbol collection : {application, line('$1'), unwrap('$3'), build_args('$1', '$4')}.
 
-match -> expression apply match_keyword tuple   : {match, line('$1'), '$1', '$4'}.
+match -> expression apply match_keyword tuple   : {match, line('$1'), '$1', lists:nth(1,unwrap('$4'))}.
 clause -> patterns implies expression 	        : {clause, line('$2'), '$1', '$3'}.
 patterns -> pattern                             : ['$1'].
 patterns -> pattern patterns                    : ['$1' | '$2'].
@@ -69,8 +69,8 @@ collection -> list  : '$1'.
 collection -> dict  : '$1'.
 
 tuple -> open close                                 : {tuple, line('$1'), []}.
-tuple -> open elements close                        : {tuple, line('$1'), '$2'}.
-tuple -> open separator elements close              : {tuple, line('$1'), '$3'}.
+tuple -> open elements close                        : parse_tuple(line('$1'), '$2').
+tuple -> open separator elements close              : parse_tuple(line('$1'), '$3').
 list -> square_open square_close                    : {list, line('$1'), []}.
 list -> square_open elements square_close           : {list, line('$1'), '$2'}.
 list -> square_open separator elements square_close : {list, line('$1'), '$3'}.
@@ -93,6 +93,21 @@ unwrap({_,_,V}) -> V.
 line({_, Line})         -> Line;
 line({_, Line, _})      -> Line;
 line({_, Line, _, _})   -> Line.
+
+% Tuples are ambigious. A touple can be:
+% - A set of non-clause elements: A normal tuple
+% - A set of clauses: A tuple with a single element 'clauses' element containing all clauses
+% - A set of both clauses and elements: A tuple where each clause is wrapped in a 'clauses' element
+parse_tuple(Line, Elements) ->
+    {Clauses, Elems} = lists:splitwith(fun({clause, _, _, _}) -> true; (_) -> false end, Elements),
+    WrapClause = fun({clause, ClauseLine, _, _} = Clause) -> {clauses, ClauseLine, [Clause]};
+                    (Other) -> Other
+                 end,
+    case {Clauses, Elems} of
+        {[], []}        -> {tuple, Line, []};
+        {Clauses, []}   -> {tuple, Line, [{clauses, Line, Clauses}]};
+        _               -> {tuple, Line, lists:map(WrapClause, Elements)}
+    end.
 
 build_args({tuple, _, Elems}) -> Elems;
 build_args(Collection) -> [Collection].

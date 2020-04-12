@@ -64,9 +64,9 @@ gen_expr(Env, {application, _, Name, Args}) ->
     end,
     cerl:c_apply(FName, [gen_expr(Env, E) || E <- Args]);
 
-gen_expr(Env, {match, _, Expr, {tuple, _, Clauses}}) -> gen_pattern_match(Env, [Expr], Clauses);
+gen_expr(Env, {match, _, Expr, {clauses, _, Clauses}}) -> gen_pattern_match(Env, [Expr], Clauses);
 
-gen_expr(Env, {lambda, Line, Clauses}) ->
+gen_expr(Env, {clauses, Line, Clauses}) ->
     [{clause, _, Patterns, _} | _Rest] = Clauses,
     Args = [{symbol, Line, substitute_underscore('_')} || _ <- Patterns],
     CompiledBody = gen_pattern_match(Env, Args, Clauses),
@@ -74,6 +74,7 @@ gen_expr(Env, {lambda, Line, Clauses}) ->
     cerl:c_fun(CompiledArgs, CompiledBody);
 
 gen_expr(_, {tuple, _, []}) -> cerl:c_atom('()');
+
 % This makes is so we can use parenthesis to group evaluation like `(1 + 3).match( ... )`
 % However, currently it only evaluates the last element of a tuple.
 % In the future we'd like for it to evaluate all statements in a tuple when it's evaluated as an expression
@@ -89,10 +90,11 @@ binary(Code) ->
     {ok, Parsed} = parser:parse(Tokens),
     {ok, Forms} = gen({"test", Parsed}),
     io:format("Forms are ~p~n", [Forms]),
-    compile:forms(Forms, [report, verbose, from_core]).
+    {ok, Mod, Bin} = compile:forms(Forms, [report, verbose, from_core]),
+    {Mod, Bin}.
 
 run(Code, RunAsserts) ->
-    {ok, Mod, Bin} = binary(Code),
+    {Mod, Bin} = binary(Code),
     {module, Mod} = code:load_binary(Mod, "test.beam", Bin),
     RunAsserts(Mod),
     true = code:soft_purge(Mod),
@@ -100,7 +102,7 @@ run(Code, RunAsserts) ->
 
 identity_compile_test() ->
     Code = "def id a -> a",
-    {ok, _, _Bin} = binary(Code).
+    {_, _Bin} = binary(Code).
 
 identity_run_test() ->
     Code = "def id a -> a",
