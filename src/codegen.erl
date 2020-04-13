@@ -92,25 +92,11 @@ gen_expr(Env, {tuple, _, Expressions}) -> lists:last([gen_expr(Env, Expr) || Exp
 
 -ifdef(TEST).
 
-binary(Code) ->
-    {ok, Tokens, _} = lexer:string(Code),
-    io:format("Tokens are ~p~n", [Tokens]),
-    {ok, Parsed} = parser:parse(Tokens),
-    {ok, Forms} = gen({"test", Parsed}),
-    io:format("Forms are ~p~n", [Forms]),
-    {ok, Mod, Bin} = compile:forms(Forms, [report, verbose, from_core]),
-    {Mod, Bin}.
-
 run(Code, RunAsserts) ->
-    {Mod, Bin} = binary(Code),
-    {module, Mod} = code:load_binary(Mod, "test.beam", Bin),
+    {module, Mod} = kind:compile({"test", Code}),
     RunAsserts(Mod),
     true = code:soft_purge(Mod),
     true = code:delete(Mod).
-
-identity_compile_test() ->
-    Code = "def id a -> a",
-    {_, _Bin} = binary(Code).
 
 identity_run_test() ->
     Code = "def id a -> a",

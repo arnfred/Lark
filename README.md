@@ -1,3 +1,22 @@
+# Kind
+
+> Hello babies. Welcome to Earth. It's hot in the summer and cold in the winter. It's round and wet and crowded. On the outside, babies, you've got a hundred years here. There's only one rule that I know of, babies-"God damn it, you've got to be kind."
+
+_Kurt Vonnegut_.
+
+# Compiling and Running Tests
+
+Use `rebar3` to compile and run tests:
+
+```
+rebar3 compile
+rebar3 eunit
+```
+
+# Notes from building individual components
+
+As I've built the compiler, I've tried to keep notes on how to run and test new additions as I've progressed. I've kept these notes here because I think they might be valuable for someone else (or me from the future) trying to repurpose the code for something else.
+
 ## Lexing
 
 Open erlang OTP using `erl`. Then use `leex` to generate `lexer.erl` and the compiler to compile it:
