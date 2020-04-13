@@ -4,13 +4,13 @@ Terminals
     integer float string
     open close square_open square_close curly_open curly_close
     apply comma newline assign
-    bar implies qualifier.
+    bar right_arrow slash.
 
 Nonterminals
     definitions definition expression
-    assignment function newtype
+    assignment function newtype implies
     match clause patterns pattern
-    application callable terminal_callable qualified_callable
+    application callable terminal_callable qualified_callable qualifier
     symbols newlines elements
     collection tuple list dict
     literal element separator.
@@ -21,12 +21,15 @@ Rootsymbol definitions.
 definitions -> definition                       : ['$1'].
 definitions -> definition newlines definitions  : ['$1' | '$3'].
 
-newlines -> newline          : '$1'.
+newlines -> newline  : '$1'.
 newlines -> newline newlines : '$1'.
 
 definition -> assignment   : '$1'.
 definition -> function     : '$1'.
 definition -> newtype      : '$1'.
+
+implies -> right_arrow          : '$1'.
+implies -> right_arrow newlines : '$1'.
 
 assignment -> val symbol assign expression      : {val, line('$1'), unwrap('$2'), '$4'}.
 function -> def symbols implies expression      : {def, line('$1'), '$2', {body, '$4'}}.
@@ -37,9 +40,11 @@ symbols -> symbol           : ['$1'].
 symbols -> symbol symbols   : ['$1' | '$2'].
 
 separator -> comma          : '$1'.
-separator -> comma newline  : '$1'.
-separator -> newline        : '$1'.
-separator -> newline bar    : '$2'.
+separator -> comma newlines : '$1'.
+separator -> newlines       : '$1'.
+separator -> newlines bar   : '$2'.
+
+qualifier -> slash : '$1'.
 
 callable -> terminal_callable       : '$1'.
 terminal_callable -> symbol         : '$1'.

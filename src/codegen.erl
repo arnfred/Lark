@@ -129,6 +129,13 @@ function_call_test() ->
     RunAsserts = fun(Mod) -> ?assertEqual(2, Mod:callId(2)) end,
     run(Code, RunAsserts).
 
+function_def_newline_test() ->
+    Code = 
+        "def id b ->\n"
+        "    b",
+    RunAsserts = fun(Mod) -> ?assertEqual(2, Mod:id(2)) end,
+    run(Code, RunAsserts).
+
 function_call_multiple_args_test() ->
     Code = 
         "def firstId a b c -> a\n"
@@ -249,7 +256,7 @@ erlang_module_call_erlang_test() ->
 
 erlang_module_call_no_dot_notation_test() ->
     Code = "def test a -> erlang/atom_to_list(a)",
-    RunAsserts = fun(Mod) -> ?assertEqual("an_atom", Mod:test('an_atom')) end,
+    RunAsserts = fun(Mod) -> ?assertEqual("another_atom", Mod:test('another_atom')) end,
     run(Code, RunAsserts).
 
 -endif.
