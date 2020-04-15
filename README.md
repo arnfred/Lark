@@ -107,17 +107,49 @@ The answer probably depends on what I need to do with the type afterwards:
 * I'd like for the type-checker to understand that the values belong to a type
 * I'd like to be able to qualify the type values so that True always refer to the same atom
 
-## Next Steps
+# Running from CLI
+
+Ideally I'd like to run the Kind compiler via the cli as in `kind compile my-program.kind` and run the output of the compiler using `kind run my-program`. However this turns out not to be so super simple. Erlang programs are compiled to beam files that run on the Erlang Beam VM.
+
+Using Rebar3 we can produce a release that includes a script for running Kind:
+
+```
+rebar3 release
+_build/test/rel/kind/bin/kind-0.0.1 console
+```
+
+However, this script is made for deploying Erlang code as a long running process and doesn't support passing in arguments from the command line (at least not as far as I can tell).
+
+One way I've found of parsing in arguments is to use the `escript` option instead which can either be used alone or through the binary:
+
+```
+ escript _build/default/lib/kind/ebin/cli.beam "test"
+ > Args: ["test"]
+
+./_build/default/rel/kind/bin/kind escript lib/kind-0.1.0/ebin/cli.beam test
+> Args: ["test"]
+```
+
+# Next Steps
 
 This is currently very unfinished. Instead of a Trello board, I'm keeping this section as way to think about next steps.
 
+### 2020-04-15
+
+* Product types (e.g. `type Test = Blip(blap: Bool, blup: Bool)`)
+* Evaluation rules for tuples (e.g. `(val x = False, x or True)` should evaluate to `True`)
+* Guards for pattern match (e.g. `a.match(n if n < 5 -> True | _ -> False)`)
+* Type inference from guard constraints (e.g. `def not a -> a.match(True -> False | False -> true)` infers that `not` accepts only `True` and `False`
+* Type
+
+
 ### 2020-04-01
 
-* Code generation support for type enum declarations (e.g. `type Bool = True | False`)
+* ~Code generation support for type enum declarations (e.g. `type Bool = True | False`)~
 * Parser module to sanitise AST into something more intuitive
 * ~guards and matching~
 * type inference
-* Figure out an FFI so that I can add support for lists and numbers without hard-coding it in to the code-gen
+* ~Figure out an FFI so that I can add support for lists and numbers without hard-coding it in to the code-gen~
 * lists
 * infix functions
 * numbers?
