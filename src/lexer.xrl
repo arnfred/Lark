@@ -15,7 +15,7 @@ Rules.
 \)                      : {token, {close,           TokenLine, list_to_atom(TokenChars)}}.
 \{                      : {token, {curly_open,      TokenLine, list_to_atom(TokenChars)}}.
 \}                      : {token, {curly_close,     TokenLine, list_to_atom(TokenChars)}}.
-\|                      : {token, {bar,             TokenLine, list_to_atom(TokenChars)}}.
+\|                      : {token, {pipe,            TokenLine, list_to_atom(TokenChars)}}.
 \/                      : {token, {slash,           TokenLine, list_to_atom(TokenChars)}}.
 def                     : {token, {def,             TokenLine, list_to_atom(TokenChars)}}.
 val                     : {token, {val,             TokenLine, list_to_atom(TokenChars)}}.

@@ -23,13 +23,13 @@ substitute_underscore(Var) -> Var.
 gen_module_env(Defs) -> 
     [{Name, length(Args)} || {_, _, [{symbol, _, Name}|Args], _} <- Defs].
 
-gen_def(Env, {def, _, [{symbol, _, Name}|Args], Body}) ->
+gen_def(Env, {def, _, [{symbol, _, Name} | Args], Body}) ->
     io:format("~nCompiling definition ~s~n", [Name]),
     FName = cerl:c_fname(Name, length(Args)),
     CompiledArgs = [gen_var(A) || {symbol, _, A} <- Args],
     CompiledBody = case Body of 
-                       {body, Expr} -> gen_expr(Env, Expr);
-                       {clauses, Clauses} -> gen_pattern_match(Env, Args, Clauses)
+                       {clauses, _, Clauses} -> gen_pattern_match(Env, Args, Clauses);
+                       Expr                  -> gen_expr(Env, Expr)
                    end,
     {FName, cerl:c_fun(CompiledArgs, CompiledBody)};
 
@@ -160,37 +160,18 @@ pattern_match_multivariate_test() ->
 
 pattern_match_expr_syntax1_test() ->
     Code = 
-        "def test1 a -> a.match(\n"
-        " | False -> True\n"
-        " | True -> False)",
-    RunAsserts = fun(Mod) -> 
-                         ?assertEqual('True', Mod:test1('False'))
-                 end,
-    run(Code, RunAsserts).
-
-pattern_match_expr_syntax2_test() ->
-    Code = 
-        "def test2 a -> a.match(False -> True, True -> False)",
+        "def test2 a -> a.match(False -> True | True -> False)",
     RunAsserts = fun(Mod) -> 
                          ?assertEqual('True', Mod:test2('False'))
                  end,
     run(Code, RunAsserts).
 
-pattern_match_expr_syntax3_test() ->
+pattern_match_expr_syntax2_test() ->
     Code = 
         "def test3 a -> a.match(False -> True\n"
         "                       True -> False)",
     RunAsserts = fun(Mod) -> 
                          ?assertEqual('True', Mod:test3('False'))
-                 end,
-    run(Code, RunAsserts).
-
-pattern_match_expr_syntax4_test() ->
-    Code = 
-        "def test4 a -> a.match(False -> True,\n"
-        "                       True -> False)",
-    RunAsserts = fun(Mod) -> 
-                         ?assertEqual('True', Mod:test4('False'))
                  end,
     run(Code, RunAsserts).
 
@@ -227,6 +208,24 @@ anonymous_function4_test() ->
         "def blip a f -> f(a, a)\n"
         "def blap a -> a.blip(arg1 False -> False\n"
         "                     arg1 True -> arg1)",
+    RunAsserts = fun(Mod) -> ?assertEqual('True', Mod:blap('True')) end,
+    run(Code, RunAsserts).
+
+multiple_anonymous_functions1_test() ->
+    Code = 
+        "def blip a f g -> f(g(a))\n"
+        "def blap a -> a.blip(_ -> False,\n"
+        "                     False -> True\n"
+        "                     True -> False)",
+    RunAsserts = fun(Mod) -> ?assertEqual('False', Mod:blap('True')) end,
+    run(Code, RunAsserts).
+
+multiple_anonymous_functions2_test() ->
+    Code = 
+        "def blip a f g -> f(g(a))\n"
+        "def blap a -> a.blip(True -> False\n"
+        "                     False -> True,\n"
+        "                     _ -> False)",
     RunAsserts = fun(Mod) -> ?assertEqual('True', Mod:blap('True')) end,
     run(Code, RunAsserts).
 

@@ -4,16 +4,17 @@ Terminals
     integer float string
     open close square_open square_close curly_open curly_close
     apply comma newline assign
-    bar right_arrow slash.
+    pipe right_arrow slash.
 
 Nonterminals
     definitions definition expression
     assignment function newtype implies
-    match clause patterns pattern
+    def_match match clause patterns pattern clauses guard_clauses clause_list clause_tuple
     application callable terminal_callable qualified_callable qualifier
-    symbols newlines elements
+    type_symbols symbols newlines elements
     collection tuple list dict
-    literal element separator.
+    literal element 
+    separator primary_separator secondary_separator.
 
 Rootsymbol definitions.
 
@@ -32,26 +33,27 @@ implies -> right_arrow          : '$1'.
 implies -> right_arrow newlines : '$1'.
 
 assignment -> val symbol assign expression      : {val, line('$1'), unwrap('$2'), '$4'}.
-function -> def symbols implies expression      : {def, line('$1'), '$2', {body, '$4'}}.
-function -> def symbols separator elements      : {def, line('$1'), '$2', {clauses, '$4'}}.
-newtype -> type type_symbol assign elements     : {type, line('$1'), unwrap('$2'), '$4'}.
+function -> def symbols implies expression      : {def, line('$1'), '$2', '$4'}.
+function -> def symbols newlines def_match      : {def, line('$1'), '$2', '$4'}.
+newtype -> type type_symbols assign elements    : {type, line('$1'), unwrap('$2'), '$4'}.
 
 symbols -> symbol           : ['$1'].
 symbols -> symbol symbols   : ['$1' | '$2'].
 
-separator -> comma          : '$1'.
-separator -> comma newlines : '$1'.
-separator -> newlines       : '$1'.
-separator -> newlines bar   : '$2'.
-
-qualifier -> slash : '$1'.
+type_symbols -> type_symbol     	   : ['$1'].
+type_symbols -> type_symbol type_symbols   : ['$1' | '$2'].
 
 callable -> terminal_callable       : '$1'.
+callable -> qualified_callable      : {qualified_symbol, '$1'}.
+callable -> collection              : '$1'.
+
 terminal_callable -> symbol         : '$1'.
 terminal_callable -> type_symbol    : '$1'.
-callable -> qualified_callable      : {qualified_symbol, '$1'}.
+
 qualified_callable -> terminal_callable qualifier terminal_callable  : [unwrap('$1'), unwrap('$3')].
 qualified_callable -> terminal_callable qualifier qualified_callable : [unwrap('$1') | '$3'].
+
+qualifier -> slash : '$1'.
 
 expression -> literal       : '$1'.
 expression -> application   : '$1'.
@@ -66,19 +68,29 @@ application -> callable collection                  : {application, line('$1'), 
 application -> expression apply callable            : {application, line('$1'), '$3', ['$1']}.
 application -> expression apply callable collection : {application, line('$1'), '$3', build_args('$1', '$4')}.
 
-match -> expression apply match_keyword tuple   : {match, line('$1'), '$1', lists:nth(1,unwrap('$4'))}.
-clause -> patterns implies expression 	        : {clause, line('$2'), '$1', '$3'}.
-patterns -> pattern                             : ['$1'].
-patterns -> pattern patterns                    : ['$1' | '$2'].
-pattern -> expression                           : '$1'.
+match -> expression apply match_keyword clause_tuple    : {match, line('$1'), '$1', '$4'}.
+clause -> patterns implies expression 	                : {clause, line('$2'), '$1', '$3'}.
+patterns -> pattern                                     : ['$1'].
+patterns -> pattern patterns                            : ['$1' | '$2'].
+pattern -> expression                                   : '$1'.
+
+clause_tuple -> open clauses close                      : '$2'.
+clauses -> clause_list                                  : {clauses, line('$1'), '$1'}.
+clause_list -> clause                                   : ['$1'].
+clause_list -> clause secondary_separator clause_list   : ['$1' | '$3'].
+
+def_match -> clauses.
+def_match -> guard_clauses                          : {clauses, line('$1'), '$1'}.
+guard_clauses -> pipe clause                        : ['$2'].
+guard_clauses -> pipe clause newlines guard_clauses : ['$2' | '$4'].
 
 collection -> tuple : '$1'.
 collection -> list  : '$1'.
 collection -> dict  : '$1'.
 
 tuple -> open close                                 : {tuple, line('$1'), []}.
-tuple -> open elements close                        : parse_tuple(line('$1'), '$2').
-tuple -> open separator elements close              : parse_tuple(line('$1'), '$3').
+tuple -> open elements close                        : {tuple, line('$1'), '$2'}.
+tuple -> open separator elements close              : {tuple, line('$1'), '$3'}.
 list -> square_open square_close                    : {list, line('$1'), []}.
 list -> square_open elements square_close           : {list, line('$1'), '$2'}.
 list -> square_open separator elements square_close : {list, line('$1'), '$3'}.
@@ -86,12 +98,20 @@ dict -> curly_open curly_close                      : {dict, line('$1'), []}.
 dict -> curly_open elements curly_close             : {dict, line('$1'), '$2'}.
 dict -> curly_open separator elements curly_close   : {dict, line('$1'), '$3'}.
 
-elements -> element : ['$1'].
-elements -> element separator elements : ['$1' | '$3'].
+separator -> primary_separator.
+separator -> secondary_separator.
+
+primary_separator -> comma.
+primary_separator -> comma newlines.
+secondary_separator -> newlines.
+secondary_separator -> pipe.
+
+elements -> element                     : ['$1'].
+elements -> element separator elements  : ['$1' | '$3'].
 
 element -> expression : '$1'.
-element -> clause : '$1'.
 element -> definition : '$1'.
+element -> clauses    : '$1'.
 
 Erlang code.
 
@@ -100,22 +120,8 @@ unwrap({_,_,V}) -> V.
 
 line({_, Line})         -> Line;
 line({_, Line, _})      -> Line;
-line({_, Line, _, _})   -> Line.
-
-% Tuples are ambigious. A touple can be:
-% - A set of non-clause elements: A normal tuple
-% - A set of clauses: A tuple with a single element 'clauses' element containing all clauses
-% - A set of both clauses and elements: A tuple where each clause is wrapped in a 'clauses' element
-parse_tuple(Line, Elements) ->
-    {Clauses, Elems} = lists:splitwith(fun({clause, _, _, _}) -> true; (_) -> false end, Elements),
-    WrapClause = fun({clause, ClauseLine, _, _} = Clause) -> {clauses, ClauseLine, [Clause]};
-                    (Other) -> Other
-                 end,
-    case {Clauses, Elems} of
-        {[], []}        -> {tuple, Line, []};
-        {Clauses, []}   -> {tuple, Line, [{clauses, Line, Clauses}]};
-        _               -> {tuple, Line, lists:map(WrapClause, Elements)}
-    end.
+line({_, Line, _, _})   -> Line;
+line([Head|_]) 		-> line(Head).
 
 build_args({tuple, _, Elems}) -> Elems;
 build_args(Collection) -> [Collection].
