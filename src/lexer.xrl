@@ -5,7 +5,6 @@ TypeSymbol      = [A-Z_][a-zA-Z0-9_-]*
 Number          = [0-9]
 String          = "(\\\^.|\\.|[^\"])*"
 RightArrow      = ->
-Qualifier       = blup
 
 Rules.
 
@@ -40,8 +39,7 @@ build_string(Type, Chars, Line, Len) ->
 
 unescape_string(String) -> unescape_string(String, []).
  
-unescape_string([], Output) ->
-  lists:reverse(Output);
+unescape_string([], Output) -> lists:reverse(Output);
 unescape_string([$\\, Escaped | Rest], Output) ->
   Char = case Escaped of
     $\\ -> $\\;
@@ -60,5 +58,4 @@ unescape_string([$\\, Escaped | Rest], Output) ->
     _ -> throw({error, {"unrecognized escape sequence: ", [$\\, Escaped]}})
   end,
   unescape_string(Rest, [Char|Output]);
-unescape_string([Char|Rest], Output) ->
-  unescape_string(Rest, [Char|Output]).
+unescape_string([Char|Rest], Output) -> unescape_string(Rest, [Char|Output]).

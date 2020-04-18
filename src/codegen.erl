@@ -3,13 +3,11 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-gen({Name, Defs}) ->
-    io:format("Defs are ~p~n", [Defs]),
-    Env = gen_module_env(Defs),
+gen({Name, Env, AST}) ->
     io:format("Env is ~w~n", [Env]),
-    CompiledDefs = [gen_def(Env, D) || D <- Defs],
+    Compiled = [gen_definitions(Env, D) || D <- AST],
     CompiledExports = [cerl:c_fname(N, Arity) || {N, Arity} <- Env],
-    {ok, cerl:c_module(cerl:c_atom(Name), CompiledExports, [], CompiledDefs)}.
+    {ok, cerl:c_module(cerl:c_atom(Name), CompiledExports, [], Compiled)}.
 
 substitute_underscore('_') -> 
     N = case get('_') of
@@ -20,20 +18,17 @@ substitute_underscore('_') ->
     list_to_atom(lists:flatten(io_lib:format("_q~w", [N])));
 substitute_underscore(Var) -> Var.
 
-gen_module_env(Defs) -> 
-    [{Name, length(Args)} || {_, _, [{symbol, _, Name}|Args], _} <- Defs].
-
-gen_def(Env, {def, _, [{symbol, _, Name} | Args], Body}) ->
+gen_definitions(Env, {def, _, [{symbol, _, Name, _} | Args], Body}) ->
     io:format("~nCompiling definition ~s~n", [Name]),
     FName = cerl:c_fname(Name, length(Args)),
-    CompiledArgs = [gen_var(A) || {symbol, _, A} <- Args],
+    CompiledArgs = [gen_expr(Env, A) || A <- Args],
     CompiledBody = case Body of 
                        {clauses, _, Clauses} -> gen_pattern_match(Env, Args, Clauses);
                        Expr                  -> gen_expr(Env, Expr)
                    end,
     {FName, cerl:c_fun(CompiledArgs, CompiledBody)};
 
-gen_def(Env, {type, _, Name, Body}) ->
+gen_definitions(Env, {type, _, Name, Body}) ->
     io:format("~nCompiling type ~s with body ~p ~n", [Name, Body]),
     FName = cerl:c_fname(Name, 0),
     CompiledBody = gen_type_fun(Env, Body),
@@ -49,22 +44,21 @@ gen_clause(Env, Patterns, Expr) ->
     cerl:c_clause(CompiledPatterns, gen_expr(Env, Expr)).
 
 gen_type_fun(_, Values) ->
-    Instances = [cerl:c_map_pair(cerl:c_atom(S), cerl:c_atom(true)) ||{type_symbol, _, S} <- Values],
+    Instances = [cerl:c_map_pair(cerl:c_atom(S), cerl:c_atom(true)) ||{type_symbol, _, S, _} <- Values],
     cerl:c_map(Instances).
 
-gen_var(Var) -> cerl:c_var(substitute_underscore(Var)).
-
-gen_expr(_, {symbol, _, S}) -> gen_var(S);
-gen_expr(_, {type_symbol, _, T}) -> cerl:c_atom(T);
+gen_expr(_, {symbol, _, S, _}) -> cerl:c_var(substitute_underscore(S));
+gen_expr(_, {type_symbol, _, T, _}) -> cerl:c_atom(T);
 
 gen_expr(Env, {application, _, {qualified_symbol, Symbols}, Args}) ->
+    Symbols_ = [S || {symbol, _, S} <- Symbols],
     CompiledArgs = [gen_expr(Env, E) || E <- Args],
-    case Symbols of
+    case Symbols_ of
         ['erlang', Module, Name] -> cerl:c_call(cerl:c_atom(Module), cerl:c_atom(Name), CompiledArgs);
         ['erlang', Name]         -> cerl:c_call(cerl:c_atom('erlang'), cerl:c_atom(Name), CompiledArgs)
     end;
 
-gen_expr(Env, {application, _, {symbol, _, Name}, Args}) ->
+gen_expr(Env, {application, _, {symbol, _, Name, _}, Args}) ->
     CompiledArgs = [gen_expr(Env, E) || E <- Args],
     FName = case proplists:get_value(Name, Env) of
         undefined -> cerl:c_var(Name);
@@ -76,9 +70,10 @@ gen_expr(Env, {match, _, Expr, {clauses, _, Clauses}}) -> gen_pattern_match(Env,
 
 gen_expr(Env, {clauses, Line, Clauses}) ->
     [{clause, _, Patterns, _} | _Rest] = Clauses,
-    Args = [{symbol, Line, substitute_underscore('_')} || _ <- Patterns],
+    Symbols = [symbol:id('_') || _ <- Patterns],
+    Args = [{symbol, Line, S, S} || S <- Symbols],
     CompiledBody = gen_pattern_match(Env, Args, Clauses),
-    CompiledArgs = [cerl:c_var(A) || {_, _, A} <- Args],
+    CompiledArgs = [gen_expr(Env, A) || A <- Args],
     cerl:c_fun(CompiledArgs, CompiledBody);
 
 gen_expr(_, {tuple, _, []}) -> cerl:c_atom('()');
