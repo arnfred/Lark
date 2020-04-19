@@ -6,7 +6,7 @@ compile({Module, Code}) ->
     io:format("Tokens are ~p~n", [Tokens]),
     {ok, AST} = parser:parse(Tokens),
     io:format("AST is ~p~n", [AST]),
-    {ok, _, TaggedAST} = tagger:tag(AST),
+    {ok, TaggedAST} = tagger:tag(AST),
     io:format("Tagged AST is ~p~n", [TaggedAST]),
     {ok, Env} = typer:type(AST),
     {ok, Forms} = codegen:gen({Module, Env, TaggedAST}),

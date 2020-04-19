@@ -9,15 +9,6 @@ gen({Name, Env, AST}) ->
     CompiledExports = [cerl:c_fname(N, Arity) || {N, Arity} <- Env],
     {ok, cerl:c_module(cerl:c_atom(Name), CompiledExports, [], Compiled)}.
 
-substitute_underscore('_') -> 
-    N = case get('_') of
-            undefined -> 0;
-            S -> S
-        end,
-    put('_', N+1),
-    list_to_atom(lists:flatten(io_lib:format("_q~w", [N])));
-substitute_underscore(Var) -> Var.
-
 gen_definitions(Env, {def, _, [{symbol, _, Name, _} | Args], Body}) ->
     io:format("~nCompiling definition ~s~n", [Name]),
     FName = cerl:c_fname(Name, length(Args)),
@@ -47,7 +38,7 @@ gen_type_fun(_, Values) ->
     Instances = [cerl:c_map_pair(cerl:c_atom(S), cerl:c_atom(true)) ||{type_symbol, _, S, _} <- Values],
     cerl:c_map(Instances).
 
-gen_expr(_, {symbol, _, S, _}) -> cerl:c_var(substitute_underscore(S));
+gen_expr(_, {symbol, _, _, Tag}) -> cerl:c_var(Tag);
 gen_expr(_, {type_symbol, _, T, _}) -> cerl:c_atom(T);
 
 gen_expr(Env, {application, _, {qualified_symbol, Symbols}, Args}) ->
@@ -58,10 +49,10 @@ gen_expr(Env, {application, _, {qualified_symbol, Symbols}, Args}) ->
         ['erlang', Name]         -> cerl:c_call(cerl:c_atom('erlang'), cerl:c_atom(Name), CompiledArgs)
     end;
 
-gen_expr(Env, {application, _, {symbol, _, Name, _}, Args}) ->
+gen_expr(Env, {application, _, {symbol, _, Name, Tag}, Args}) ->
     CompiledArgs = [gen_expr(Env, E) || E <- Args],
     FName = case proplists:get_value(Name, Env) of
-        undefined -> cerl:c_var(Name);
+        undefined -> cerl:c_var(Tag);
         Arity -> cerl:c_fname(Name, Arity)
     end,
     cerl:c_apply(FName, CompiledArgs);
@@ -237,6 +228,13 @@ erlang_module_call_erlang_test() ->
 erlang_module_call_no_dot_notation_test() ->
     Code = "def test a -> erlang/atom_to_list(a)",
     RunAsserts = fun(Mod) -> ?assertEqual("another_atom", Mod:test('another_atom')) end,
+    run(Code, RunAsserts).
+
+shadow_variable_test() ->
+    Code = 
+        "def test a\n"
+        " | a -> a",
+    RunAsserts = fun(Mod) -> ?assertEqual(test, Mod:test(test)) end,
     run(Code, RunAsserts).
 
 -endif.

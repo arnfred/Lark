@@ -4,17 +4,17 @@
 -include_lib("eunit/include/eunit.hrl").
 
 tag(AST) -> 
-    {EnvList, Definitions} = lists:unzip([tag(#{}, Definition) || Definition <- AST]),
-    {ok, slurp(EnvList), Definitions}.
+    {_, Definitions} = lists:unzip([tag(#{}, Definition) || Definition <- AST]),
+    {ok, Definitions}.
 
 tag(Env, {def, Line, Args, Body}) ->
-    {ArgsEnv, TaggedArgs} = tag(Env, Args),
-    {BodyEnv, TaggedBody} = tag(ArgsEnv, Body),
+    {ArgsEnv, TaggedArgs} = tag(#{}, Args),
+    {BodyEnv, TaggedBody} = tag(maps:merge(Env, ArgsEnv), Body),
     {BodyEnv, {def, Line, TaggedArgs, TaggedBody}};
 
 tag(Env, {type, Line, Args, Body}) ->
-    {ArgsEnv, TaggedArgs} = tag(Env, Args),
-    {BodyEnv, TaggedBody} = tag(ArgsEnv, Body),
+    {ArgsEnv, TaggedArgs} = tag(#{}, Args),
+    {BodyEnv, TaggedBody} = tag(maps:merge(Env, ArgsEnv), Body),
     {BodyEnv, {type, Line, TaggedArgs, TaggedBody}};
 
 tag(Env, {clauses, Line, Clauses}) ->
@@ -22,9 +22,10 @@ tag(Env, {clauses, Line, Clauses}) ->
     {slurp(EnvList), {clauses, Line, TaggedClauses}};
 
 tag(Env, {clause, Line, Patterns, Expr}) ->
-    {EnvList, TaggedPatterns} = lists:unzip([tag(Env, Pattern) || Pattern <- Patterns]),
-    {NewEnv, TaggedBody} = tag(slurp(EnvList), Expr),
-    {NewEnv, {clause, Line, TaggedPatterns, TaggedBody}};
+    {EnvList, TaggedPatterns} = lists:unzip([tag(#{}, Pattern) || Pattern <- Patterns]),
+    PatternEnv = maps:merge(Env, slurp(EnvList)),
+    {BodyEnv, TaggedBody} = tag(PatternEnv, Expr),
+    {BodyEnv, {clause, Line, TaggedPatterns, TaggedBody}};
 
 tag(Env, {application, Line, Name, Args}) ->
     {NameEnv, TaggedName} = tag(Env, Name),
@@ -70,35 +71,38 @@ tag_AST(Code) ->
     tag(AST).
 
 identity_function_test() ->
-    {ok, Tags, [{def, _, [Name | Args], Body}]} = tag_AST("def id a -> a"),
-    ?assertEqual(maps:is_key(id, Tags), true),
-    ?assertEqual(maps:is_key(a, Tags), true),
-    TaggedName = maps:get(id, Tags),
-    TaggedArg = maps:get(a, Tags),
+    {ok, [{def, _, [_ | Args], Body}]} = tag_AST("def id a -> a"),
     {symbol, _, a, TaggedArg} = Body,
-    [{symbol, _, a, TaggedArg}] = Args,
-    {symbol, _, id, TaggedName} = Name.
+    [{symbol, _, a, TaggedArg}] = Args.
 
 pattern_match1_test() ->
     Code = 
         "def not a\n"
         " | b -> b",
-    {ok, Tags, [{def, _, _, {clauses, _, [Clause]}}]} = tag_AST(Code),
-    TaggedArg = maps:get(b, Tags),
+    {ok, [{def, _, _, {clauses, _, [Clause]}}]} = tag_AST(Code),
     {clause, _, [{symbol, _, b, TaggedArg}], {symbol, _, b, TaggedArg}} = Clause.
 
 pattern_match2_test() ->
     Code = 
         "def not a\n"
         " | b -> a",
-    {ok, Tags, [{def, _, _, {clauses, _, [Clause]}}]} = tag_AST(Code),
-    TaggedArg = maps:get(a, Tags),
+    {ok, [{def, _, [_ | Args], {clauses, _, [Clause]}}]} = tag_AST(Code),
+    [{symbol, _, a, TaggedArg}] = Args,
     {clause, _, _, {symbol, _, a, TaggedArg}} = Clause.
+
+pattern_match3_test() ->
+    Code = 
+        "def not a\n"
+        " | a -> a",
+    {ok, [{def, _, [_ | Args], {clauses, _, [Clause]}}]} = tag_AST(Code),
+    [{symbol, _, a, TaggedDefArg}] = Args,
+    {clause, _, [{symbol, _, a, TaggedArg}], {symbol, _, a, TaggedArg}} = Clause,
+    ?assertNotEqual(TaggedDefArg, TaggedArg).
 
 tuple_test() ->
     Code = "def not a -> (a, a)",
-    {ok, Tags, [{def, _, _, {tuple, _, [L1, L2]}}]} = tag_AST(Code),
-    TaggedArg = maps:get(a, Tags),
+    {ok, [{def, _, [_ | Args], {tuple, _, [L1, L2]}}]} = tag_AST(Code),
+    [{symbol, _, a, TaggedArg}] = Args,
     {symbol, _, a, TaggedArg} = L1,
     {symbol, _, a, TaggedArg} = L2.
     
@@ -106,12 +110,10 @@ anonymous_function_test() ->
     Code = 
         "def blap a -> a.blip(b -> b\n"
         "                     _ -> a)",
-    {ok, Tags, [{def, _, DefArgs, {application, _, _, Args}}]} = tag_AST(Code),
-    TaggedA = maps:get(a, Tags),
-    TaggedB = maps:get(b, Tags),
-    [_, {symbol, _, a, TaggedA}] = DefArgs,
+    {ok, [{def, _, [Name | DefArgs], {application, _, _, Args}}]} = tag_AST(Code),
     [_, {clauses, _, [Clause1, Clause2]}] = Args,
+    [{symbol, _, a, TaggedA}] = DefArgs,
     {clause, _, [{symbol, _, b, TaggedB}], {symbol, _, b, TaggedB}} = Clause1,
     {clause, _, _, {symbol, _, a, TaggedA}} = Clause2.
-    
+
 -endif.
