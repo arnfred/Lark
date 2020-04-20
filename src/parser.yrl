@@ -1,6 +1,6 @@
 Terminals
     def type val 
-    symbol type_symbol match_keyword
+    symbol match_keyword
     integer float string
     open close square_open square_close curly_open curly_close
     apply comma newline assign
@@ -9,11 +9,11 @@ Terminals
 Nonterminals
     definitions definition expression
     assignment function newtype implies
-    def_match match clause patterns pattern clauses guard_clauses clause_list clause_tuple
-    application callable terminal_callable qualified_callable qualifier
-    type_symbols symbols newlines elements
+    pattern_match clause patterns clauses def_clauses clause_tuple
+    application subject verb
+    symbols newlines elements qualified_symbol
     collection tuple list dict
-    literal element 
+    literal element
     type_element type_elements type_pairs type_pair
     type_application type_sum type_product type_sum_block
     separator secondary_separator.
@@ -27,62 +27,55 @@ definitions -> definition newlines definitions  : ['$1' | '$3'].
 newlines -> newline          : '$1'.
 newlines -> newline newlines : '$1'.
 
-definition -> assignment        : '$1'.
 definition -> function          : '$1'.
 definition -> newtype           : '$1'.
 
 implies -> right_arrow          : '$1'.
 implies -> right_arrow newlines : '$1'.
 
-assignment -> val symbol assign expression          : {val, line('$1'), unwrap('$2'), '$4'}.
-function -> def symbols implies expression          : {def, line('$1'), '$2', '$4'}.
-function -> def symbols newlines def_match          : {def, line('$1'), '$2', '$4'}.
-newtype -> type type_symbols assign type_element    : {type, line('$1'), '$2', '$4'}.
+assignment -> val patterns assign expression    : {val, line('$1'), unwrap('$2'), '$4'}.
+function -> def symbols implies expression      : {def, line('$1'), name('$2'), args('$2'), '$4'}.
+function -> def symbols newlines def_clauses    : {def, line('$1'), name('$2'), args('$2'), '$4'}.
+newtype -> type symbols implies type_element    : {type, line('$1'), name('$2'), args('$2'), '$4'}.
 
 symbols -> symbol           : ['$1'].
 symbols -> symbol symbols   : ['$1' | '$2'].
 
-callable -> terminal_callable       : '$1'.
-callable -> qualified_callable      : {qualified_symbol, '$1'}.
-callable -> open expression close   : '$2'.
+expression -> pattern_match         : '$1'.
+expression -> subject               : '$1'.
 
-terminal_callable -> symbol      : '$1'.
-terminal_callable -> type_symbol : '$1'.
+subject -> application      : '$1'.
+subject -> verb             : '$1'.
 
-qualified_callable -> terminal_callable qualifier terminal_callable  : ['$1', '$3'].
-qualified_callable -> terminal_callable qualifier qualified_callable : ['$1' | '$3'].
+verb -> literal             : '$1'.
+verb -> symbol              : '$1'.
+verb -> qualified_symbol    : {qualified_symbol, line('$1'), unwrap_symbols('$1')}.
+verb -> collection          : '$1'.
 
-qualifier -> slash          : '$1'.
-
-expression -> literal       : '$1'.
-expression -> application   : '$1'.
-expression -> match         : '$1'.
-expression -> callable      : '$1'.
-expression -> collection    : '$1'.
+qualified_symbol -> symbol slash symbol  : ['$1', '$3'].
+qualified_symbol -> symbol slash qualified_symbol : ['$1' | '$3'].
 
 literal -> string   : '$1'.
 literal -> integer  : '$1'.
 literal -> float    : '$1'.
 
-application -> callable collection                  : {application, line('$1'), '$1', build_args('$2')}.
-application -> expression apply callable            : {application, line('$1'), '$3', ['$1']}.
-application -> expression apply callable collection : {application, line('$1'), '$3', build_args('$1', '$4')}.
+application -> verb collection                  : {application, line('$2'), '$1', build_args('$2')}.
+application -> subject apply verb               : {application, line('$1'), '$3', ['$1']}.
+application -> subject apply verb collection    : {application, line('$1'), '$3', build_args('$1', '$4')}.
 
-match -> expression apply match_keyword clause_tuple    : {match, line('$1'), '$1', '$4'}.
-clause -> patterns implies expression 	                : {clause, line('$2'), '$1', '$3'}.
-patterns -> pattern                                     : ['$1'].
-patterns -> pattern patterns                            : ['$1' | '$2'].
-pattern -> expression                                   : '$1'.
+pattern_match -> subject apply match_keyword clause_tuple   : {match, line('$1'), '$1', '$4'}.
 
-clause_tuple -> open clauses close                      : '$2'.
-clause_tuple -> open newlines clauses close             : '$3'.
-clauses -> clause_list                                  : {clauses, line('$1'), '$1'}.
-clause_list -> clause                                   : ['$1'].
-clause_list -> clause secondary_separator clause_list   : ['$1' | '$3'].
+clause -> patterns implies expression   : {clause, line('$2'), '$1', '$3'}.
+patterns -> subject                     : ['$1'].
+patterns -> subject patterns            : ['$1' | '$2'].
 
-def_match -> guard_clauses                          : {clauses, line('$1'), '$1'}.
-guard_clauses -> pipe clause                        : ['$2'].
-guard_clauses -> pipe clause newlines guard_clauses : ['$2' | '$4'].
+clause_tuple -> open clauses close              : '$2'.
+clause_tuple -> open newlines clauses close     : '$3'.
+clauses -> clause                               : ['$1'].
+clauses -> clause secondary_separator clauses   : ['$1' | '$3'].
+
+def_clauses -> pipe clause                      : ['$2'].
+def_clauses -> pipe clause newlines def_clauses : ['$2' | '$4'].
 
 collection -> tuple : '$1'.
 collection -> list  : '$1'.
@@ -110,13 +103,11 @@ elements -> element newlines            : ['$1'].
 elements -> element separator elements  : ['$1' | '$3'].
 
 element -> expression   : '$1'.
-element -> definition   : '$1'.
-element -> clauses      : '$1'.
+element -> assignment   : '$1'.
+element -> newtype      : '$1'.
+element -> clauses      : {clauses, line('$1'), '$1'}.
 
-type_symbols -> type_symbol     	        : ['$1'].
-type_symbols -> type_symbol type_symbols    : ['$1' | '$2'].
-
-type_sum -> type_element pipe type_element      : ['$1', '$2'].
+type_sum -> type_element pipe type_element      : ['$1', '$3'].
 type_sum -> open type_sum_block close           : '$2'.
 type_sum -> open newlines type_sum_block close  : '$2'.
 
@@ -124,16 +115,16 @@ type_sum_block -> type_element secondary_separator type_element             : ['
 type_sum_block -> type_element secondary_separator type_element newlines    : ['$1', '$3'].
 type_sum_block -> type_element secondary_separator type_sum_block           : ['$1' | '$3'].
 
-type_product -> type_symbol open type_pairs close           : {product, line('$1'), '$1', '$3'}.
-type_product -> type_symbol open newlines type_pairs close  : {product, line('$1'), '$1', '$3'}.
+type_product -> symbol open type_pairs close           : {product, line('$1'), '$1', '$3'}.
+type_product -> symbol open newlines type_pairs close  : {product, line('$1'), '$1', '$3'}.
 
 type_pairs -> type_pair                         : ['$1'].
 type_pairs -> type_pair newlines                : ['$1'].
 type_pairs -> type_pair separator type_pairs    : ['$1' | '$3'].
 type_pair -> symbol colon type_element          : {type_pair, line('$1'), '$1', '$3'}.
 
-type_application -> type_symbol open type_elements close            : {appliaction, '$1', '$3'}.
-type_application -> type_symbol open newlines type_elements close   : {appliaction, '$1', '$3'}.
+type_application -> symbol open type_elements close            : {appliaction, '$1', '$3'}.
+type_application -> symbol open newlines type_elements close   : {appliaction, '$1', '$3'}.
 
 type_elements -> type_element                           : ['$1'].
 type_elements -> type_element newlines                  : ['$1'].
@@ -141,15 +132,20 @@ type_elements -> type_element separator type_elements   : ['$1' | '$3'].
 
 type_element -> type_sum            : {sum, line('$1'), '$1'}.
 type_element -> type_product        : '$1'.
-type_element -> type_symbol         : '$1'.
+type_element -> symbol              : '$1'.
 type_element -> type_application    : '$1'.
 
 
 
 Erlang code.
 
+name([{symbol, _, S} | _]) -> S.
+args([_ | Args]) -> Args.
+
 unwrap({_,V})   -> V;
 unwrap({_,_,V}) -> V.
+
+unwrap_symbols(Symbols) -> [S || {symbol, _, S} <- Symbols].
 
 line({_, Line})         -> Line;
 line({_, Line, _})      -> Line;
