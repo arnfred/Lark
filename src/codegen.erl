@@ -14,13 +14,16 @@ gen_expr({def, _, Name, Args, Expr}) ->
     CompiledBody = gen_expr({Args, Expr}),
     {FName, cerl:c_fun(CompiledArgs, CompiledBody)};
 
-gen_expr({type, _, Name, _, Body}) ->
+gen_expr({type_def, _, Name, _, Body}) ->
     io:format("~nCompiling type ~s with body ~p ~n", [Name, Body]),
     FName = cerl:c_fname(Name, 0),
     CompiledBody = gen_type_fun(Body),
     {FName, cerl:c_fun([], CompiledBody)};
 
-gen_expr({symbol, _, _, Tag}) -> cerl:c_var(Tag);
+gen_expr({variable, _, _, Tag}) -> cerl:c_var(Tag);
+gen_expr({type, _, Symbols}) -> 
+    Tag = list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)])),
+    cerl:c_atom(Tag);
 
 gen_expr({qualified_symbol, _, Symbols}) -> 
     Tag = list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)])),
@@ -37,8 +40,8 @@ gen_expr({_, Expr}) -> gen_expr(Expr);
 
 gen_expr({clauses, Line, Clauses}) ->
     [{clause, _, Patterns, _} | _Rest] = Clauses,
-    Symbols = [symbol:id('') || _ <- Patterns],
-    Args = [{symbol, Line, S, S} || S <- Symbols],
+    Symbols = [symbol:id(['']) || _ <- Patterns],
+    Args = [{variable, Line, S, S} || S <- Symbols],
     CompiledBody = gen_pattern_match(Args, Clauses),
     CompiledArgs = [gen_expr(A) || A <- Args],
     cerl:c_fun(CompiledArgs, CompiledBody);
@@ -57,7 +60,7 @@ gen_apply({qualified_symbol, _, Symbols}, CompiledArgs) ->
         ['erlang', Name]         -> cerl:c_call(cerl:c_atom('erlang'), cerl:c_atom(Name), CompiledArgs)
     end;
 
-gen_apply({symbol, _, _, Tag}, CompiledArgs) ->
+gen_apply({variable, _, _, Tag}, CompiledArgs) ->
     cerl:c_apply(cerl:c_var(Tag), CompiledArgs).
 
 gen_pattern_match(Args, Clauses) ->
@@ -70,7 +73,7 @@ gen_clause(Patterns, Expr) ->
     cerl:c_clause(CompiledPatterns, gen_expr(Expr)).
 
 gen_type_fun(Values) ->
-    Instances = [cerl:c_map_pair(cerl:c_atom(S), cerl:c_atom(true)) ||{symbol, _, S, _} <- Values],
+    Instances = [cerl:c_map_pair(cerl:c_atom(S), cerl:c_atom(true)) ||{type, _, S, _} <- Values],
     cerl:c_map(Instances).
 
 -ifdef(TEST).

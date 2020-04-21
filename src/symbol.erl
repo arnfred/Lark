@@ -1,7 +1,9 @@
 -module(symbol).
 -export([id/1]).
 
-id(Chars) -> list_to_atom(lists:append([atom_to_list(Chars), "_", get_random_string(6)])).
+id(Path) -> 
+    PathString = [atom_to_list(A) || A <- lists:join('_', Path)],
+    list_to_atom(lists:flatten([PathString, "_", get_random_string(6)])).
 
 get_random_string(Length) ->
     AllowedChars = "abcdefghijklmnopqrstuvwxyz1234567890",

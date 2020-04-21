@@ -16,6 +16,7 @@ Rules.
 \}                      : {token, {curly_close,     TokenLine, list_to_atom(TokenChars)}}.
 \|                      : {token, {pipe,            TokenLine, list_to_atom(TokenChars)}}.
 \/                      : {token, {slash,           TokenLine, list_to_atom(TokenChars)}}.
+\:                      : {token, {colon,           TokenLine, list_to_atom(TokenChars)}}.
 def                     : {token, {def,             TokenLine, list_to_atom(TokenChars)}}.
 val                     : {token, {val,             TokenLine, list_to_atom(TokenChars)}}.
 \.                      : {token, {apply,           TokenLine, list_to_atom(TokenChars)}}.

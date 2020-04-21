@@ -7,19 +7,18 @@ Terminals
     pipe right_arrow slash colon.
 
 Nonterminals
-    definitions definition expression
+    definitions definition
     assignment function newtype implies
     pattern_match clause patterns clauses def_clauses clause_tuple
-    application subject verb
-    symbols newlines elements qualified_symbol
+    application 
+    noun verb adjective adverb
     collection tuple list dict
-    literal element
-    type_element type_elements type_pairs type_pair
-    type_application type_sum type_product type_sum_block
+    symbols newlines elements 
+    literal element pair qualified_symbol
+    sum sum_block sum_line sum_elems
     separator secondary_separator.
 
 Rootsymbol definitions.
-
 
 definitions -> definition                       : ['$1'].
 definitions -> definition newlines definitions  : ['$1' | '$3'].
@@ -33,41 +32,45 @@ definition -> newtype           : '$1'.
 implies -> right_arrow          : '$1'.
 implies -> right_arrow newlines : '$1'.
 
-assignment -> val patterns assign expression    : {val, line('$1'), unwrap('$2'), '$4'}.
-function -> def symbols implies expression      : {def, line('$1'), name('$2'), args('$2'), '$4'}.
+assignment -> val noun assign noun        : {val, line('$1'), unwrap('$2'), '$4'}.
+function -> def symbols implies noun      : {def, line('$1'), name('$2'), args('$2'), '$4'}.
 function -> def symbols newlines def_clauses    : {def, line('$1'), name('$2'), args('$2'), '$4'}.
-newtype -> type symbols implies type_element    : {type, line('$1'), name('$2'), args('$2'), '$4'}.
+newtype -> type symbols implies adjective       : {type_def, line('$1'), name('$2'), args('$2'), '$4'}.
 
 symbols -> symbol           : ['$1'].
 symbols -> symbol symbols   : ['$1' | '$2'].
 
-expression -> pattern_match         : '$1'.
-expression -> subject               : '$1'.
+adjective -> sum            : {sum, line('$1'), '$1'}.
+adjective -> adverb         : '$1'.
 
-subject -> application      : '$1'.
-subject -> verb             : '$1'.
+adverb -> pair              : '$1'.
+adverb -> noun              : '$1'.
+
+noun -> application         : '$1'.
+noun -> pattern_match       : '$1'.
+noun -> verb                : '$1'.
 
 verb -> literal             : '$1'.
 verb -> symbol              : '$1'.
 verb -> qualified_symbol    : {qualified_symbol, line('$1'), unwrap_symbols('$1')}.
 verb -> collection          : '$1'.
 
-qualified_symbol -> symbol slash symbol  : ['$1', '$3'].
+qualified_symbol -> symbol slash symbol           : ['$1', '$3'].
 qualified_symbol -> symbol slash qualified_symbol : ['$1' | '$3'].
 
 literal -> string   : '$1'.
 literal -> integer  : '$1'.
 literal -> float    : '$1'.
 
-application -> verb collection                  : {application, line('$2'), '$1', build_args('$2')}.
-application -> subject apply verb               : {application, line('$1'), '$3', ['$1']}.
-application -> subject apply verb collection    : {application, line('$1'), '$3', build_args('$1', '$4')}.
+application -> verb collection               : {application, line('$2'), '$1', build_args('$2')}.
+application -> noun apply verb               : {application, line('$1'), '$3', ['$1']}.
+application -> noun apply verb collection    : {application, line('$1'), '$3', build_args('$1', '$4')}.
 
-pattern_match -> subject apply match_keyword clause_tuple   : {match, line('$1'), '$1', '$4'}.
+pattern_match -> noun apply match_keyword clause_tuple   : {match, line('$1'), '$1', '$4'}.
 
-clause -> patterns implies expression   : {clause, line('$2'), '$1', '$3'}.
-patterns -> subject                     : ['$1'].
-patterns -> subject patterns            : ['$1' | '$2'].
+clause -> patterns implies noun   : {clause, line('$2'), '$1', '$3'}.
+patterns -> noun                     : ['$1'].
+patterns -> noun patterns            : ['$1' | '$2'].
 
 clause_tuple -> open clauses close              : '$2'.
 clause_tuple -> open newlines clauses close     : '$3'.
@@ -102,38 +105,22 @@ elements -> element                     : ['$1'].
 elements -> element newlines            : ['$1'].
 elements -> element separator elements  : ['$1' | '$3'].
 
-element -> expression   : '$1'.
+element -> adjective   : '$1'.
 element -> assignment   : '$1'.
 element -> newtype      : '$1'.
 element -> clauses      : {clauses, line('$1'), '$1'}.
 
-type_sum -> type_element pipe type_element      : ['$1', '$3'].
-type_sum -> open type_sum_block close           : '$2'.
-type_sum -> open newlines type_sum_block close  : '$2'.
+sum -> sum_line     : '$1'.
+sum -> sum_block    : '$1'.
+sum_line -> adverb pipe adverb    : ['$1', '$3'].
+sum_line -> adverb pipe sum_line     : ['$1' | '$3'].
+sum_block -> open sum_elems close           : '$2'.
+sum_block -> open newlines sum_elems close  : '$3'.
+sum_elems -> adverb secondary_separator adverb          : ['$1', '$3'].
+sum_elems -> adverb secondary_separator adverb newlines : ['$1', '$3'].
+sum_elems -> adverb secondary_separator sum_elems     : ['$1' | '$3'].
 
-type_sum_block -> type_element secondary_separator type_element             : ['$1', '$3'].
-type_sum_block -> type_element secondary_separator type_element newlines    : ['$1', '$3'].
-type_sum_block -> type_element secondary_separator type_sum_block           : ['$1' | '$3'].
-
-type_product -> symbol open type_pairs close           : {product, line('$1'), '$1', '$3'}.
-type_product -> symbol open newlines type_pairs close  : {product, line('$1'), '$1', '$3'}.
-
-type_pairs -> type_pair                         : ['$1'].
-type_pairs -> type_pair newlines                : ['$1'].
-type_pairs -> type_pair separator type_pairs    : ['$1' | '$3'].
-type_pair -> symbol colon type_element          : {type_pair, line('$1'), '$1', '$3'}.
-
-type_application -> symbol open type_elements close            : {appliaction, '$1', '$3'}.
-type_application -> symbol open newlines type_elements close   : {appliaction, '$1', '$3'}.
-
-type_elements -> type_element                           : ['$1'].
-type_elements -> type_element newlines                  : ['$1'].
-type_elements -> type_element separator type_elements   : ['$1' | '$3'].
-
-type_element -> type_sum            : {sum, line('$1'), '$1'}.
-type_element -> type_product        : '$1'.
-type_element -> symbol              : '$1'.
-type_element -> type_application    : '$1'.
+pair -> verb colon adverb        : parse_pair({pair, line('$1'), '$1', '$3'}).
 
 
 
@@ -156,3 +143,6 @@ build_args({tuple, _, Elems}) -> Elems;
 build_args(Collection) -> [Collection].
 build_args(Elem, {tuple, _, Elems}) -> [ Elem | Elems ];
 build_args(Elem, Collection) -> [ Elem, Collection ].
+
+parse_pair({pair, Line, Name, {tuple, _, Elems}}) -> {product, Line, Name, Elems};
+parse_pair({pair, _, _, _} = Pair) -> Pair.
