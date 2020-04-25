@@ -49,8 +49,8 @@ tag(Env, {clause, Line, Patterns, Expr}, Path, TagFun) ->
 %% Notes on application:
 %% Without knowing the type of `Name`, we can't know what the symbol 
 %% resolves to. It might resolve to one of following:
-%%  1. A function defined for a constraint by a type implementing (like 
-%%     `map` on list)
+%%  1. A function defined for a constraint. We can only know by finding the
+%%     type of the noun. Example: `map` on list
 %%  2. An accessor function for a type product (which strictly speaking 
 %%     can be seen as a case of the above)
 %%  3. A global or local non-type definition
@@ -72,20 +72,14 @@ tag(Env, {tuple, Line, Expressions}, Path, TagFun) ->
     {EnvExpr, TaggedExpressions} = fold(Env, Expressions, Path, TagFun),
     {EnvExpr, {tuple, Line, TaggedExpressions}};
 
+tag(Env, {dict, Line, Expressions}, Path, TagFun) ->
+    {EnvExpr, TaggedExpressions} = map(Env, Expressions, Path, TagFun),
+    {EnvExpr, {dict, Line, TaggedExpressions}};
+
 tag(Env, {type_def, Line, Name, Args, Body}, Path, TagFun) ->
     NewPath = [Name | Path],
     {BodyEnv, TaggedBody} = tag(Env, Body, NewPath, TagFun),
-    {BodyEnv, {type, Line, Name, Args, TaggedBody}};
-
-tag(Env, {sum, Line, Types}, Path, TagFun) ->
-    {SumEnv, TaggedTypes} = map(Env, Types, Path, TagFun),
-    {SumEnv, {sum, Line, TaggedTypes}};
-
-tag(Env, {product, Line, Name, Pairs}, Path, TagFun) ->
-    NewPath = [element(3, Name) | Path],
-    {NameEnv, TaggedName} = tag(Env, Name, Path, TagFun),
-    {PairEnv, TaggedPairs} = fold(NameEnv, Pairs, NewPath, TagFun),
-    {PairEnv, {product, Line, TaggedName, TaggedPairs}};
+    {BodyEnv, {type_def, Line, Name, Args, TaggedBody}};
 
 %% We deliberately don't include the KeyEnv in the environment that is
 %% returned. This is because the key of the pair in turn becomes an accessor
@@ -175,13 +169,13 @@ anonymous_function_test() ->
     {clause, _, [{variable, _, b, TaggedB}], {variable, _, b, TaggedB}} = Clause1,
     {clause, _, _, {variable, _, a, TaggedA}} = Clause2.
 
-sum_type_test() ->
+simple_sum_type_test() ->
     Code =
         "type Boolean -> True | False\n"
         "def blah a\n"
         " | True -> False",
     {Typed, Tagged} = tag_AST(Code),
-    [{type, _, _, _, {sum, _, [{_, _, True}, {_, _, False}]}}] = Typed,
+    [{type_def, _, _, _, {tuple, _, [{_, _, True}, {_, _, False}]}}] = Typed,
     ?assertEqual(True, ['Boolean','True']),
     ?assertEqual(False, ['Boolean', 'False']),
     [{def, _, _, _, [Clause]}] = Tagged,
@@ -189,28 +183,69 @@ sum_type_test() ->
     ?assertEqual(TrueClause, ['Boolean', 'True']),
     ?assertEqual(FalseExpr, ['Boolean', 'False']).
 
-product_type_test() ->
+complex_sum_syntax_test() ->
     Code =
-        "type BooleanList -> Cons: (value: Boolean, cons: BooleanList) | Nil\n"
-        "type Boolean -> True | False",
+        "\n"
+        "type Animal -> (Cat | Dog\n"
+        "                Parrot | Seagull\n"
+        "                Brontosaurus)",
     {Typed, _} = tag_AST(Code),
-    [{type, _, Name, _, Sum},_] = Typed,
-    {sum, _, [Product, Nil]} = Sum,
-    {product, _, ProductName, [{pair, _, Key1, Value1}, {pair, _, Key2, Value2}]} = Product,
-    ?assertEqual(Name, 'BooleanList'),
-    ?assertEqual(ProductName, {type, 1, ['BooleanList', 'Cons']}),
-    ?assertEqual(Key1, {type, 1, ['BooleanList', 'Cons', 'value']}),
-    ?assertEqual(Value1, {type, 2, ['Boolean']}),
-    ?assertEqual(Key2, {type, 1, ['BooleanList', 'Cons', 'cons']}),
-    ?assertEqual(Value2, {type, 1, ['BooleanList']}),
-    ?assertEqual(Nil, {type, 1, ['BooleanList', 'Nil']}).
-    
+    [{type_def, _, _, _, {tuple, _, [{_, _, Cat}, 
+                                     {_, _, Dog},
+                                     {_, _, Parrot},
+                                     {_, _, Seagull},
+                                     {_, _, Brontosaurus}]}}] = Typed,
+    ?assertEqual(Cat, ['Animal','Cat']),
+    ?assertEqual(Dog, ['Animal','Dog']),
+    ?assertEqual(Parrot, ['Animal','Parrot']),
+    ?assertEqual(Seagull, ['Animal','Seagull']),
+    ?assertEqual(Brontosaurus, ['Animal','Brontosaurus']).
+
+simple_product_type_test() ->
+    Code =
+        "type Monkey -> Monkey: { food: Banana, plant: Trees }",
+    {Typed, _} = tag_AST(Code),
+    Expected = [{type_def, 1, 'Monkey', [],
+                 {pair, 1,
+                  {type, 1, ['Monkey']},
+                  {dict, 1,
+                   [{pair,1,
+                     {type,1,['Monkey', 'food']},
+                     {type,1,['Monkey', 'Banana']}},
+                    {pair,1,
+                     {type,1,['Monkey', 'plant']},
+                     {type,1,['Monkey', 'Trees']}}]}}}],
+    ?assertEqual(Expected, Typed).
+
+complex_type_test() ->
+    Code =
+        "type BooleanList -> (Cons: { value: (True | False)\n"
+        "                             cons: BooleanList }\n"
+        "                     Nil)",
+    {Typed, _} = tag_AST(Code),
+    ?assertEqual([{type_def,1,'BooleanList',[],
+                   {tuple,1,
+                    [{pair,1,
+                      {type,1,['BooleanList','Cons']},
+                      {dict,1,
+                       [{pair,1,
+                         {type,1,['BooleanList',value]},
+                         {tuple,1,
+                          [{type,1,['BooleanList','True']},
+                           {type,1,['BooleanList','False']}]}},
+                        {pair,2,
+                         {type,2,['BooleanList',cons]},
+                         {type,1,['BooleanList']}}]}},
+                     {type,3,['BooleanList','Nil']}]}}], Typed).
 
 product_key_not_propagated_test() ->
     Code =
-        "type Blip -> Blip(blup: Boolean, blop: Blip)\n"
-        "type Boolean -> True | False",
-    Code.
+        "type Blip -> { blup: blyp }\n"
+        "def blap -> blup",
+    {Typed, Tagged} = tag_AST(Code),
+    [{type_def, 1, 'Blip', [], {dict, _, [{pair, 1, {type, _, BlupKey}, _}]}}] = Typed,
+    [{def, 2, 'blap', [], {variable, 2, 'blup', BlupTag}}] = Tagged,
+    ?assertNotEqual(BlupKey, BlupTag).
 
 
 -endif.
