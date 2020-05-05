@@ -9,8 +9,8 @@ Terminals
 Nonterminals
     all definitions definition
     assignment function newtype implies
-    pattern_match clause patterns clauses def_clauses clause_tuple
-    application 
+    pattern_match clause flat_clause pattern patterns clauses def_clauses clause_tuple pattern_tuple
+    application index lookup
     noun verb expression
     collection tuple list dict
     sum sum_list sum_or_expression
@@ -50,11 +50,15 @@ symbols -> symbol symbols   : ['$1' | '$2'].
 expression -> pair          : '$1'.
 expression -> noun          : '$1'.
 
-noun -> application         : '$1'.
 noun -> pattern_match       : '$1'.
-noun -> verb                : '$1'.
+noun -> pattern             : '$1'.
 
-verb -> literal             : '$1'.
+pattern -> application      : '$1'.
+pattern -> index            : '$1'.
+pattern -> lookup           : '$1'.
+pattern -> literal          : '$1'.
+pattern -> verb             : '$1'.
+
 verb -> symbol              : '$1'.
 verb -> qualified_symbol    : {qualified_symbol, line('$1'), unwrap_symbols('$1')}.
 verb -> collection          : '$1'.
@@ -66,23 +70,35 @@ literal -> string   : '$1'.
 literal -> integer  : '$1'.
 literal -> float    : '$1'.
 
-application -> verb collection               : {application, line('$2'), '$1', build_args('$2')}.
+index -> pattern list                        : {index, line('$1'), '$1', unwrap('$2')}.
+lookup -> pattern dict                       : {lookup, line('$1'), '$1', unwrap('$2')}.
+
+application -> verb tuple                    : {application, line('$1'), '$1', unwrap('$2')}.
 application -> noun apply verb               : {application, line('$1'), '$3', ['$1']}.
-application -> noun apply verb collection    : {application, line('$1'), '$3', build_args('$1', '$4')}.
+application -> noun apply verb tuple         : {application, line('$1'), '$3', ['$1' | unwrap('$4')]}.
+
+def_clauses -> pipe flat_clause                      : ['$2'].
+def_clauses -> pipe flat_clause newlines def_clauses : ['$2' | '$4'].
+
+flat_clause -> pattern implies expression           : {clause, line('$2'), ['$1'], '$3'}.
+flat_clause -> patterns implies expression          : {clause, line('$2'), '$1', '$3'}.
+
+patterns -> pattern separator pattern    : ['$1', '$3'].
+patterns -> pattern separator patterns   : ['$1' | '$3'].
+
+pattern_tuple -> open patterns close          : '$2'.
+pattern_tuple -> open newlines patterns close : '$3'.
 
 pattern_match -> noun apply match_keyword clause_tuple   : {match, line('$1'), '$1', '$4'}.
 
-clause -> patterns implies expression : {clause, line('$2'), '$1', '$3'}.
-patterns -> noun                      : ['$1'].
-patterns -> noun patterns             : ['$1' | '$2'].
-
-clause_tuple -> open clauses close              : '$2'.
-clause_tuple -> open newlines clauses close     : '$3'.
 clauses -> clause                               : ['$1'].
 clauses -> clause secondary_separator clauses   : ['$1' | '$3'].
 
-def_clauses -> pipe clause                      : ['$2'].
-def_clauses -> pipe clause newlines def_clauses : ['$2' | '$4'].
+clause_tuple -> open clauses close              : '$2'.
+clause_tuple -> open newlines clauses close     : '$3'.
+
+clause -> pattern implies expression            : {clause, line('$1'), ['$1'], '$3'}.
+clause -> pattern_tuple implies expression      : {clause, line('$1'), '$1', '$3'}.
 
 collection -> tuple : '$1'.
 collection -> list  : '$1'.
@@ -110,10 +126,10 @@ elements -> element separator elements  : ['$1' | '$3'].
 secondary_separator -> newlines : '$1'.
 secondary_separator -> pipe     : '$1'.
 
-element -> expression    : '$1'.
+element -> expression           : '$1'.
 element -> assignment           : '$1'.
 element -> newtype              : '$1'.
-element -> clauses              : {clauses, line('$1'), '$1'}.
+element -> clauses              : {lambda, line('$1'), '$1'}.
 
 pair -> verb colon noun : {pair, line('$1'), '$1', '$3'}.
 
@@ -140,8 +156,3 @@ line({_, Line})         -> Line;
 line({_, Line, _})      -> Line;
 line({_, Line, _, _})   -> Line;
 line([Head|_]) 		-> line(Head).
-
-build_args({tuple, _, Elems}) -> Elems;
-build_args(Collection) -> [Collection].
-build_args(Elem, {tuple, _, Elems}) -> [ Elem | Elems ];
-build_args(Elem, Collection) -> [ Elem, Collection ].

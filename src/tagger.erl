@@ -36,6 +36,10 @@ tag(Env, {def, Line, Name, Args, Body}, Path, TagFun) ->
                             end,
     {BodyEnv, {def, Line, Name, TaggedArgs, TaggedBody}};
 
+tag(Env, {lambda, Line, Clauses}, Path, TagFun) ->
+    {NewEnv, TaggedClauses} = map(Env, Clauses, Path, TagFun),
+    {NewEnv, {lambda, Line, TaggedClauses}};
+
 tag(Env, {clauses, Line, Clauses}, Path, TagFun) ->
     {NewEnv, TaggedClauses} = map(Env, Clauses, Path, TagFun),
     {NewEnv, {clauses, Line, TaggedClauses}};
@@ -164,7 +168,7 @@ anonymous_function_test() ->
         "                     _ -> a)",
     {_, Tagged} = tag_AST(Code),
     [{def, _, _, DefArgs, {application, _, _, Args}}] = Tagged,
-    [_, {clauses, _, [Clause1, Clause2]}] = Args,
+    [_, {lambda, _, [Clause1, Clause2]}] = Args,
     [{variable, _, a, TaggedA}] = DefArgs,
     {clause, _, [{variable, _, b, TaggedB}], {variable, _, b, TaggedB}} = Clause1,
     {clause, _, _, {variable, _, a, TaggedA}} = Clause2.

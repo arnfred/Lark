@@ -98,6 +98,26 @@ dializer --src src
 
 More info here: https://learnyousomeerlang.com/dialyzer
 
+## Using the Debugger
+To use the debugger, first open a shell with the modules on path:
+
+```
+> rebar3 shell
+```
+
+Then attach the debugger and run a command:
+```
+dbg:tracer().
+dbg:p(all, c). % Trace all processes, only calls
+
+% tpl = trace local functions as well
+% x means print exceptions (and normal return values)
+dbg:tpl(domain, union, x). 
+domain:union({product, #{a => 1, b => 2}}, {product, #{a => 1, c => 3}}).
+```
+
+More information in [this helpful stackoverflow answer](https://stackoverflow.com/questions/6438041/how-to-debug-erlang-code).
+
 ## Type representation
 
 How do I represent a line containing e.g. `type Bool = True | False`?

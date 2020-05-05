@@ -38,7 +38,7 @@ gen_expr({match, _, Expr, Clauses}) -> gen_pattern_match([Expr], Clauses);
 gen_expr({Args, Clauses}) when is_list(Clauses) -> gen_pattern_match(Args, Clauses);
 gen_expr({_, Expr}) -> gen_expr(Expr);
 
-gen_expr({clauses, Line, Clauses}) ->
+gen_expr({lambda, Line, Clauses}) ->
     [{clause, _, Patterns, _} | _Rest] = Clauses,
     Symbols = [symbol:id(['']) || _ <- Patterns],
     Args = [{variable, Line, S, S} || S <- Symbols],
@@ -138,9 +138,9 @@ pattern_match_multivariate_test() ->
     Code = 
         "type Boolean -> True | False\n"
         "def rexor a b\n"
-        " | True False -> True\n"
-        " | False True -> True\n"
-        " | _ _ -> False",
+        " | True, False -> True\n"
+        " | False, True -> True\n"
+        " | _, _ -> False",
     RunAsserts = fun(Mod) -> 
                          ?assertEqual('Boolean/True', Mod:rexor('Boolean/True', 'Boolean/False')),
                          ?assertEqual('Boolean/False', Mod:rexor('Boolean/True', 'Boolean/True'))
@@ -210,8 +210,8 @@ anonymous_function4_test() ->
     Code = 
         "type Boolean -> True | False\n"
         "def blip a f -> f(a, a)\n"
-        "def blap a -> a.blip(arg1 False -> False\n"
-        "                     arg1 True -> arg1)",
+        "def blap a -> a.blip((arg1, False) -> False\n"
+        "                     (arg1, True)  -> arg1)",
     RunAsserts = fun(Mod) -> ?assertEqual('Boolean/True', Mod:blap('Boolean/True')) end,
     run(Code, RunAsserts).
 

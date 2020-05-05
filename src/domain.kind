@@ -1,0 +1,97 @@
+// Missing pieces before I can compile this file:
+// - `where` clause
+// - `defining domain using `(this: Group)` form
+// - `Set`, `Dict`, `Function`, `Ordered` and `Literal` constraints
+// - `constraint` definition
+// 
+
+
+type DomainType -> (All
+                    Empty
+                    Singelton: Literal
+                    Sum: Set where (Sum.domain: Domain)
+                    Product: Dict where (Product.values.domain: Domain)
+                    Range: {low: T, high: T} where (T: Ordered) // T is an anonymous domain
+                    Predicate: Function where (Predicate.args: [Any], Predicate.out: Boolean)
+
+constraint Domain this {
+    def intersection this that: Domain where (that: Domain)
+    def union this that: Domain
+    def subset? this that: Boolean where (that: Domain)
+    def contains? this elem: Boolean
+}
+
+constraint LiteralDomain this where (this: Domain
+                                     this.subset?(Literal.domain))
+
+kind All: Domain {
+    def intersection this that -> that
+    def union this that -> All
+    def subset? this that -> (that == All)
+    def contains? this elem -> True
+}
+
+kind Empty: Domain {
+    def intersection this that -> Empty
+    def union this that -> that
+    def subset? this that -> True
+    def contains? this elem -> False
+}
+
+kind Singleton: Domain {
+    def intersection this that -> (this == that) ?? (this, Empty)
+    def union this that -> this.subset?(that) ?? (that, Sum { this, that })
+    def subset? this that -> that.contains?(this)
+    def contains? this elem -> this == elem
+}
+
+kind Sum: Domain {
+    def intersection this that -> Sum { domain.intersection(that) | domain <- this.members }
+    def union this that -> that.subset?(this) ?? (this, this.merge(that))
+    def subset? this that -> [ domain.subset?(that) | <- this.members ].all
+    def contains? this elem -> [ domain.contains?(elem) | <- this.members ].any
+}
+                 
+kind Product: Domain {
+    // A note on how this is type-checked:
+    // 1. `key` has the domain of the keys in `this`
+    // 2. `val` has the domain of the values in `this` (all in Domain)
+    // 3. `val.intersection` accepts only other domains. This means that:
+    // 4. `that(key)` must be a mapping from the domain of `key` to `Domain`
+    def intersection this that -> { key: val.intersection(that(key)) | (key: val) <- this.members }
+    def union this that -> { key: val.union(that(key)) | (key: val) <- this.members }
+    def subset? this that -> this.map(key val -> val.subset?(that(key))).all
+    def contains? this elem -> { val.contains?(this(key)) | (key: val) <- elem }.all
+}
+
+kind Range: Domain {
+    def intersection this that
+     | _ Range where this.T.subset?(that.T) -> that.intersection(this)
+     | _ Range where this.T.subset?(that.T) -> Range {low: [that.low, this.low].max
+                                                      high: [that.high, this.high].min}
+     | _ Singleton(s) where (this.T.contains?(s)
+                             s < this.max
+                             s > this.min) -> Range { low: s, high: s }
+    def union this that
+     | _ Range -> ...
+     | _ Singleton(s) -> this.contains?(s) ?? (this, Sum { this, that })
+    def subset? this that
+     | _ Range { high, low } -> this.high <= high and this.low >= low
+    def contains? this elem -> elem >= this.high and elem <= this.low
+
+kind Predicate: Domain {
+    def intersection this that -> Predicate (arg -> that.contains(arg) or this(arg))
+    def union this that -> Predicate (arg -> that.contains(arg) or this(arg))
+    // We can't compute whether a predicate is a subset of a domain unless the domain function
+    // of the predicate is literate and we can iterate through all the members
+    def subset? this that -> Predicate.args.head.domain.subset?(that)
+    def contains? this elem -> this(elem)
+}
+
+def merge this that
+ | Sum Sum -> that.foldLeft(member acc -> acc.merge(member), this)
+ | Sum Range -> (
+    val ranges = [ r | Range ~ r <- this].fold(r acc -> acc.union(r), that)
+    val rest = [ d | d <- if not(d: Range)]
+    Sum rest.merge(ranges)
+ | Sum _ -> Sum(this.members.append(that))

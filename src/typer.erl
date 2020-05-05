@@ -1,14 +1,27 @@
 -module(typer).
--export([type/1]).
+-export([type/2]).
 
-type(AST) -> {ok, gen_module_env(AST)}.
+type(Types, Defs) -> from_AST(Types, Defs).
 
-gen_module_env(AST) -> 
-    [{Name, length(Args)} || {def, _, [{symbol, _, Name}|Args], _} <- AST].
+from_AST(Types, Defs) -> 
+    %{ok, Env} = run_scan(#{}, #{}, Defs),
+    %Env.
+    {ok, #{}}.
+
+run_scan(Types, OldEnv, Defs) ->
+    Env = maps:from_list([{Name, scanner:scan(OldEnv, Types, Def)} || {def, _, Name, _, _} = Def <- Defs]), 
+    case domain:diff(OldEnv, Env) of
+        none -> {ok, Env};
+        {some, _} -> run_scan(Types, Env, Defs)
+    end.
+
+
 
 %% Next steps:
 %% - Tag variables so we can infer constraints on a variable in different
 %%   positions of the function body
+%% - Maybe implement pattern matching for product types?
+%% - Generate function that takes a sum/product type and defines a domain for each
 %% - Create function that can infer function constraints, possibly just for
 %%   singletons to begin with?  
 %% - Create function that can infer variable domains, possibly just for
