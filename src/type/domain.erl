@@ -74,6 +74,8 @@ union(any, _) -> any;
 union(_, any) -> any;
 union(none, D) -> D;
 union(D, none) -> D;
+union({f, F}, D) -> fun(Args) -> union(D, F(Args)) end;
+union(D, {f, F}) -> union({f, F}, D);
 union({sum, D1}, {sum, D2}) -> compact({sum, sets:union(D1, D2)});
 union({sum, D1}, D) -> compact({sum, sets:add_element(D, D1)});
 union(D, {sum, D1}) -> union({sum, D1}, D);
@@ -101,6 +103,8 @@ intersection(any, D) -> D;
 intersection(D, any) -> D;
 intersection(none, _) -> none;
 intersection(_, none) -> none;
+intersection({f, F}, D) -> fun(Args) -> intersection(D, F(Args)) end;
+intersection(D, {f, F}) -> intersection({f, F}, D);
 intersection({sum, D1}, {sum, D2}) -> 
     io:format("D1 is: ~p~n", [D1]),
     io:format("D2 is: ~p~n", [D2]),
@@ -346,6 +350,12 @@ union_sum_of_products_with_same_keys_test() ->
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
+union_f_test() ->
+    D1 = {f, fun([A]) -> A end},
+    D2 = b,
+    Expected = {sum, sets:from_list([a, b])},
+    Actual = apply(union(D1, D2), [[a]]),
+    ?assertEqual(none, diff(Expected, Actual)).
 
 intersection_product_one_key_test() ->
     D1 = {product, #{blip => true}},
@@ -429,6 +439,13 @@ intersection_sum_with_any_test() ->
     D2 = {sum, sets:from_list([any])},
     Expected = {product, #{a => 1, b => 2, c => 1}},
     Actual = intersection(D1, D2),
+    ?assertEqual(none, diff(Expected, Actual)).
+
+intersection_f_test() ->
+    D1 = {f, fun([A]) -> A end},
+    D2 = {sum, sets:from_list([a, b])},
+    Expected = b,
+    Actual = apply(intersection(D1, D2), [[{sum, sets:from_list([b, c])}]]),
     ?assertEqual(none, diff(Expected, Actual)).
 
 diff_sum_product_test() ->
