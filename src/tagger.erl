@@ -82,8 +82,11 @@ tag(Env, {dict, Line, Expressions}, Path, TagFun) ->
 
 tag(Env, {type_def, Line, Name, Args, Body}, Path, TagFun) ->
     NewPath = [Name | Path],
-    {BodyEnv, TaggedBody} = tag(Env, Body, NewPath, TagFun),
-    {BodyEnv, {type_def, Line, Name, Args, TaggedBody}};
+    MakeVar = fun(L, S) -> {variable, L, S, symbol:id(lists:reverse([S | NewPath]))} end,
+    TaggedArgs = [MakeVar(L, S) || {symbol, L, S} <- Args],
+    ArgEnv = maps:from_list([{S, Arg} || {_, _, S, _} = Arg <- TaggedArgs]),
+    {BodyEnv, TaggedBody} = tag(maps:merge(Env, ArgEnv), Body, NewPath, TagFun),
+    {BodyEnv, {type_def, Line, Name, TaggedArgs, TaggedBody}};
 
 %% We deliberately don't include the KeyEnv in the environment that is
 %% returned. This is because the key of the pair in turn becomes an accessor
@@ -97,6 +100,7 @@ tag(Env, {pair, Line, Key, Value}, Path, TagFun) ->
 tag(Env, {qualified_symbol, _, _} = QS, _, _) -> {Env, QS};
 
 tag(Env, {symbol, _, S} = Symbol, Path, TagFun) ->
+    io:format("Env for symbol ~w: ~p~n", [Env, S]),
     NewSymbol = maps:get(S, Env, TagFun(Path, Symbol)),
     NewEnv = maps:put(S, NewSymbol, Env),
     {NewEnv, NewSymbol}.

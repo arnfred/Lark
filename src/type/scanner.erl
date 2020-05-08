@@ -5,16 +5,6 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-generate_env_fun(Name, DomainFromEnv) -> 
-    fun(EnvFunctions) ->
-            DomainFun = fun(ArgDomains) ->
-                                {Envs, _} = unzip([EnvF(EnvFunctions) || EnvF <- EnvFunctions]),
-                                Env = maps:from_list(Envs),
-                                DomainFromEnv(Env, ArgDomains)
-                        end,
-            {{Name, {f, DomainFun}}, {f, DomainFun}}
-    end.
-
 scan(Types, AST) when is_list(AST) ->
     Scanned = [scan(#{}, Types, Def) || Def <- AST],
     {Envs, _} = unzip([EnvFun(Scanned) || EnvFun <- Scanned]),
@@ -133,10 +123,6 @@ scan_pattern(Domain, Types, {pair, _, {variable, _, Key, _}, Val}) ->
     {ValEnv, ValDomain} = scan_pattern(Domain, Types, Val),
     {intersection([ValEnv, #{Key => intersection(ValDomain, Domain)}]), ValDomain}.
 
-%pivot([]) -> [];
-%pivot(ListOfLists) -> 
-%    [[nth(N, List) || List <- ListOfLists] || N <- seq(1,length(nth(1, ListOfLists)))].
-
 fold(Env, Types, Elements) when is_list(Elements) ->
     F = fun(Elem, {EnvAcc, _}) -> 
                 {ElemEnv, Domain} = scan(EnvAcc, Types, Elem),
@@ -145,14 +131,28 @@ fold(Env, Types, Elements) when is_list(Elements) ->
     {NewEnv, NewDomain} = lists:foldl(F, {Env, any}, Elements),
     {NewEnv, NewDomain}.
 
+generate_env_fun(Name, DomainFromEnv) -> 
+    fun(EnvFunctions) ->
+            DomainFun = fun(ArgDomains) ->
+                                {Envs, _} = unzip([EnvF(EnvFunctions) || EnvF <- EnvFunctions]),
+                                Env = maps:from_list(Envs),
+                                DomainFromEnv(Env, ArgDomains)
+                        end,
+            {{Name, {f, DomainFun}}, {f, DomainFun}}
+    end.
+
+
 -ifdef(TEST).
 
 env_gen_test() ->
     AST = [{def, 1, function1, [], []}, {def, 2, function2, [], []}],
-    Expected = [none, none],
     Output = scan({}, AST),
-    Actual = [DomainFun([]) || {_, {f, DomainFun}} <- maps:to_list(Output)],
-    ?assertEqual(Expected, Actual).
+    ExpectedDomains = [none, none],
+    ActualDomains = [DomainFun([]) || {_, {f, DomainFun}} <- maps:to_list(Output)],
+    ExpectedKeys = [function1, function2],
+    ActualKeys = [Key || {Key, _} <- maps:to_list(Output)],
+    ?assertEqual(ExpectedDomains, ActualDomains),
+    ?assertEqual(ExpectedKeys, ActualKeys).
 
 -endif.
 

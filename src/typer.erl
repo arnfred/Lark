@@ -1,19 +1,20 @@
 -module(typer).
--export([type/2]).
+-export([type/3, load/2]).
 
-type(Types, Defs) -> from_AST(Types, Defs).
+type(Module, TypeDefs, Defs) -> 
+    %load(Module, TypeDefs).
+    {ok, ok}.
 
-from_AST(Types, Defs) -> 
-    %{ok, Env} = run_scan(#{}, #{}, Defs),
-    %Env.
-    {ok, #{}}.
+load(Module, TypeDefs) ->
+    TypeMod = lists:flatten([Module, "_types"]),
+    {ok, Forms} = typegen:gen(TypeMod, TypeDefs),
+    io:format("Forms are ~p~n", [Forms]),
+    {ok, Mod, TypeBin} = compile:forms(Forms, [report, verbose, from_core]),
+    io:format("Mod: ~p, TypeMod: ~p~n", [Mod, TypeMod]),
+    BeamName = lists:flatten([TypeMod, ".beam"]),
+    code:load_binary(Mod, BeamName, TypeBin),
+    {ok, Mod}.
 
-run_scan(Types, OldEnv, Defs) ->
-    Env = maps:from_list([{Name, scanner:scan(OldEnv, Types, Def)} || {def, _, Name, _, _} = Def <- Defs]), 
-    case domain:diff(OldEnv, Env) of
-        none -> {ok, Env};
-        {some, _} -> run_scan(Types, Env, Defs)
-    end.
 
 
 

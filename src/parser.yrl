@@ -142,7 +142,7 @@ sum -> expression secondary_separator sum : ['$1' | '$3'].
 Erlang code.
 
 unpack_tuple([T]) -> T;
-unpack_tuple([T | [_ | _]] = Terms) -> {tuple, line(T), Terms}.
+unpack_tuple([T | _] = Terms) -> {tuple, line(T), Terms}.
 
 name([{symbol, _, S} | _]) -> S.
 args([_ | Args]) -> Args.
