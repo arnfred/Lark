@@ -11,28 +11,26 @@ scan(Types, AST) when is_list(AST) ->
     maps:from_list(Envs).
 
 scan(_, Types, {def, _, Name, Args, Cs}) when is_list(Cs) ->
-    DomainFun = fun(Env, ArgDomains) ->
-                        ClauseArgs = zip(Args, ArgDomains),
-                        {_, Domain} = scan_clauses(Env, Types, ClauseArgs, Cs),
-                        Domain
-                end,
+    F = fun(Env, ArgDomains) ->
+                ClauseArgs = zip(Args, ArgDomains),
+                scan_clauses(Env, Types, ClauseArgs, Cs)
+        end,
+    DomainFun = fun(Env, ArgDomains) -> element(2, F(Env, ArgDomains)) end,
     generate_env_fun(Name, DomainFun);
 
 scan(_, Types, {def, _, Name, Args, Expr}) ->
-    DomainFun = fun(Env, ArgDomains) -> 
-                        ArgEnv = maps:from_dict([{A, D} || {A, D} <- zip(Args, ArgDomains)]),
-                        scan(intersection(ArgEnv, Env), Types, Expr)
-                end,
+    F = fun(Env, ArgDomains) -> 
+                ArgEnv = maps:from_dict(zip(Args, ArgDomains)),
+                scan(intersection(ArgEnv, Env), Types, Expr)
+        end,
+    DomainFun = fun(Env, ArgDomains) -> element(2, F(Env, ArgDomains)) end,
     generate_env_fun(Name, DomainFun);
 
-scan(Env, Types, {application, _, F, Args}) ->
+scan(Env, Types, {application, _, Expr, Args}) ->
     {ArgEnvs, ArgDomains} = [scan(Env, Types, A) || A <- Args],
-    {FEnv, FDomain} = case F of
-                          {type, _, T}  -> {#{}, Types:T(ArgDomains)};
-                          Expr          -> {E, {f, DomainFun}} = scan(Env, Types, Expr),
-                                           {E, DomainFun(ArgDomains)}
-                      end,
-    {intersection([FEnv | ArgEnvs]), FDomain};
+    {ExprEnv, {f, DomainFun}} = scan(Env, Types, Expr),
+    ExprDomain = DomainFun(ArgDomains),
+    {intersection([ExprEnv | ArgEnvs]), ExprDomain};
 
 scan(Env, Types, {lookup, _, Var, Elems}) ->
     {ElemEnvs, ElemDomains} = unzip([scan(Env, Types, E) || E <- Elems]),
@@ -63,7 +61,7 @@ scan(Env, _, {variable, _, _, Tag}) ->
     D = maps:get(Tag, Env, any),
     {#{Tag => D}, D};
 
-scan(_, Types, {type, _, T}) -> {#{}, Types:T()};
+scan(_, Types, {type, _, T}) -> {#{}, Types:domain(T)};
 
 scan(Env, _, {qualified_symbol, _, S}) ->
     D = maps:get(S, Env, any),
@@ -84,9 +82,8 @@ scan_clause(Env, Types, Args, {clause, _, Patterns, Expr}) ->
 
 % Pattern of: `T(a, b)`
 scan_pattern(Domain, Types, {application, _, {type, _, T}, Args}) ->
-    TArgDomains = Types:args(T),
-    {f, TDomainFun} = Types:T(), 
-    {ArgEnvs, ArgDomains} = unzip([scan_pattern(D, Types, A) || {D, A} <- zip(TArgDomains, Args)]),
+    {ArgEnvs, ArgDomains} = unzip([scan_pattern(any, Types, A) || A <- Args]),
+    {f, TDomainFun} = Types:domain(T), 
     {intersection(ArgEnvs), intersection(Domain, TDomainFun(ArgDomains))};
 
 % Pattern of: `T { k: v, ... }`
@@ -113,7 +110,7 @@ scan_pattern(Domain, Types, {dict, _, Elems}) ->
     {intersection(ArgEnvs), {product, ArgDomain}};
 
 % Pattern of: `T` for some defined type `T`
-scan_pattern(Domain, Types, {type, _, T}) -> {#{}, intersection(Domain, Types:T())};
+scan_pattern(Domain, Types, {type, _, T}) -> {#{}, intersection(Domain, Types:domain(T))};
 
 % Pattern of `v` for any non-type
 scan_pattern(Domain, _, {variable, _, _, Tag}) -> {#{Tag => Domain}, Domain};
@@ -126,11 +123,23 @@ scan_pattern(Domain, Types, {pair, _, {variable, _, Key, _}, Val}) ->
 fold(Env, Types, Elements) when is_list(Elements) ->
     F = fun(Elem, {EnvAcc, _}) -> 
                 {ElemEnv, Domain} = scan(EnvAcc, Types, Elem),
-                {union([EnvAcc, ElemEnv]), Domain} 
+                {intersection([EnvAcc, ElemEnv]), Domain} 
         end,
     {NewEnv, NewDomain} = lists:foldl(F, {Env, any}, Elements),
     {NewEnv, NewDomain}.
 
+% This is a bit of a funky pattern that is going to be hard to understand when
+% reading the code In short, what's going on here is that we want the domain
+% function in `{f, DomainFun}` to be purely a function that accepts a domain as
+% a parameter and returns a domain. However, when the function is executed, it
+% executes the scan of the AST and needs an environment of other top level
+% functions available. This isn't known at the time we generate the domain
+% function, so we can't store it in the clojure. Instead I'm using this kludge
+% to make sure it's passed in after we've created a domain function for all
+% top-level functions.
+%
+% To understand what's going on in the code a bit better, have a look at the
+% commit commit message of `ac6dcd61822ecfde1aeaa75482f059a9fe1f6d24`.
 generate_env_fun(Name, DomainFromEnv) -> 
     fun(EnvFunctions) ->
             DomainFun = fun(ArgDomains) ->

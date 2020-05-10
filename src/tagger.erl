@@ -100,7 +100,6 @@ tag(Env, {pair, Line, Key, Value}, Path, TagFun) ->
 tag(Env, {qualified_symbol, _, _} = QS, _, _) -> {Env, QS};
 
 tag(Env, {symbol, _, S} = Symbol, Path, TagFun) ->
-    io:format("Env for symbol ~w: ~p~n", [Env, S]),
     NewSymbol = maps:get(S, Env, TagFun(Path, Symbol)),
     NewEnv = maps:put(S, NewSymbol, Env),
     {NewEnv, NewSymbol}.

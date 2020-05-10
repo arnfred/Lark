@@ -2,7 +2,7 @@
 -export([compile/1, get_AST/1]).
 
 compile({Module, Code}) ->
-    {ok, TypeAST, DefAST} = get_AST(Code),
+    {ok, _, {TypeAST, DefAST}} = get_AST(Code),
     io:format("Tagged AST is ~p~n", [DefAST]),
     {ok, _} = typer:type(Module, TypeAST, DefAST),
     {ok, Forms} = codegen:gen({Module, DefAST}),
@@ -16,5 +16,4 @@ get_AST(Code) ->
     io:format("Tokens are ~p~n", [Tokens]),
     {ok, AST} = parser:parse(Tokens),
     io:format("AST is ~p~n", [AST]),
-    {ok, _, {TypeAST, DefAST}} = tagger:tag(AST),
-    {ok, TypeAST, DefAST}.
+    tagger:tag(AST).

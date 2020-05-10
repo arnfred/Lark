@@ -1,5 +1,5 @@
 -module(domain).
--export([diff/2, union/1, union/2, intersection/1, intersection/2]).
+-export([diff/2, union/1, union/2, intersection/1, intersection/2, compact/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -106,8 +106,6 @@ intersection(_, none) -> none;
 intersection({f, F}, D) -> fun(Args) -> intersection(D, F(Args)) end;
 intersection(D, {f, F}) -> intersection({f, F}, D);
 intersection({sum, D1}, {sum, D2}) -> 
-    io:format("D1 is: ~p~n", [D1]),
-    io:format("D2 is: ~p~n", [D2]),
     compact({sum, sets:from_list([intersection(Dj, Di) || Di <- sets:to_list(D1), Dj <- sets:to_list(D2)])});
 intersection({sum, D1}, D) -> 
     compact({sum, sets:from_list([intersection(D, Di) || Di <- sets:to_list(D1)])});
@@ -118,50 +116,53 @@ intersection({product, D1}, {product, D2}) -> propagate_none({product, intersect
 intersection(_, _) -> none.
 
 
-propagate_none({product, Map}) -> case lists:member(none, maps:values(Map)) of
-                                      true -> none;
-                                      false -> {product, Map}
-                                  end;
-propagate_none({tagged, T, {product, Map}}) -> case lists:member(none, maps:values(Map)) of
-                                                   true -> none;
-                                                   false -> {tagged, T, {product, Map}}
-                                               end;
+propagate_none({product, Map}) -> 
+    case lists:member(none, maps:values(Map)) of
+        true -> none;
+        false -> {product, Map}
+    end;
+propagate_none({tagged, T, {product, Map}}) -> 
+    case lists:member(none, maps:values(Map)) of
+        true -> none;
+        false -> {tagged, T, {product, Map}}
+    end;
 propagate_none(D) -> D.
 
 
 
-compact({sum, S}) -> compact(S);
+compact({sum, S}) -> compact_sum_list(compact_set(S));
+compact({product, Map}) -> {product, maps:map(fun(_, V) -> compact(V) end, Map)};
+compact({tagged, Tag, Domain}) -> {tagged, Tag, compact(Domain)};
+compact({f, DomainFun}) -> {f, fun(Args) -> compact(DomainFun(Args)) end};
+compact({_, _} = T) -> T;
+compact({_, _, _} = T) -> T;
+compact(Type) -> Type.
 
-compact(S) ->
-    io:format("S is: ~p~n", [S]),
+% TODO: Need to filter out atoms
+compact_set(SumSet) ->
     % Filter out `none` and group by domain type
     KeyFun = fun({Type, _}) -> Type;
                 (Other)     -> Other end,
-    Keyed = [{K, V} || {K, V} <- group_by(KeyFun, sets:to_list(S))],
-    io:format("Keyed is: ~p~n", [Keyed]),
-
+    Keyed = [{K, V} || {K, V} <- group_by(KeyFun, sets:to_list(SumSet))],
 
     % Based on domain type compact appropriately
-    Compacted = lists:map(fun({product, Products})  -> compact_products(Products);
-                             ({sum, Sums})          -> compact(sets:union([Set || {sum, Set} <- Sums]));
-                             ({none, _})            -> [];
-                             ({any, _})             -> [any];
-                             ({_, Other})           -> Other
-                          end, Keyed),
+    L = lists:map(fun({product, Products})  -> compact_products(Products);
+                     ({sum, Sums})          -> compact_set(sets:union([Set || {sum, Set} <- Sums]));
+                     ({none, _})            -> [];
+                     ({any, _})             -> [any];
+                     ({_, Others})          -> [compact(Elem) || Elem <- Others]
+                  end, Keyed),
 
-    % We want to remove any instances of `none` in the sum. If there are
-    % instances of `any`, the whole sum is converted to an `any`
+    lists:flatten(L).
 
-    io:format("Compacted is: ~p~n", [Compacted]),
-    case lists:flatten(Compacted) of
-        []      -> none;
-        [D]     -> D;
-        Elems   -> 
-            NoNones = [E || E <- Elems, not(E =:= none)],
-            case lists:member(any, NoNones) of 
-                       true -> any; 
-                       _ -> {sum, sets:from_list(Elems)} 
-            end
+
+compact_sum_list([]) -> none;
+compact_sum_list([D]) -> D;
+compact_sum_list(Elems) ->
+    NoNones = [E || E <- Elems, not(E =:= none)],
+    case lists:member(any, NoNones) of 
+        true -> any; 
+        _ -> {sum, sets:from_list(Elems)} 
     end.
 
 
@@ -528,6 +529,32 @@ diff_tagged_sum_test() ->
     Expected = none,
     Actual = diff(Old, New),
     ?assertEqual(Expected, Actual).
+
+compact_sum_sum_test() ->
+    Expected = {sum, sets:from_list([a, b, c])},
+    Actual = compact({sum, sets:from_list([a,{sum, sets:from_list([b,c])}])}),
+    ?assertEqual(Expected, Actual).
+
+compact_product_sum_sum_test() ->
+    Expected = {product, #{a => {sum, sets:from_list([a, b, c])}}},
+    Actual = compact({product, #{a => {sum, sets:from_list([a,{sum, sets:from_list([b,c])}])}}}),
+    ?assertEqual(Expected, Actual).
+
+compact_tagged_sum_sum_test() ->
+    Expected = {tagged, t, {sum, sets:from_list([a, b, c])}},
+    Actual = compact({tagged, t, {sum, sets:from_list([a,{sum, sets:from_list([b,c])}])}}),
+    ?assertEqual(Expected, Actual).
+
+compact_sum_tagged_sum_sum_test() ->
+    Expected = {tagged, t, {sum, sets:from_list([a, b, c])}},
+    Actual = compact({sum, sets:from_list([{tagged, t, {sum, sets:from_list([a,{sum, sets:from_list([b,c])}])}}])}),
+    ?assertEqual(none, diff(Expected, Actual)).
+
+compact_sum_item_test() ->
+    Expected = {sum, sets:from_list([a, b, c])},
+    Actual = compact({sum, sets:from_list([a, b, {sum, sets:from_list([c])}])}),
+    ?assertEqual(none, diff(Expected, Actual)).
+
 
     
 -endif.
