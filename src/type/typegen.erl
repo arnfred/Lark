@@ -1,5 +1,6 @@
 -module(typegen).
 -import(lists, [unzip/1, unzip3/1, zip/2]).
+-import(symbol, [tag/1]).
 -export([gen/2]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -21,7 +22,7 @@ gen(Module, AST) when is_list(AST) ->
     {ok, cerl:c_module(cerl:c_atom(Module), Exports, [], [DomainDef | TypeDefs])}.
 
 gen_type_def(Name, Args, Body) -> 
-    ArgsForm = [cerl:c_var(gen_tag(A)) || A <- Args],
+    ArgsForm = [cerl:c_var(tag(A)) || A <- Args],
     Compacted = cerl:c_call(cerl:c_atom(domain), cerl:c_atom(compact), [Body]),
     FName = cerl:c_fname(Name, length(Args)),
     {FName, cerl:c_fun(ArgsForm, Compacted)}.
@@ -45,7 +46,7 @@ gen_env(Envs) when is_list(Envs) ->
     maps:from_list([{Tag, {Vars, Domain}} || {Tag, Vars, Domain} <- Deduped]).
 
 domains([], {type_def, _, Name, Args, Expr}) -> 
-    Vars = [gen_tag(A) || A <- Args],
+    Vars = [tag(A) || A <- Args],
     {Env, _, Domain} = domains(Vars, Expr),
     {[{Name, Vars, Domain} | Env], Vars, Domain};
 
@@ -64,14 +65,14 @@ domains(Args, {dict, _, Pairs}) ->
 
 domains(Args, {pair, _, Key, Expr}) ->
     {Env, Vars, ExprDomain} = domains(Args, Expr),
-    Tag = gen_tag(Key),
+    Tag = tag(Key),
     Domain = {tagged, Tag, ExprDomain},
     {[{Tag, order(Args, Vars), Domain} | Env], order(Args, Vars), Domain};
 
 domains(_, {variable, _, _, Tag}) -> {[], [Tag], {variable, Tag}};
 
 domains(_, {type, _, _} = Type) -> 
-    Tag = gen_tag(Type),
+    Tag = tag(Type),
     Domain = {type, Tag},
     {[{Tag, [], Domain}], [], Domain}.
 
@@ -93,7 +94,7 @@ abstract_form(Env, {sum, Set}) ->
     cerl:c_tuple([cerl:c_atom(sum), DomainSet]);
 
 abstract_form(Env, {product, Map}) ->
-    Entries = [cerl:c_map_pair(cerl:c_atom(gen_tag(K)), abstract_form(Env, D)) || 
+    Entries = [cerl:c_map_pair(cerl:c_atom(tag(K)), abstract_form(Env, D)) || 
                {K, D} <- maps:to_list(Map)],
     DomainMap = cerl:c_map(Entries),
     cerl:c_tuple([cerl:c_atom(product), DomainMap]);
@@ -113,13 +114,6 @@ abstract_form(Env, {type, Tag}) ->
 order(Args, Vars) ->
     FlatVars = lists:flatten(Vars),
     [A || A <- Args, lists:member(A, FlatVars)].
-
-gen_tag({type, _, Symbols}) -> 
-    list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)]));
-
-gen_tag({symbol, _, S}) -> S;
-
-gen_tag({variable, _, _, Tag}) -> Tag.
 
 group_by(F, L) -> dict:to_list(lists:foldr(fun({K,V}, D) -> dict:append(K, V, D) end , dict:new(), [ {F(X), X} || X <- L ])).
 
@@ -237,8 +231,8 @@ var_order_test() ->
                          Expected = {tagged, 'Order/T', 
                                      {sum, sets:from_list([
                                                            {tagged, 'Order/C', 'Args/C'},
-                                                           {tagged, 'Order/B', 'Args/B'},
-                                                           {tagged, 'Order/A', 'Args/A'}])}},
+                                                           {tagged, 'Order/A', 'Args/A'},
+                                                           {tagged, 'Order/B', 'Args/B'}])}},
                          {f, DomainFun} = Mod:domain('Order/T'),
                          Actual = DomainFun('Args/A', 'Args/B', 'Args/C'),
                          ?assertEqual(none, domain:diff(Expected, Actual))

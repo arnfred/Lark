@@ -1,9 +1,16 @@
 -module(symbol).
--export([id/1]).
+-export([id/1, tag/1]).
 
 id(Path) -> 
     PathString = [atom_to_list(A) || A <- lists:join('_', Path)],
     list_to_atom(lists:flatten([PathString, "_", get_random_string(6)])).
+
+tag({type, _, Symbols}) -> 
+    list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)]));
+
+tag({symbol, _, S}) -> S;
+
+tag({variable, _, _, Tag}) -> Tag.
 
 get_random_string(Length) ->
     AllowedChars = "abcdefghijklmnopqrstuvwxyz1234567890",

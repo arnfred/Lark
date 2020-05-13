@@ -67,6 +67,11 @@ tag(Env, {application, Line, Name, Args}, Path, TagFun) ->
     {NewEnv, TaggedArgs} = map(NameEnv, Args, Path, TagFun),
     {NewEnv, {application, Line, TaggedName, TaggedArgs}};
 
+tag(Env, {lookup, Line, Var, Elems}, Path, TagFun) ->
+    {VarEnv, TaggedVar} = tag(Env, Var, Path, TagFun),
+    {NewEnv, TaggedElems} = map(VarEnv, Elems, Path, TagFun),
+    {NewEnv, {lookup, Line, TaggedVar, TaggedElems}};
+
 tag(Env, {match, Line, Expr, Clauses}, Path, TagFun) ->
     {ExprEnv, TaggedExpr} = tag(Env, Expr, Path, TagFun),
     {ClausesEnv, TaggedClauses} = map(ExprEnv, Clauses, Path, TagFun),

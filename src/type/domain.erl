@@ -1,5 +1,5 @@
 -module(domain).
--export([diff/2, union/1, union/2, intersection/1, intersection/2, compact/1]).
+-export([diff/2, union/1, union/2, intersection/1, intersection/2, compact/1, subset/2]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -70,12 +70,13 @@ union(D1, D2) when is_map(D1), is_map(D2) ->
     maps:map(F, maps:merge(D1, D2));
 
 union(D, D) -> D;
+union({error, E1}, {error, E2}) -> {error, E1 ++ E2};
+union({error, _} = E, _) -> E;
+union(_, {error, _} = E) -> E;
 union(any, _) -> any;
 union(_, any) -> any;
 union(none, D) -> D;
 union(D, none) -> D;
-union({f, F}, D) -> fun(Args) -> union(D, F(Args)) end;
-union(D, {f, F}) -> union({f, F}, D);
 union({sum, D1}, {sum, D2}) -> compact({sum, sets:union(D1, D2)});
 union({sum, D1}, D) -> compact({sum, sets:add_element(D, D1)});
 union(D, {sum, D1}) -> union({sum, D1}, D);
@@ -85,7 +86,7 @@ union({product, D1}, {product, D2}) ->
 union(D1, D2) -> compact({sum, sets:from_list([D1, D2])}).
 
 
-intersection(Ds) when is_list(Ds) -> lists:foldl(fun(E1,E2) -> intersection(E1, E2) end, none, Ds).
+intersection(Ds) when is_list(Ds) -> lists:foldl(fun(E1,E2) -> intersection(E1, E2) end, any, Ds).
 intersection(D1, D2) when is_map(D1), is_map(D2) ->
     % When intersecting two maps we include all domains of the two maps.  This
     % is because a key not present in a map is assumed to have domain `any`,
@@ -99,11 +100,14 @@ intersection(D1, D2) when is_map(D1), is_map(D2) ->
     maps:map(F, maps:merge(D1, D2));
 
 intersection(D, D) -> D;
+intersection({error, E1}, {error, E2}) -> {error, E1 ++ E2};
+intersection({error, _} = E, _) -> E;
+intersection(_, {error, _} = E) -> E;
 intersection(any, D) -> D;
 intersection(D, any) -> D;
 intersection(none, _) -> none;
 intersection(_, none) -> none;
-intersection({f, F}, D) -> fun(Args) -> intersection(D, F(Args)) end;
+intersection({f, F}, D) -> fun(Args, Stack) -> intersection(D, F(Args, Stack)) end;
 intersection(D, {f, F}) -> intersection({f, F}, D);
 intersection({sum, D1}, {sum, D2}) -> 
     compact({sum, sets:from_list([intersection(Dj, Di) || Di <- sets:to_list(D1), Dj <- sets:to_list(D2)])});
@@ -116,18 +120,21 @@ intersection({product, D1}, {product, D2}) -> propagate_none({product, intersect
 intersection(_, _) -> none.
 
 
-propagate_none({product, Map}) -> 
-    case lists:member(none, maps:values(Map)) of
-        true -> none;
-        false -> {product, Map}
-    end;
-propagate_none({tagged, T, {product, Map}}) -> 
-    case lists:member(none, maps:values(Map)) of
-        true -> none;
-        false -> {tagged, T, {product, Map}}
-    end;
-propagate_none(D) -> D.
-
+subset(D, D) -> true;
+subset(any, any) -> true;
+subset(_, any) -> true;
+subset(any, _) -> false;
+subset(none, none) -> true;
+subset(_, none) -> false;
+subset(none, _) -> true;
+subset({f, _}, _) -> false;
+subset(_, {f, _}) -> false;
+subset({sum, D1}, D2) -> lists:all(fun(D) -> subset(D, D2) end, sets:to_list(D1));
+subset(D1, {sum, D2}) -> lists:any(fun(D) -> subset(D1, D) end, sets:to_list(D2));
+subset({tagged, Tag, D1}, {tagged, Tag, D2}) -> subset(D1, D2);
+subset({product, D1}, {product, D2}) -> 
+    lists:all(fun({K,D}) -> subset(D, maps:get(K, D2, any)) end, maps:to_list(D1));
+subset(_, _) -> false.
 
 
 compact({sum, S}) -> compact_sum_list(compact_set(S));
@@ -172,7 +179,7 @@ compact_products(Products) ->
 % Why is the union of two products tricky? 
 %
 % Because the union of a cartesian product is not equal to the union of each
-% domain of the cartesian product.  to illustrate, consider the two product
+% domain of the cartesian product.  to illustrate, consider the two products
 % `{a: D_a, b: D_b/2}` and `{a: D_a/2, b: D_b}`. 
 %
 % In a clunky notation i'm denoting `D_b` as the full domain of `b`
@@ -235,8 +242,26 @@ set_eq(S1, S2) -> sets:is_subset(S1, S2) andalso sets:is_subset(S2, S1).
 
 group_by(F, L) -> dict:to_list(lists:foldr(fun({K,V}, D) -> dict:append(K, V, D) end , dict:new(), [ {F(X), X} || X <- L ])).
 
+propagate_none({product, Map}) -> 
+    case lists:member(none, maps:values(Map)) of
+        true -> none;
+        false -> {product, Map}
+    end;
+propagate_none({tagged, T, {product, Map}}) -> 
+    case lists:member(none, maps:values(Map)) of
+        true -> none;
+        false -> {tagged, T, {product, Map}}
+    end;
+propagate_none(D) -> D.
+
 
 -ifdef(TEST).
+
+union_array_test() ->
+    D = blip,
+    Expected = blip,
+    Actual = union([D]),
+    ?assertEqual(none, diff(Expected, Actual)).
 
 union_product_one_key_test() ->
     D1 = {product, #{blip => true}},
@@ -351,11 +376,10 @@ union_sum_of_products_with_same_keys_test() ->
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
-union_f_test() ->
-    D1 = {f, fun([A]) -> A end},
-    D2 = b,
-    Expected = {sum, sets:from_list([a, b])},
-    Actual = apply(union(D1, D2), [[a]]),
+intersection_array_test() ->
+    D = blip,
+    Expected = blip,
+    Actual = intersection([D]),
     ?assertEqual(none, diff(Expected, Actual)).
 
 intersection_product_one_key_test() ->
@@ -443,10 +467,17 @@ intersection_sum_with_any_test() ->
     ?assertEqual(none, diff(Expected, Actual)).
 
 intersection_f_test() ->
-    D1 = {f, fun([A]) -> A end},
+    D1 = {f, fun([A], _) -> A end},
     D2 = {sum, sets:from_list([a, b])},
     Expected = b,
-    Actual = apply(intersection(D1, D2), [[{sum, sets:from_list([b, c])}]]),
+    Actual = apply(intersection(D1, D2), [[{sum, sets:from_list([b, c])}], []]),
+    ?assertEqual(none, diff(Expected, Actual)).
+
+intersection_map_map_test() ->
+    D1 = #{a => any, b => any},
+    D2 = #{b => blup, c => none},
+    Expected = #{a => any, b => blup, c => none},
+    Actual = intersection(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 diff_sum_product_test() ->
@@ -555,6 +586,41 @@ compact_sum_item_test() ->
     Actual = compact({sum, sets:from_list([a, b, {sum, sets:from_list([c])}])}),
     ?assertEqual(none, diff(Expected, Actual)).
 
+subset_sum_sum_test() ->
+    D1 = {sum, sets:from_list([a, b, c])},
+    D2 = {sum, sets:from_list([a, b, c, d])},
+    ?assertEqual(true, subset(D1, D2)).
 
+subset_non_sum_sum_test() ->
+    D1 = {sum, sets:from_list([a, b, c])},
+    D2 = {sum, sets:from_list([b, c, d])},
+    ?assertEqual(false, subset(D1, D2)).
     
+subset_product_product_test() ->
+    D1 = {product, #{a => 1, b => 2}},
+    D2 = {product, #{a => 1}},
+    ?assertEqual(true, subset(D1, D2)).
+
+subset_non_product_product_test() ->
+    D1 = {product, #{a => 1, b => 2}},
+    D2 = {product, #{a => 2}},
+    ?assertEqual(false, subset(D1, D2)).
+
+subset_tagged_tagged_test() ->
+    D1 = {tagged, t, t},
+    D2 = {tagged, t, {sum, sets:from_list([s, t])}},
+    ?assertEqual(true, subset(D1, D2)).
+
+subset_non_tagged_tagged_test() ->
+    D1 = {tagged, t, t},
+    D2 = {tagged, s, {sum, sets:from_list([s, t])}},
+    ?assertEqual(false, subset(D1, D2)).
+
+subset_sum_product_test() ->
+    D1 = {product, #{a => 2, b => 3, c => 4}},
+    D2 = {sum, sets:from_list([{product, #{a => 1, b => 2}},
+                               {product, #{a => 2, b => 3}}])},
+    ?assertEqual(true, subset(D1, D2)).
+
+
 -endif.
