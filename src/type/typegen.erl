@@ -59,7 +59,7 @@ domains(Args, {tuple, _, Expressions}) ->
 
 domains(Args, {dict, _, Pairs}) ->
     {EnvList, Vars, Domains} = unzip3([domains(Args, Expr) || {pair, _, _, Expr} <- Pairs]),
-    Keys = [Key || {pair, _, Key, _} <- Pairs],
+    Keys = [symbol:name(P) || P <- Pairs],
     io:format("Args: ~p, Vars: ~p~n", [Args, Vars]),
     {lists:flatten(EnvList), order(Args, Vars), {product, maps:from_list(zip(Keys, Domains))}};
 
@@ -74,7 +74,10 @@ domains(_, {variable, _, _, Tag}) -> {[], [Tag], {variable, Tag}};
 domains(_, {type, _, _} = Type) -> 
     Tag = tag(Type),
     Domain = {type, Tag},
-    {[{Tag, [], Domain}], [], Domain}.
+    {[{Tag, [], Domain}], [], Domain};
+
+domains(_, {key, _, Key}) -> 
+    {[], [], Key}.
 
 compile(Tag, Env) -> 
     {Vars, Domain} = maps:get(Tag, Env),
@@ -94,7 +97,7 @@ abstract_form(Env, {sum, Set}) ->
     cerl:c_tuple([cerl:c_atom(sum), DomainSet]);
 
 abstract_form(Env, {product, Map}) ->
-    Entries = [cerl:c_map_pair(cerl:c_atom(tag(K)), abstract_form(Env, D)) || 
+    Entries = [cerl:c_map_pair(cerl:c_atom(K), abstract_form(Env, D)) || 
                {K, D} <- maps:to_list(Map)],
     DomainMap = cerl:c_map(Entries),
     cerl:c_tuple([cerl:c_atom(product), DomainMap]);
@@ -109,7 +112,9 @@ abstract_form(Env, {type, Tag}) ->
     case maps:get(Tag, Env) of
         {_, {type, Tag}} -> cerl:c_atom(Tag);
         {_, Domain} -> abstract_form(Env, Domain)
-    end.
+    end;
+
+abstract_form(_, Key) -> cerl:c_atom(Key).
 
 order(Args, Vars) ->
     FlatVars = lists:flatten(Vars),
@@ -142,7 +147,7 @@ sum_type_boolean_test() ->
 product_type_test() ->
     Code = "type P -> {a: A, b: B}",
     RunAsserts = fun(Mod) ->
-                         Expected = {product, #{'P/a' => 'P/A', 'P/b' => 'P/B'}},
+                         Expected = {product, #{a => 'P/A', b => 'P/B'}},
                          Actual = Mod:domain('P'),
                          ?assertEqual(none, domain:diff(Expected, Actual)),
                          Actual2 = Mod:'P'(),
@@ -153,7 +158,7 @@ product_type_test() ->
 tagged_type_test() ->
     Code = "type P -> K: {a: A, b: B}",
     RunAsserts = fun(Mod) ->
-                         Expected = {tagged, 'P/K', {product, #{'P/a' => 'P/A', 'P/b' => 'P/B'}}},
+                         Expected = {tagged, 'P/K', {product, #{a => 'P/A', b => 'P/B'}}},
                          Actual = Mod:domain('P'),
                          ?assertEqual(none, domain:diff(Expected, Actual)),
                          Actual2 = Mod:'P'(),
@@ -191,11 +196,11 @@ tagged_subtype_test() ->
                  end,
     run(Code, RunAsserts).
 
-tagged_product_subttype_test() ->
+tagged_product_subset_test() ->
     Code = "type Time -> {hour: (Hour: Int), minute: (Minute: Int), second: (Second: Int)}",
     RunAsserts = fun(Mod) ->
-                         Expected = {tagged, 'Time/Minute', 'Time/Int'},
                          Actual = Mod:domain('Time/Minute'),
+                         Expected = {tagged, 'Time/Minute', 'Time/Int'},
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
     run(Code, RunAsserts).
@@ -217,7 +222,7 @@ buried_var_test() ->
            "type Hidden -> Treasure",
     RunAsserts = fun(Mod) ->
                          Expected = {tagged, 'Buried/Bottom', 
-                                     {product, #{'Buried/var' => 'Hidden/Treasure'}}},
+                                     {product, #{var => 'Hidden/Treasure'}}},
                          {f, DomainFun} = Mod:domain('Buried/Bottom'),
                          Actual = DomainFun('Hidden/Treasure'),
                          ?assertEqual(none, domain:diff(Expected, Actual))

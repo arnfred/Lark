@@ -69,6 +69,7 @@ tag(Env, {application, Line, Name, Args}, Path, TagFun) ->
 
 tag(Env, {lookup, Line, Var, Elems}, Path, TagFun) ->
     {VarEnv, TaggedVar} = tag(Env, Var, Path, TagFun),
+    io:format("Env: ~p~nVarEnv: ~p~n", [Env, VarEnv]),
     {NewEnv, TaggedElems} = map(VarEnv, Elems, Path, TagFun),
     {NewEnv, {lookup, Line, TaggedVar, TaggedElems}};
 
@@ -82,7 +83,7 @@ tag(Env, {tuple, Line, Expressions}, Path, TagFun) ->
     {EnvExpr, {tuple, Line, TaggedExpressions}};
 
 tag(Env, {dict, Line, Expressions}, Path, TagFun) ->
-    {EnvExpr, TaggedExpressions} = map(Env, Expressions, Path, TagFun),
+    {EnvExpr, TaggedExpressions} = map_dict(Env, Expressions, Path, TagFun),
     {EnvExpr, {dict, Line, TaggedExpressions}};
 
 tag(Env, {type_def, Line, Name, Args, Body}, Path, TagFun) ->
@@ -93,13 +94,9 @@ tag(Env, {type_def, Line, Name, Args, Body}, Path, TagFun) ->
     {BodyEnv, TaggedBody} = tag(maps:merge(Env, ArgEnv), Body, NewPath, TagFun),
     {BodyEnv, {type_def, Line, Name, TaggedArgs, TaggedBody}};
 
-%% We deliberately don't include the KeyEnv in the environment that is
-%% returned. This is because the key of the pair in turn becomes an accessor
-%% function, but we want local definitions and assignments to have precedence
-%% over type product accessor functions.
 tag(Env, {pair, Line, Key, Value}, Path, TagFun) ->
-    {_, TaggedKey} = tag(Env, Key, Path, TagFun),
-    {ValueEnv, TaggedValue} = tag(Env, Value, Path, TagFun),
+    {KeyEnv, TaggedKey} = tag(Env, Key, Path, TagFun),
+    {ValueEnv, TaggedValue} = tag(KeyEnv, Value, Path, TagFun),
     {ValueEnv, {pair, Line, TaggedKey, TaggedValue}};
 
 tag(Env, {qualified_symbol, _, _} = QS, _, _) -> {Env, QS};
@@ -108,6 +105,26 @@ tag(Env, {symbol, _, S} = Symbol, Path, TagFun) ->
     NewSymbol = maps:get(S, Env, TagFun(Path, Symbol)),
     NewEnv = maps:put(S, NewSymbol, Env),
     {NewEnv, NewSymbol}.
+
+
+%% We deliberately don't include the KeyEnv in the environment that is
+%% returned. This is because the key of the pair in turn becomes an accessor
+%% function, but we want local definitions and assignments to have precedence
+%% over type product accessor functions.
+map_dict(Env, Elements, Path, TagFun) when is_list(Elements) ->
+    TagKey = fun(_, Symbol) -> {key, element(2, Symbol), symbol:name(Symbol)} end,
+    Tag = fun({pair, Line, Key, Val}) ->
+                  {_, TaggedKey} = tag(Env, Key, Path, TagKey),
+                  {ValEnv, TaggedVal} = tag(Env, Val, Path, TagFun),
+                  {ValEnv, {pair, Line, TaggedKey, TaggedVal}};
+             ({symbol, _, _} = S) -> 
+                  {_, TaggedSymbol} = tag(Env, S, Path, TagKey),
+                  {Env, TaggedSymbol}
+          end,
+    {EnvList, Tagged} = lists:unzip([Tag(E) || E <- Elements]),
+    NewEnv = lists:foldl(fun(M1, M2) -> maps:merge(M1, M2) end, #{}, EnvList),
+    {NewEnv, Tagged}.
+
 
 map(Env, Elements, Path, TagFun) when is_list(Elements) ->
     {EnvList, Tagged} = lists:unzip([tag(Env, E, Path, TagFun) || E <- Elements]),
@@ -181,6 +198,19 @@ anonymous_function_test() ->
     {clause, _, [{variable, _, b, TaggedB}], {variable, _, b, TaggedB}} = Clause1,
     {clause, _, _, {variable, _, a, TaggedA}} = Clause2.
 
+dict_pair_test() ->
+    Code = "def f -> {a: b}",
+    {_, Tagged} = tag_AST(Code),
+    [{def, _, _, [], {dict, _, [{pair, _, Key, _}]}}] = Tagged,
+    ?assertEqual({key, 1, a}, Key).
+
+dict_value_test() ->
+    Code = "def f -> {a}",
+    {_, Tagged} = tag_AST(Code),
+    [{def, _, _, [], {dict, _, [Key]}}] = Tagged,
+    ?assertEqual({key, 1, a}, Key).
+
+
 simple_sum_type_test() ->
     Code =
         "type Boolean -> True | False\n"
@@ -222,10 +252,10 @@ simple_product_type_test() ->
                   {type, 1, ['Monkey']},
                   {dict, 1,
                    [{pair,1,
-                     {type,1,['Monkey', 'food']},
+                     {key,1,food},
                      {type,1,['Monkey', 'Banana']}},
                     {pair,1,
-                     {type,1,['Monkey', 'plant']},
+                     {key,1,plant},
                      {type,1,['Monkey', 'Trees']}}]}}}],
     ?assertEqual(Expected, Typed).
 
@@ -241,12 +271,12 @@ complex_type_test() ->
                       {type,1,['BooleanList','Cons']},
                       {dict,1,
                        [{pair,1,
-                         {type,1,['BooleanList',value]},
+                         {key,1,value},
                          {tuple,1,
                           [{type,1,['BooleanList','True']},
                            {type,1,['BooleanList','False']}]}},
                         {pair,2,
-                         {type,2,['BooleanList',cons]},
+                         {key,2,cons},
                          {type,1,['BooleanList']}}]}},
                      {type,3,['BooleanList','Nil']}]}}], Typed).
 
@@ -255,7 +285,7 @@ product_key_not_propagated_test() ->
         "type Blip -> { blup: blyp }\n"
         "def blap -> blup",
     {Typed, Tagged} = tag_AST(Code),
-    [{type_def, 1, 'Blip', [], {dict, _, [{pair, 1, {type, _, BlupKey}, _}]}}] = Typed,
+    [{type_def, 1, 'Blip', [], {dict, _, [{pair, 1, {key, _, BlupKey}, _}]}}] = Typed,
     [{def, 2, 'blap', [], {variable, 2, 'blup', BlupTag}}] = Tagged,
     ?assertNotEqual(BlupKey, BlupTag).
 

@@ -1,6 +1,5 @@
 -module(domain).
--export([diff/2, union/1, union/2, intersection/1, intersection/2, compact/1, subset/2]).
-
+-export([diff/2, union/1, union/2, intersection/1, intersection/2, compact/1, subset/2, lookup/2]).
 -include_lib("eunit/include/eunit.hrl").
 
 diff(Same, Same) -> none;
@@ -136,6 +135,10 @@ subset({product, D1}, {product, D2}) ->
     lists:all(fun({K,D}) -> subset(D, maps:get(K, D2, any)) end, maps:to_list(D1));
 subset(_, _) -> false.
 
+lookup({product, Map}, Elems) -> 
+    compact({sum, sets:from_list([intersection(maps:get(K, Map), D) || 
+                              {K, D} <- maps:to_list(Elems), maps:is_key(K, Map)])});
+lookup({tagged, Tag, D}, Elems) -> lookup(D, Elems).
 
 compact({sum, S}) -> compact_sum_list(compact_set(S));
 compact({product, Map}) -> {product, maps:map(fun(_, V) -> compact(V) end, Map)};
@@ -621,6 +624,27 @@ subset_sum_product_test() ->
     D2 = {sum, sets:from_list([{product, #{a => 1, b => 2}},
                                {product, #{a => 2, b => 3}}])},
     ?assertEqual(true, subset(D1, D2)).
+
+lookup_product_test() ->
+    D = {product, #{a => 'A', b => 'B'}},
+    Elems = #{a => any},
+    Expected = 'A',
+    Actual = lookup(D, Elems),
+    ?assertEqual(none, diff(Expected, Actual)).
+
+lookup_domain_intersection_test() ->
+    D = {product, #{a => {sum, sets:from_list(['A', 'B'])}}},
+    Elems = #{a => 'A'},
+    Expected = 'A',
+    Actual = lookup(D, Elems),
+    ?assertEqual(none, diff(Expected, Actual)).
+
+lookup_tagged_test() -> 
+    D = {tagged, tag, {product, #{a => 'A', b => 'B'}}},
+    Elems = #{a => any},
+    Expected = 'A',
+    Actual = lookup(D, Elems),
+    ?assertEqual(none, diff(Expected, Actual)).
 
 
 -endif.

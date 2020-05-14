@@ -42,19 +42,22 @@ scan(Env, Stack, TypeMod, {application, _, Expr, Args} = Current) ->
     {ExprEnv, ExprDomain} = scan(Env, Stack, TypeMod, Expr),
     Domain = case ExprDomain of
                  {f, DomainFun} -> DomainFun(ArgDomains, Stack);
-                 {error, E}     -> {error, E};
-                 D              -> {error, [{Current, {expected_domain_fun, D}, Stack}]}
+                 {error, Err}   -> {error, Err};
+                 D              -> {error, [{Current, {expected_function_domain, D}, Stack}]}
              end,
     {intersection([ExprEnv | ArgEnvs]), Domain};
 
-scan(Env, Stack, TypeMod, {lookup, _, Var, Elems}) ->
-    io:format("Lookup Env: ~p~n", [Env]),
-    {ElemEnvs, ElemDomains} = unzip([scan(Env, Stack, TypeMod, E) || E <- Elems]),
+scan(Env, Stack, TypeMod, {lookup, _, Var, Elems} = Current) ->
+    {_, ElemDomains} = unzip([scan(Env, Stack, TypeMod, E) || E <- Elems]),
+    Entries = maps:from_list([{symbol:name(E), D} || {E, D} <- zip(Elems, ElemDomains)]),
+    io:format("Elem Entires: ~p~n", [Entries]),
     {VarEnv, Domain} = case scan(Env, Stack, TypeMod, Var) of
-                                         {E, {f, DomainFun}} -> {E, DomainFun(ElemDomains)};
-                                         {E, D} -> {E, TypeMod:lookup(D, ElemDomains)}
-                                     end,
-    {intersection([VarEnv | ElemEnvs]), Domain};
+                           {E, {product,_} = D} -> {E, domain:lookup(D, Entries)};
+                           {E, {tagged,_,_} = D} -> {E, domain:lookup(D, Entries)};
+                           {E, {error, Err}} -> {E, {error, Err}};
+                           {E, D} -> {E, {error, [{Current, {expected_product_domain, D}, Stack}]}}
+                       end,
+    {intersection(VarEnv, Env), Domain};
 
 scan(Env, Stack, TypeMod, {pair, _, Key, Value}) ->
     {ValueEnv, ValueDomain} = scan(Env, Stack, TypeMod, Value),
@@ -86,6 +89,8 @@ scan(Env, _, _, {variable, _, _, Tag}) ->
     {#{Tag => D}, D};
 
 scan(_, _, TypeMod, {type, _, _} = T) -> {#{}, TypeMod:domain(symbol:tag(T))};
+
+scan(_, _, _, {key, _, Key}) -> {#{}, Key};
 
 scan(Env, _, _, {qualified_symbol, _, S}) ->
     D = maps:get(S, Env, any),
@@ -149,7 +154,8 @@ scan_pattern(Domain, TypeMod, {lookup, Line, Var, Elems}) ->
 % Pattern of: `{ k: v, ... }`
 scan_pattern(Domain, TypeMod, {dict, _, Elems}) ->
     GetKey = fun({pair, _, {variable, _, Key, _}, _}) -> Key;
-                ({variable, _, Key, _}) -> Key
+                ({variable, _, Key, _}) -> Key;
+                ({key, _, Key}) -> Key
              end,
     GetDomain = fun F(Elem, D) -> case D of
                                     {product, M} -> maps:get(GetKey(Elem), M, any);
@@ -318,13 +324,26 @@ application_error_test() ->
     RunAsserts = fun(Env) ->
                          {f, DomainFun} = maps:get({f, 1}, Env),
                          {error, Error} = DomainFun([any], []),
-                         ExpectedError = expected_domain_fun,
+                         ExpectedError = expected_function_domain,
                          ExpectedDomain = any,
                          ExpectedStack = [{f, [any]}],
                          [{_, {ActualError, ActualDomain}, ActualStack}] = Error,
                          ?assertEqual(ExpectedError, ActualError),
                          ?assertEqual(ExpectedDomain, ActualDomain),
                          ?assertEqual(ExpectedStack, ActualStack)
+                 end,
+    run(Code, RunAsserts).
+
+lookup_expr_test() ->
+    Code = "type T -> T: {blip: (Blip | Blop)\n"
+           "              blup: (Blup | Blap)}\n"
+           "def f a\n"
+           " | (t: T) -> t { blup }",
+    RunAsserts = fun(Env) ->
+                         {f, DomainFun} = maps:get({f, 1}, Env),
+                         Expected = {sum, sets:from_list(['T/Blup', 'T/Blap'])},
+                         Actual = DomainFun([any], []),
+                         ?assertEqual(none, diff(Expected, Actual))
                  end,
     run(Code, RunAsserts).
            
