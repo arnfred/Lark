@@ -106,7 +106,11 @@ intersection(any, D) -> D;
 intersection(D, any) -> D;
 intersection(none, _) -> none;
 intersection(_, none) -> none;
-intersection({f, F}, D) -> fun(Args, Stack) -> intersection(D, F(Args, Stack)) end;
+intersection({f, F1}, {f, F2}) -> 
+    case {get_arity(F1), get_arity(F2)} of
+        {N, N} -> {f, mapfun(fun(Res1, Res2) -> intersection(Res1, Res2) end, F1, F2)};
+        _ -> none
+    end;
 intersection(D, {f, F}) -> intersection({f, F}, D);
 intersection({sum, D1}, {sum, D2}) -> 
     compact({sum, sets:from_list([intersection(Dj, Di) || Di <- sets:to_list(D1), Dj <- sets:to_list(D2)])});
@@ -136,19 +140,21 @@ subset({product, D1}, {product, D2}) ->
 subset(_, _) -> false.
 
 lookup({product, Map}, Elems) -> 
-    compact({sum, sets:from_list([intersection(maps:get(K, Map), D) || 
+    compact({product, maps:from_list([{K, intersection(maps:get(K, Map), D)} || 
                               {K, D} <- maps:to_list(Elems), maps:is_key(K, Map)])});
-lookup({tagged, Tag, D}, Elems) -> lookup(D, Elems).
+lookup({tagged, _, D}, Elems) -> lookup(D, Elems).
 
 compact({sum, S}) -> compact_sum_list(compact_set(S));
-compact({product, Map}) -> {product, maps:map(fun(_, V) -> compact(V) end, Map)};
+compact({product, Map}) -> case maps:size(Map) of
+                               0 -> none;
+                               _ -> {product, maps:map(fun(_, V) -> compact(V) end, Map)}
+                           end;
 compact({tagged, Tag, Domain}) -> {tagged, Tag, compact(Domain)};
-compact({f, DomainFun}) -> {f, fun(Args) -> compact(DomainFun(Args)) end};
+compact({f, DomainFun}) -> {f, mapfun(fun(D) -> compact(D) end, DomainFun)};
 compact({_, _} = T) -> T;
 compact({_, _, _} = T) -> T;
 compact(Type) -> Type.
 
-% TODO: Need to filter out atoms
 compact_set(SumSet) ->
     % Filter out `none` and group by domain type
     KeyFun = fun({Type, _}) -> Type;
@@ -257,6 +263,44 @@ propagate_none({tagged, T, {product, Map}}) ->
     end;
 propagate_none(D) -> D.
 
+get_arity(Fun) ->
+    proplists:get_value(arity, erlang:fun_info(Fun)).
+
+mapfun(Mapper, Fun) -> 
+    case get_arity(Fun) of
+        0  -> Mapper(Fun());
+        1  -> fun(Arg) -> Mapper(Fun(Arg)) end;
+        2  -> fun(A1, A2) -> Mapper(Fun(A1, A2)) end;
+        3  -> fun(A1, A2, A3) -> Mapper(Fun(A1, A2, A3)) end;
+        4  -> fun(A1, A2, A3, A4) -> Mapper(Fun(A1, A2, A3, A4)) end;
+        5  -> fun(A1, A2, A3, A4, A5) -> Mapper(Fun(A1, A2, A3, A4, A5)) end;
+        6  -> fun(A1, A2, A3, A4, A5, A6) -> Mapper(Fun(A1, A2, A3, A4, A5, A6)) end;
+        7  -> fun(A1, A2, A3, A4, A5, A6, A7) -> Mapper(Fun(A1, A2, A3, A4, A5, A6, A7)) end;
+        8  -> fun(A1, A2, A3, A4, A5, A6, A7, A8) -> Mapper(Fun(A1, A2, A3, A4, A5, A6, A7, A8)) end;
+        9  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9) -> Mapper(Fun(A1, A2, A3, A4, A5, A6, A7, A8, A9)) end;
+        10 -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10) -> Mapper(Fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10)) end;
+        11 -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11) -> Mapper(Fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11)) end;
+        12 -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12) -> Mapper(Fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12)) end;
+        13 -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13) -> Mapper(Fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13)) end
+    end.
+
+mapfun(Mapper, Fun1, Fun2) -> 
+    case {get_arity(Fun1), get_arity(Fun2)} of
+        {0, 0}   -> Mapper(Fun1(), Fun2());
+        {1, 1}   -> fun(Arg) -> Mapper(Fun1(Arg), Fun2(Arg)) end;
+        {2, 2}   -> fun(A1, A2) -> Mapper(Fun1(A1, A2), Fun2(A1, A2)) end;
+        {3, 3}   -> fun(A1, A2, A3) -> Mapper(Fun1(A1, A2, A3), Fun2(A1, A2, A3)) end;
+        {4, 4}   -> fun(A1, A2, A3, A4) -> Mapper(Fun1(A1, A2, A3, A4), Fun2(A1, A2, A3, A4)) end;
+        {5, 5}   -> fun(A1, A2, A3, A4, A5) -> Mapper(Fun1(A1, A2, A3, A4, A5), Fun2(A1, A2, A3, A4, A5)) end;
+        {6, 6}   -> fun(A1, A2, A3, A4, A5, A6) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6), Fun2(A1, A2, A3, A4, A5, A6)) end;
+        {7, 7}   -> fun(A1, A2, A3, A4, A5, A6, A7) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6, A7), Fun2(A1, A2, A3, A4, A5, A6, A7)) end;
+        {8, 8}   -> fun(A1, A2, A3, A4, A5, A6, A7, A8) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6, A7, A8), Fun2(A1, A2, A3, A4, A5, A6, A7, A8)) end;
+        {9, 9}   -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6, A7, A8, A9), Fun2(A1, A2, A3, A4, A5, A6, A7, A8, A9)) end;
+        {10, 10} -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10), Fun2(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10)) end;
+        {11, 11} -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11), Fun2(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11)) end;
+        {12, 12} -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12), Fun2(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12)) end;
+        {13, 13} -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13), Fun2(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13)) end
+    end.
 
 -ifdef(TEST).
 
@@ -471,9 +515,10 @@ intersection_sum_with_any_test() ->
 
 intersection_f_test() ->
     D1 = {f, fun([A], _) -> A end},
-    D2 = {sum, sets:from_list([a, b])},
-    Expected = b,
-    Actual = apply(intersection(D1, D2), [[{sum, sets:from_list([b, c])}], []]),
+    D2 = {f, fun([A], _) -> {sum, sets:from_list([A, b])} end},
+    Expected = a,
+    {f, DomainFun} = intersection(D1, D2),
+    Actual = DomainFun([a], []),
     ?assertEqual(none, diff(Expected, Actual)).
 
 intersection_map_map_test() ->
@@ -589,6 +634,13 @@ compact_sum_item_test() ->
     Actual = compact({sum, sets:from_list([a, b, {sum, sets:from_list([c])}])}),
     ?assertEqual(none, diff(Expected, Actual)).
 
+compact_f_test() ->
+    Input = {f, fun(A1, A2) -> {sum, sets:from_list([{sum, sets:from_list([A1, A2])}])} end},
+    Expected = {sum, sets:from_list([a1, a2])},
+    {f, DomainFun} = compact(Input),
+    Actual = DomainFun(a1, a2),
+    ?assertEqual(none, diff(Expected, Actual)).
+
 subset_sum_sum_test() ->
     D1 = {sum, sets:from_list([a, b, c])},
     D2 = {sum, sets:from_list([a, b, c, d])},
@@ -628,21 +680,21 @@ subset_sum_product_test() ->
 lookup_product_test() ->
     D = {product, #{a => 'A', b => 'B'}},
     Elems = #{a => any},
-    Expected = 'A',
+    Expected = {product, #{a => 'A'}},
     Actual = lookup(D, Elems),
     ?assertEqual(none, diff(Expected, Actual)).
 
 lookup_domain_intersection_test() ->
     D = {product, #{a => {sum, sets:from_list(['A', 'B'])}}},
     Elems = #{a => 'A'},
-    Expected = 'A',
+    Expected = {product, #{a => 'A'}},
     Actual = lookup(D, Elems),
     ?assertEqual(none, diff(Expected, Actual)).
 
 lookup_tagged_test() -> 
     D = {tagged, tag, {product, #{a => 'A', b => 'B'}}},
     Elems = #{a => any},
-    Expected = 'A',
+    Expected = {product, #{a => 'A'}},
     Actual = lookup(D, Elems),
     ?assertEqual(none, diff(Expected, Actual)).
 

@@ -131,7 +131,7 @@ element -> assignment           : '$1'.
 element -> newtype              : '$1'.
 element -> clauses              : {lambda, line('$1'), '$1'}.
 
-pair -> verb colon noun : {pair, line('$1'), '$1', '$3'}.
+pair -> noun colon noun : {pair, line('$1'), '$1', '$3'}.
 
 sum_or_expression -> sum_list : unpack_tuple('$1').
 sum_list -> expression : ['$1'].
