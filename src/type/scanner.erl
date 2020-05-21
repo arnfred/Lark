@@ -163,7 +163,7 @@ scan_pattern(Domain, TypeMod, {dict, _, Elems}) ->
              end,
     GetDomain = fun F(Elem, D) -> case D of
                                     {product, M} -> maps:get(GetKey(Elem), M, any);
-                                    {sum, S} -> union([F(Elem, E) || E <- sets:from_list(S)]);
+                                    {sum, S} -> union([F(Elem, E) || E <- ordsets:from_list(S)]);
                                     {tagged, _, T} -> F(Elem, T);
                                     any -> any;
                                     _ -> none
@@ -263,14 +263,14 @@ run_xor_test() ->
                          {f, DomainFun} = maps:get({'xor', 2}, Env),
 
                          Actual1 = DomainFun([], [any, any]),
-                         Expected1 = {sum, sets:from_list(['Boolean/True', 'Boolean/False'])},
+                         Expected1 = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
                          ?assertEqual(none, domain:diff(Expected1, Actual1)),
 
                          Actual2 = DomainFun([], ['Boolean/True', 'Boolean/False']),
                          Expected2 = 'Boolean/True',
                          ?assertEqual(none, domain:diff(Expected2, Actual2)),
 
-                         Boolean = {sum, sets:from_list(['Boolean/True', 'Boolean/False'])},
+                         Boolean = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
                          Actual3 = DomainFun([], [Boolean, Boolean]),
                          Expected3 = Boolean,
                          ?assertEqual(none, domain:diff(Expected3, Actual3)),
@@ -363,7 +363,7 @@ lookup_expr_sum_test() ->
            " | (t: T) -> t { blup }",
     RunAsserts = fun(Env) ->
                          {f, DomainFun} = maps:get({f, 1}, Env),
-                         Expected = {product, #{blup => {sum, sets:from_list(['T/Blup', 'T/Blap'])}}},
+                         Expected = {product, #{blup => {sum, ordsets:from_list(['T/Blup', 'T/Blap'])}}},
                          Actual = DomainFun([], [any]),
                          ?assertEqual(none, diff(Expected, Actual))
                  end,
@@ -373,8 +373,9 @@ lookup_error_propagation_test() ->
     Code = "def f t -> t { a }",
     RunAsserts = fun(Env) ->
                          {f, DomainFun} = maps:get({f, 1}, Env),
-                         Expected1 = {error, some_error},
-                         Actual1 = DomainFun([], [Expected1]),
+                         StackError = {error, [some_error]},
+                         Actual1 = DomainFun([], [StackError]),
+                         Expected1 = StackError,
                          ?assertEqual(none, diff(Expected1, Actual1))
                  end,
     run(Code, RunAsserts).
@@ -394,7 +395,7 @@ pair_values_refinement_test() ->
            "def f t -> t: Boolean",
     RunAsserts = fun(Env) ->
                          {f, DomainFun} = maps:get({f, 1}, Env),
-                         Expected = {sum, sets:from_list(['Boolean/True', 'Boolean/False'])},
+                         Expected = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
                          Actual = DomainFun([], [any]),
                          ?assertEqual(none, diff(Expected, Actual))
                  end,
@@ -407,7 +408,7 @@ pair_values_refinement_test() ->
 %           "def f t -> id(t): Option(True)",
 %    RunAsserts = fun(Env) ->
 %                         {f, DomainFun} = maps:get({f, 1}, Env),
-%                         Expected = {sum, sets:from_list(['Boolean/True', 'Option/None'])},
+%                         Expected = {sum, ordsets:from_list(['Boolean/True', 'Option/None'])},
 %                         Actual = DomainFun([], [any]),
 %                         ?assertEqual(none, diff(Expected, Actual))
 %                 end,

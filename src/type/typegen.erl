@@ -11,7 +11,7 @@ gen(Module, AST) when is_list(AST) ->
     Env = gen_env(Mappings),
     io:format("Type Env: ~p~n", [Env]),
 
-    case error:collate([compile(Tag, Env, TypeDefs) || Tag <- maps:keys(Env)]) of
+    case error:flatten([compile(Tag, Env, TypeDefs) || Tag <- maps:keys(Env)]) of
         {error, Errs} -> {error, Errs};
         {ok, AllTypes} ->
             % Generate the function for `TypeMod:domain(T)`
@@ -28,7 +28,7 @@ compile(Tag, Env, TypeDefs) ->
     {Vars, Domain} = maps:get(Tag, Env),
     case Vars of
         [] -> error:map(abstract_form(Env, TypeDefs, Domain), fun(Form) -> {Tag, Form} end);
-        _ -> error:map(abstract_form(Env, TypeDefs, {f, Vars, Domain}), fun(Form) -> {Tag, Form} end)
+        _N -> error:map(abstract_form(Env, TypeDefs, {f, Vars, Domain}), fun(Form) -> {Tag, Form} end)
     end.
 
 gen_top_level_def(Name, []) ->
@@ -44,7 +44,7 @@ gen_top_level_def(Name, Args) ->
 gen_domain_def([]) -> {cerl:c_fname(domain, 1),
                        cerl:c_fun([cerl:c_var('_')], cerl:c_atom(none))};
 gen_domain_def(DomainList) ->
-    Domains = sets:to_list(sets:from_list(DomainList)),
+    Domains = ordsets:to_list(ordsets:from_list(DomainList)),
     Clauses = [cerl:c_clause([cerl:c_atom(Tag)], Form) || {Tag, Form} <- Domains],
     Arg = cerl:c_var(type),
     Body = cerl:c_case(Arg, Clauses),
@@ -63,7 +63,6 @@ gen_env(Envs) when is_list(Envs) ->
 
 domains([], [], {type_def, _, Name, Args, Expr}) -> 
     DefArgs = [tag(A) || A <- Args],
-    io:format("Expr: ~p~nDefArgs: ~p~nPath: ~p~n", [Expr, DefArgs, [Name]]),
     {Env, _, Domain} = domains([Name], DefArgs, Expr),
     {[{Name, DefArgs, Domain} | Env], DefArgs, Domain};
 
@@ -71,13 +70,12 @@ domains(Path, Args, {tuple, _, [Expr]}) -> domains(Path, Args, Expr);
 
 domains(Path, Args, {tuple, _, Expressions}) ->
     {EnvList, Vars, Domains} = unzip3([domains(Path, Args, Expr) || Expr <- Expressions]),
-    Domain = domain:compact({sum, sets:from_list(Domains)}),
+    Domain = domain:compact({sum, ordsets:from_list(Domains)}),
     {lists:flatten(EnvList), order(Args, Vars), Domain};
 
 domains(Path, Args, {dict, _, Pairs}) ->
     {EnvList, Vars, Domains} = unzip3([domains(Path, Args, Expr) || {pair, _, _, Expr} <- Pairs]),
     Keys = [symbol:name(P) || P <- Pairs],
-    io:format("Args: ~p, Vars: ~p~n", [Args, Vars]),
     {lists:flatten(EnvList), order(Args, Vars), {product, maps:from_list(zip(Keys, Domains))}};
 
 domains(Path, Args, {pair, _, Key, Expr}) ->
@@ -93,17 +91,16 @@ domains(Path, Args, {application, _, Expr, AppArgs}) ->
     {ExprEnv, ExprVars, ExprDomain} = domains(Path, Args, Expr),
     {ArgsEnvs, ArgVars, ArgDomains} = unzip3([domains(Path, Args, A) || A <- AppArgs]),
     Env = lists:flatten(ArgsEnvs) ++ ExprEnv,
-    Vars = sets:to_list(sets:from_list(ExprVars ++ ArgVars)),
+    Vars = ordsets:to_list(ordsets:from_list(ExprVars ++ ArgVars)),
     Domain = {application, ExprDomain, ArgDomains},
     {Env, order(Args, Vars), Domain};
 
 domains(Path, _, {type, _, _} = Type) -> 
     Tag = tag(Type),
-    Domain = case lists:member(Tag, Path) of
-                 true -> {branch, Tag};
-                 false -> {type, Tag}
-             end,
-    {[{Tag, [], Domain}], [], Domain};
+    case lists:member(Tag, Path) of
+        true -> {[], [], {recur, Tag}};
+        false -> {[{Tag, [], {type, Tag}}], [], {type, Tag}}
+    end;
 
 domains(_, _, {key, _, Key}) -> 
     {[], [], Key}.
@@ -114,16 +111,16 @@ abstract_form(Env, TypeDefs, {f, Vars, Domain}) ->
         cerl:c_tuple([cerl:c_atom(f), cerl:c_fun(ArgsForm, DomainForm)]) end);
 
 abstract_form(Env, TypeDefs, {sum, Set}) -> 
-    case error:collate([abstract_form(Env, TypeDefs, Elem) || Elem <- sets:to_list(Set)]) of
+    case error:flatten([abstract_form(Env, TypeDefs, Elem) || Elem <- ordsets:to_list(Set)]) of
         {error, Err} -> {error, Err};
         {ok, ElemForms} ->
             Elements = cerl:make_list(ElemForms),
-            DomainSet = cerl:c_call(cerl:c_atom(sets), cerl:c_atom(from_list), [Elements]),
+            DomainSet = cerl:c_call(cerl:c_atom(ordsets), cerl:c_atom(from_list), [Elements]),
             {ok, cerl:c_tuple([cerl:c_atom(sum), DomainSet])}
     end;
 
 abstract_form(Env, TypeDefs, {product, Map}) ->
-    case error:collate([abstract_form(Env, TypeDefs, D) || D <- maps:values(Map)]) of
+    case error:flatten([abstract_form(Env, TypeDefs, D) || D <- maps:values(Map)]) of
         {error, Errors} -> {error, Errors};
         {ok, Forms} ->
             Entries = [cerl:c_map_pair(cerl:c_atom(K), Form) || {Form, K} <- zip(Forms, maps:keys(Map))],
@@ -144,13 +141,13 @@ abstract_form(Env, TypeDefs, {type, Tag}) ->
         {_, Domain} -> {ok, abstract_form(Env, TypeDefs, Domain)}
     end;
 
-abstract_form(Env, TypeDefs, {branch, Tag}) ->
+abstract_form(Env, _, {recur, Tag}) ->
     {_, Domain} = maps:get(Tag, Env),
-    error:map(abstract_form(Env, TypeDefs, Domain), fun(DomainForm) ->
-        cerl:c_tuple([cerl:c_atom(branch), DomainForm]) end);
+    BranchFun = cerl:c_fun([], cerl:c_apply(cerl:c_atom(domain), [cerl:c_atom(Tag)])),
+    cerl:c_tuple([cerl:c_atom(recur), BranchFun]);
 
 abstract_form(Env, TypeDefs, {application, Expr, Args} = Current) ->
-    CompiledArgs = error:collate([abstract_form(Env, TypeDefs, A) || A <- Args]),
+    CompiledArgs = error:flatten([abstract_form(Env, TypeDefs, A) || A <- Args]),
     case {Expr, CompiledArgs} of
 
         {_, {error, E}} -> {error, E};
@@ -173,13 +170,21 @@ abstract_form(Env, TypeDefs, {application, Expr, Args} = Current) ->
             end;
 
         % type recursion e.g.: List a -> Nil | Cons: { head: a, tail: List(a) }
-        {{branch, Tag}, {ok, _}} ->
-            error:map(abstract_form(Env, TypeDefs, {application, {type, Tag}, Args}), fun(Form) ->
-                cerl:c_tuple([cerl:c_atom(branch), cerl:c_fun([], Form)]) end)
+        {{recur, Tag}, {ok, ArgForms}} ->
+            case {maps:get(Tag, Env), maps:is_key(Tag, TypeDefs)} of
+
+                {_, false} -> {error, [{{nonexistent_type_def, Tag}, {typegen, Current}}]};
+
+                {{Vars, _}, _} when length(Vars) =:= length(Args) -> 
+                    BranchFun = cerl:c_fun([], unsafe_call_form(cerl:c_atom(Tag), ArgForms)),
+                    {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
+
+                {{Vars, _}, _} ->                     
+                    {error, [{{wrong_number_of_arguments, Tag, length(Args), length(Vars)}, {typegen, Current}}]}
+            end
     end;
 
 abstract_form(_, _, Key) -> {ok, cerl:c_atom(Key)}.
-
 
 order(Args, Vars) ->
     FlatVars = lists:flatten(Vars),
@@ -210,7 +215,7 @@ run(Code, RunAsserts) ->
 sum_type_boolean_test() ->
     Code = "type Boolean -> True | False",
     RunAsserts = fun(Mod) ->
-                         Expected = {sum, sets:from_list(['Boolean/True', 'Boolean/False'])},
+                         Expected = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
                          Actual = Mod:domain('Boolean'),
                          ?assertEqual(none, domain:diff(Expected, Actual)),
                          Actual2 = Mod:'Boolean'(),
@@ -283,7 +288,7 @@ sum_var_test() ->
     Code = "type Boolean -> True | False\n"
            "type Option a -> a | None",
     RunAsserts = fun(Mod) ->
-                         Expected = {sum, sets:from_list(['Boolean/True',
+                         Expected = {sum, ordsets:from_list(['Boolean/True',
                                                           'Boolean/False',
                                                           'Option/None'])},
                          Actual = Mod:'Option'('Boolean'),
@@ -308,7 +313,7 @@ var_order_test() ->
            "type Args -> A | B | C",
     RunAsserts = fun(Mod) ->
                          Expected = {tagged, 'Order/T', 
-                                     {sum, sets:from_list([
+                                     {sum, ordsets:from_list([
                                                            {tagged, 'Order/C', 'Args/C'},
                                                            {tagged, 'Order/A', 'Args/A'},
                                                            {tagged, 'Order/B', 'Args/B'}])}},
@@ -322,7 +327,7 @@ application_top_level_f_test() ->
     Code = "type Option a -> a | None\n"
            "type BlahOption -> Option(blah)",
     RunAsserts = fun(Mod) ->
-                         Expected = {sum, sets:from_list(['BlahOption/blah', 'Option/None'])},
+                         Expected = {sum, ordsets:from_list(['BlahOption/blah', 'Option/None'])},
                          Actual = Mod:domain('BlahOption'),
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
@@ -354,21 +359,32 @@ application_inner_level_f_test() ->
     run(Code, RunAsserts).
 
 application_first_order_type_test() ->
-    Code = "type Option a -> None | a\n"
+    Code = "type Args -> Arg1 | Arg2\n"
+           "type Option a -> None | a\n"
            "type AnyOption f a -> f(a)",
     RunAsserts = fun(Mod) ->
-                         Expected = 'Option/None',
+                         Expected = {sum, ordsets:from_list(['Option/None', 'Args/Arg1'])},
                          {f, DomainFun} = Mod:domain('AnyOption'),
-                         Actual = DomainFun('Option', 'Option/None'),
+                         Actual = DomainFun('Option', 'Args/Arg1'),
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
     run(Code, RunAsserts).
 
-%recursion_top_level_f_test() ->
-%    Code = "type List a -> Nil | Cons: {head: a, tail: List(a)}",
-%    RunAsserts = fun(Mod) -> ok
-%                 end,
-%    run(Code, RunAsserts).
+recursion_top_level_f_test() ->
+    Code = "type List a -> Nil | Cons: {head: a, tail: List(a)}",
+    RunAsserts = fun(Mod) ->
+                         {f, DomainFun} = Mod:domain('List'),
+                         ?debugVal(Mod:domain('List/Nil')),
+                         ?debugHere,
+                         Actual = DomainFun('List/Nil'),
+                         ?assertMatch({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, Actual),
+                         {_, [_, {_, _, {recur, RecurFun}}]} = Actual,
+                         ?assertMatch({product, _}, RecurFun()),
+                         {product, ProductMap} = RecurFun(),
+                         ?assertEqual('List/Nil', maps:get(head, ProductMap)),
+                         ?assertMatch({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, maps:get(tail, ProductMap))
+                 end,
+    run(Code, RunAsserts).
 
 
 -endif.

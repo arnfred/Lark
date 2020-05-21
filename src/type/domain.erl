@@ -2,24 +2,46 @@
 -export([diff/2, union/1, union/2, intersection/1, intersection/2, compact/1, subset/2, lookup/2]).
 -include_lib("eunit/include/eunit.hrl").
 
-diff(Same, Same) -> none;
-diff({Type, Old}, {Type, New}) -> 
-    case diff(Old, New) of
+diff(Old, New) -> diff_([], Old, New).
+
+diff_(_, {recur, D}, {recur, D}) -> none;
+diff_(Path, {recur, OldF}, {recur, NewF}) -> 
+    OldTag = gen_tag(OldF),
+    NewTag = gen_tag(NewF),
+    case lists:member(OldTag, Path) or lists:member(NewTag, Path) of
+        true -> none;
+        false -> diff_([OldTag | [NewTag | Path]], OldF(), NewF())
+    end;
+diff_(Path, {recur, OldF}, New) -> 
+    Tag = gen_tag(OldF),
+    case lists:member(Tag, Path) of
+        true -> none;
+        false -> diff_([Tag | Path], OldF(), New)
+    end;
+diff_(Path, Old, {recur, NewF}) -> 
+    Tag = gen_tag(NewF),
+    case lists:member(Tag, Path) of
+        true -> none;
+        false -> diff_([Tag | Path], Old, NewF())
+    end;
+diff_(_, Same, Same) -> none;
+diff_(Path, {Type, Old}, {Type, New}) -> 
+    case diff_(Path, Old, New) of
         none -> none;
         Diff -> {Type, Diff}
     end;
 
-diff({tagged, Tag, Old}, {tagged, Tag, New}) ->
-    case diff(Old, New) of
+diff_(Path, {tagged, Tag, Old}, {tagged, Tag, New}) ->
+    case diff_(Path, Old, New) of
         none -> none;
         Diff -> {tagged, Tag, Diff}
     end;
-                                      
-diff(Old, New) when is_map(Old), is_map(New) -> 
-    Keys = sets:to_list(sets:from_list(maps:keys(Old) ++ maps:keys(New))),
+
+diff_(Path, Old, New) when is_map(Old), is_map(New) -> 
+    Keys = ordsets:to_list(ordsets:from_list(maps:keys(Old) ++ maps:keys(New))),
     OnlyInOld = [Key || Key <- Keys, not maps:is_key(Key, New)],
     OnlyInNew = [Key || Key <- Keys, not maps:is_key(Key, Old)],
-    Domains = [{Key, diff(maps:get(Key, Old), maps:get(Key, New))} || 
+    Domains = [{Key, diff_(Path, maps:get(Key, Old), maps:get(Key, New))} || 
                Key <- Keys, maps:is_key(Key, Old) andalso maps:is_key(Key, New)],
     DiffDomains = [{K, D} || {K, D} <- Domains, not(D =:= none)],
     case {OnlyInOld, OnlyInNew, DiffDomains} of
@@ -29,16 +51,26 @@ diff(Old, New) when is_map(Old), is_map(New) ->
                diff => DiffDomains}
     end;
 
-diff(Old, New) -> 
-    case sets:is_set(Old) andalso sets:is_set(New) of
-        true -> case set_eq(New,Old) of
-                    true -> none;
-                    false -> #{only_in_old => sets:to_list(sets:subtract(Old, New)),
-                               only_in_new => sets:to_list(sets:subtract(New, Old))}
-                end;
+diff_(Path, Old, New) -> 
+    case ordsets:is_set(Old) andalso ordsets:is_set(New) of
+        true -> diff_set(Path, Old, New);
         false -> #{old => Old,
                    new => New}
     end.
+
+diff_set(Path, Old, New) ->
+    InOld = ordsets:subtract(Old, New),
+    InNew = ordsets:subtract(New, Old),
+    Matched = [{O, N} || O <- InOld, N <- InNew, D <- [diff_(Path, O, N)], D =:= none],
+    {MatchedOld, MatchedNew} = lists:unzip(Matched),
+    OnlyInOld = ordsets:to_list(ordsets:subtract(InOld, ordsets:from_list(MatchedOld))),
+    OnlyInNew = ordsets:to_list(ordsets:subtract(InNew, ordsets:from_list(MatchedNew))),
+    case length(OnlyInOld) =:= 0 andalso length(OnlyInNew) =:= 0 of
+        true -> none;
+        false -> #{only_in_old => OnlyInOld,
+                   only_in_new => OnlyInNew}
+    end.
+
 
 % Union serves two purposes:
 % 1. Compute the union of two environments
@@ -56,133 +88,174 @@ diff(Old, New) ->
 % accepted by the pattern match.
 
 % List of Envs or Domains
-union(Envs) when is_list(Envs) -> lists:foldl(fun(E1,E2) -> union(E1, E2) end, none, Envs).
 
-% Union of two Envs or Domains
-union(D1, D2) when is_map(D1), is_map(D2) ->
+union(Envs) when is_list(Envs) -> lists:foldl(fun(E1,E2) -> union(E1, E2) end, none, Envs).
+union(D1, D2) -> compact(unroll(union_(D1, D2))).
+
+union_({recur, S}, {recur, T}) -> {recur, fun() -> union_(S(), T()) end};
+union_({recur, S}, {sum, _} = D) -> {recur, fun() -> union_(S(), D) end};
+union_({recur, S}, {product, _} = D) -> {recur, fun() -> union_(S(), D) end};
+union_({recur, S}, {tagged, _, _} = D) -> {recur, fun() -> union_(S(), D) end};
+union_({recur, _}, _) -> none;
+union_(D, {recur, S}) -> union_({recur, S}, D);
+
+union_(D, D) -> D;
+union_(D1, D2) when is_map(D1), is_map(D2) ->
     F = fun(K, _) -> case {maps:is_key(K, D1), maps:is_key(K, D2)} of
-                         {true, true} -> union(maps:get(K, D1), maps:get(K, D2));
+                         {true, true} -> union_(maps:get(K, D1), maps:get(K, D2));
                          {false, true} -> maps:get(K, D2);
                          {true, false} -> maps:get(K, D1)
                      end
         end,
     maps:map(F, maps:merge(D1, D2));
+union_({error, E1}, {error, E2}) -> {error, E1 ++ E2};
+union_({error, _} = E, _) -> E;
+union_(_, {error, _} = E) -> E;
+union_(any, _) -> any;
+union_(_, any) -> any;
+union_(none, D) -> D;
+union_(D, none) -> D;
+union_({sum, D1}, {sum, D2}) -> {sum, ordsets:union(D1, D2)};
+union_({sum, D1}, D) -> {sum, ordsets:add_element(D, D1)};
+union_(D, {sum, D1}) -> union_({sum, D1}, D);
+union_({tagged, Tag, D1}, {tagged, Tag, D2}) -> {tagged, Tag, union_(D1, D2)};
+union_({product, D1}, {product, D2}) -> 
+    {sum, ordsets:from_list([{product, D1}, {product, D2}])};
+union_(D1, D2) -> {sum, ordsets:from_list([D1, D2])}.
 
-union(D, D) -> D;
-union({error, E1}, {error, E2}) -> {error, E1 ++ E2};
-union({error, _} = E, _) -> E;
-union(_, {error, _} = E) -> E;
-union(any, _) -> any;
-union(_, any) -> any;
-union(none, D) -> D;
-union(D, none) -> D;
-union({sum, D1}, {sum, D2}) -> compact({sum, sets:union(D1, D2)});
-union({sum, D1}, D) -> compact({sum, sets:add_element(D, D1)});
-union(D, {sum, D1}) -> union({sum, D1}, D);
-union({tagged, Tag, D1}, {tagged, Tag, D2}) -> {tagged, Tag, union(D1, D2)};
-union({product, D1}, {product, D2}) -> 
-    compact({sum, sets:from_list([{product, D1}, {product, D2}])});
-union(D1, D2) -> compact({sum, sets:from_list([D1, D2])}).
 
 
 intersection(Ds) when is_list(Ds) -> lists:foldl(fun(E1,E2) -> intersection(E1, E2) end, any, Ds).
-intersection(D1, D2) when is_map(D1), is_map(D2) ->
+intersection(D1, D2) -> compact(unroll(intersect_(D1, D2))).
+
+intersect_({recur, S}, {recur, T}) -> {recur, fun() -> intersect_(S(), T()) end};
+intersect_({recur, S}, {sum, _} = D) -> {recur, fun() -> intersect_(S(), D) end};
+intersect_({recur, S}, {product, _} = D) -> {recur, fun() -> intersect_(S(), D) end};
+intersect_({recur, S}, {tagged, _, _} = D) -> {recur, fun() -> intersect_(S(), D) end};
+intersect_({recur, _}, _) -> none;
+intersect_(D, {recur, S}) -> intersect_({recur, S}, D);
+
+intersect_(D1, D2) when is_map(D1), is_map(D2) ->
     % When intersecting two maps we include all domains of the two maps.  This
-    % is because a key not present in a map is assumed to have domain `any`,
-    % and any narrower definition would need to be captured in the intersection
+    % is because a key is assumed to have domain `any` when it is not present
+    % in a map and any narrower definition would need to be captured in the
+    % intersection
     F = fun(K, _) -> case {maps:is_key(K, D1), maps:is_key(K, D2)} of
-                         {true, true} -> intersection(maps:get(K, D1), maps:get(K, D2));
+                         {true, true} -> intersect_(maps:get(K, D1), maps:get(K, D2));
                          {false, true} -> maps:get(K, D2);
                          {true, false} -> maps:get(K, D1)
                      end
         end,
     maps:map(F, maps:merge(D1, D2));
 
-intersection(D, D) -> D;
-intersection({error, E1}, {error, E2}) -> {error, E1 ++ E2};
-intersection({error, _} = E, _) -> E;
-intersection(_, {error, _} = E) -> E;
-intersection(any, D) -> D;
-intersection(D, any) -> D;
-intersection(none, _) -> none;
-intersection(_, none) -> none;
-intersection({f, F1}, {f, F2}) -> 
+intersect_({error, E1}, {error, E2}) -> {error, E1 ++ E2};
+intersect_({error, _} = E, _) -> E;
+intersect_(_, {error, _} = E) -> E;
+
+intersect_(any, D) -> D;
+intersect_(D, any) -> D;
+intersect_(none, _) -> none;
+intersect_(_, none) -> none;
+
+intersect_({f, F1}, {f, F2}) -> 
     case {get_arity(F1), get_arity(F2)} of
-        {N, N} -> {f, mapfun(fun(Res1, Res2) -> intersection(Res1, Res2) end, F1, F2)};
+        {N, N} -> {f, mapfun(fun(Res1, Res2) -> intersect_(Res1, Res2) end, F1, F2)};
         _ -> none
     end;
-intersection(D, {f, F}) -> intersection({f, F}, D);
-intersection({sum, D1}, {sum, D2}) -> 
-    compact({sum, sets:from_list([intersection(Dj, Di) || Di <- sets:to_list(D1), Dj <- sets:to_list(D2)])});
-intersection({sum, D1}, D) -> 
-    compact({sum, sets:from_list([intersection(D, Di) || Di <- sets:to_list(D1)])});
-intersection(D, {sum, D1}) -> intersection({sum, D1}, D);
-intersection({tagged, Tag, D1}, {tagged, Tag, D2}) -> 
-    propagate_none({tagged, Tag, intersection(D1, D2)});
-intersection({product, D1}, {product, D2}) -> propagate_none({product, intersection(D1, D2)});
-intersection(_, _) -> none.
+
+intersect_({sum, D1}, {sum, D2}) -> 
+    {sum, ordsets:from_list([intersect_(Dj, Di) || Di <- D1, Dj <- D2])}; 
+intersect_({sum, D1}, D) -> 
+    {sum, ordsets:from_list([intersect_(D, Di) || Di <- D1])};
+intersect_(D, {sum, D1}) -> intersect_({sum, D1}, D);
+
+intersect_({tagged, Tag, D1}, {tagged, Tag, D2}) -> 
+    propagate_none({tagged, Tag, intersect_(D1, D2)});
+intersect_({product, D1}, {product, D2}) -> propagate_none({product, intersect_(D1, D2)});
+
+intersect_(D, D) -> D;
+intersect_(_, _) -> none.
 
 
-subset(D, D) -> true;
-subset(any, any) -> true;
-subset(_, any) -> true;
-subset(any, _) -> false;
-subset(none, none) -> true;
-subset(_, none) -> false;
-subset(none, _) -> true;
-subset({f, _}, _) -> false;
-subset(_, {f, _}) -> false;
-subset({sum, D1}, D2) -> lists:all(fun(D) -> subset(D, D2) end, sets:to_list(D1));
-subset(D1, {sum, D2}) -> lists:any(fun(D) -> subset(D1, D) end, sets:to_list(D2));
-subset({tagged, Tag, D1}, {tagged, Tag, D2}) -> subset(D1, D2);
-subset({product, D1}, {product, D2}) -> 
-    lists:all(fun({K,D}) -> subset(D, maps:get(K, D2, any)) end, maps:to_list(D1));
-subset(_, _) -> false.
+subset(D1, D2) -> diff(D1, intersection(D1, D2)) =:= none.
 
+
+lookup({recur, F}, Elems) -> lookup(unroll(F()), Elems);
 lookup({product, Map}, Elems) -> 
     compact({product, maps:from_list([{K, intersection(maps:get(K, Map), D)} || 
                               {K, D} <- maps:to_list(Elems), maps:is_key(K, Map)])});
 lookup({tagged, _, D}, Elems) -> lookup(D, Elems).
 
-compact({sum, S}) -> compact_sum_list(compact_set(S));
-compact({product, Map}) -> case maps:size(Map) of
-                               0 -> none;
-                               _ -> {product, maps:map(fun(_, V) -> compact(V) end, Map)}
-                           end;
-compact({tagged, Tag, Domain}) -> {tagged, Tag, compact(Domain)};
-compact({f, DomainFun}) -> {f, mapfun(fun(D) -> compact(D) end, DomainFun)};
-compact({_, _} = T) -> T;
-compact({_, _, _} = T) -> T;
-compact(Type) -> Type.
 
-compact_set(SumSet) ->
+compact(D) -> unroll(compact_(D)).
+compact_({sum, S}) -> compact_sum({sum, S});
+compact_({product, Map}) -> compact_product({product, Map});
+compact_({tagged, Tag, Domain}) -> {tagged, Tag, compact_(Domain)};
+compact_({f, DomainFun}) -> {f, mapfun(fun(D) -> compact_(D) end, DomainFun)};
+compact_({recur, D}) -> {recur, fun() -> compact_(D()) end};
+compact_(T) -> T.
+
+compact_product({product, ProductMap}) ->
+    Elements = [{K, compact_(V)} || {K, V} <- maps:to_list(ProductMap)],
+    io:format("Elements: ~p~n", [Elements]),
+    IsRecur = fun({_, {recur, _}}) -> true;
+                 (_) -> false end,
+    case lists:partition(IsRecur, Elements) of
+        {[], []}            -> none;
+        {[], _}             -> {product, maps:from_list(Elements)};
+        {Recurs, Other} ->
+            % If one or more recurs elements are present in the product, wrap
+            % the entire product in a 'recur' domain
+            {recur, fun() -> {product, maps:from_list(Other ++ [{K, D()} || {K, {_, D}} <- Recurs])} end}
+    end.
+
+compact_sum({sum, SumSet}) ->
+    io:format("Sum: ~p~n", [SumSet]),
+    Elements = [compact_(E) || E <- ordsets:to_list(SumSet)],
+    io:format("Elements: ~p~n", [Elements]),
+    IsRecur = fun({recur, _}) -> true;
+                 (_) -> false end,
+    case lists:partition(IsRecur, Elements) of
+        {[], []}        -> none;
+        {[], _}         -> list_to_sum(compact_sum_groups(Elements));
+        {Recurs, Other} ->
+        % If one or more recursive elements are present in the sum, make the
+        % sum recursive and compact all elements
+            {recur, fun() -> list_to_sum(compact_sum_groups(Other ++ [D() || {recur, D} <- Recurs])) end}
+    end.
+
+
+compact_sum_groups(Elements) ->
+
     % Filter out `none` and group by domain type
     KeyFun = fun({Type, _}) -> Type;
                 (Other)     -> Other end,
-    Keyed = [{K, V} || {K, V} <- group_by(KeyFun, sets:to_list(SumSet))],
+    Keyed = [{K, V} || {K, V} <- group_by(KeyFun, Elements)],
 
     % Based on domain type compact appropriately
-    L = lists:map(fun({product, Products})  -> compact_products(Products);
-                     ({sum, Sums})          -> compact_set(sets:union([Set || {sum, Set} <- Sums]));
-                     ({none, _})            -> [];
-                     ({any, _})             -> [any];
-                     ({_, Others})          -> [compact(Elem) || Elem <- Others]
+    L = lists:map(fun({product, Products}) -> compact_product_list(Products);
+                     ({sum, Sums})         -> Sets = [Set || {sum, Set} <- Sums],
+                                              SumElements = ordsets:to_list(ordsets:union(Sets)),
+                                              compact_sum_groups(SumElements);
+                     ({none, _})           -> [];
+                     ({any, _})            -> [any];
+                     ({_, Others})         -> Others
                   end, Keyed),
 
     lists:flatten(L).
 
-
-compact_sum_list([]) -> none;
-compact_sum_list([D]) -> D;
-compact_sum_list(Elems) ->
+list_to_sum([]) -> none;
+list_to_sum([D]) -> D;
+list_to_sum(Elems) when is_list(Elems) ->
     NoNones = [E || E <- Elems, not(E =:= none)],
     case lists:member(any, NoNones) of 
         true -> any; 
-        _ -> {sum, sets:from_list(Elems)} 
-    end.
+        _ -> {sum, ordsets:from_list(Elems)} 
+    end;
+list_to_sum(Domain) -> Domain.
 
 
-compact_products(Products) -> 
+compact_product_list(Products) -> 
     [{product, M} || M <- compact_maps([M || {product, M} <- Products])].
 
 % Why is the union of two products tricky? 
@@ -214,14 +287,14 @@ compact_maps([]) -> [];
 compact_maps([M]) -> [M];
 compact_maps(Maps) ->
     % Select the key appearing in most products as the first pivot key
-    CountDomains = fun(Key) -> sets:size(sets:from_list([maps:get(Key, M, undefined) || M <- Maps])) end,
+    CountDomains = fun(Key) -> ordsets:size(ordsets:from_list([maps:get(Key, M, undefined) || M <- Maps])) end,
     Compare = fun(K1, K2) -> CountDomains(K1) < CountDomains(K2) end,
     Keys = lists:sort(Compare, lists:flatten([maps:keys(M) || M <- Maps])),
     Pivot = lists:nth(1, Keys),
 
     % We can do a union only if the product maps vary along a single dimension
     % (i.e. key). When there's only one key left, we know this to be the case.
-    NumberOfUniqueKeys = sets:size(sets:from_list(Keys)),
+    NumberOfUniqueKeys = ordsets:size(ordsets:from_list(Keys)),
     case NumberOfUniqueKeys of
         0 -> [];
         1 -> [#{Pivot => union([maps:get(Pivot, M, any) || M <- Maps])}];
@@ -247,7 +320,10 @@ compact_maps(Maps) ->
             lists:flatten([Compact(Pivot, Domain, Group) || {Domain, Group} <- Grouped])
     end.
 
-set_eq(S1, S2) -> sets:is_subset(S1, S2) andalso sets:is_subset(S2, S1).
+unroll(D) -> unroll_(100, D).
+unroll_(0, _) -> {error, [{{possibly_infinite_recursion}, {domain}}]};
+unroll_(N, {recur, D}) -> unroll_(N-1, D());
+unroll_(_, D) -> D.
 
 group_by(F, L) -> dict:to_list(lists:foldr(fun({K,V}, D) -> dict:append(K, V, D) end , dict:new(), [ {F(X), X} || X <- L ])).
 
@@ -263,8 +339,15 @@ propagate_none({tagged, T, {product, Map}}) ->
     end;
 propagate_none(D) -> D.
 
+gen_tag(F) -> 
+    {name, Tag} = erlang:fun_info(F, name),
+    Tag.
+
 get_arity(Fun) ->
     proplists:get_value(arity, erlang:fun_info(Fun)).
+
+is_recur({recur, _}) -> true;
+is_recur(_)          -> false.
 
 mapfun(Mapper, Fun) -> 
     case get_arity(Fun) of
@@ -313,21 +396,21 @@ union_array_test() ->
 union_product_one_key_test() ->
     D1 = {product, #{blip => true}},
     D2 = {product, #{blip => false}},
-    Expected = {product, #{blip => {sum, sets:from_list([true, false])}}},
+    Expected = {product, #{blip => {sum, ordsets:from_list([true, false])}}},
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 union_product_two_keys_mergeable_test() ->
     D1 = {product, #{blap => a, blip => true}},
     D2 = {product, #{blap => a, blip => false}},
-    Expected = {product, #{blap => a, blip => {sum, sets:from_list([true, false])}}},
+    Expected = {product, #{blap => a, blip => {sum, ordsets:from_list([true, false])}}},
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 union_product_two_keys_non_mergeable_test() ->
     D1 = {product, #{blap => a, blip => true}},
     D2 = {product, #{blap => b, blip => false}},
-    Expected = {sum, sets:from_list([{product, #{blap => a, blip => true}},
+    Expected = {sum, ordsets:from_list([{product, #{blap => a, blip => true}},
                                      {product, #{blap => b, blip => false}}])},
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
@@ -342,7 +425,7 @@ union_product_uneven_keys_mergeable_test() ->
 union_product_many_keys_test() ->
     D1 = {product, #{blip => true, blap => false, blup => extra_old}},
     D2 = {product, #{blip => true, blap => true, blep => extra_new}},
-    Expected = {sum, sets:from_list([{product, #{blip => true, blap => false, blup => extra_old}},
+    Expected = {sum, ordsets:from_list([{product, #{blip => true, blap => false, blup => extra_old}},
                                      {product, #{blip => true, blap => true, blep => extra_new}}])},
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
@@ -350,78 +433,84 @@ union_product_many_keys_test() ->
 union_product_same_keys_test() ->
     D1 = {product, #{blip => true, blap => false}},
     D2 = {product, #{blip => true, blap => true}},
-    Expected = {product, #{blip => true, blap => {sum, sets:from_list([false, true])}}},
+    Expected = {product, #{blip => true, blap => {sum, ordsets:from_list([false, true])}}},
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 union_sum_test() ->
-    D1 = {sum, sets:from_list([a,b,c])},
-    D2 = {sum, sets:from_list([b,c,d])},
-    Expected = {sum, sets:from_list([a,b,c,d])},
+    D1 = {sum, ordsets:from_list([a,b,c])},
+    D2 = {sum, ordsets:from_list([b,c,d])},
+    Expected = {sum, ordsets:from_list([a,b,c,d])},
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 union_sum_none_test() ->
-    D1 = {sum, sets:from_list([none])},
-    D2 = {sum, sets:from_list([a,b])},
-    Expected = {sum, sets:from_list([a,b])},
+    D1 = {sum, ordsets:from_list([none])},
+    D2 = {sum, ordsets:from_list([a,b])},
+    Expected = {sum, ordsets:from_list([a,b])},
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 union_tagged_same_test() ->
     D1 = {tagged, kukkeluk, {product, #{blip => true}}},
     D2 = {tagged, kukkeluk, {product, #{blip => false}}},
-    Expected = {tagged, kukkeluk, {product, #{blip => {sum, sets:from_list([true, false])}}}},
+    Expected = {tagged, kukkeluk, {product, #{blip => {sum, ordsets:from_list([true, false])}}}},
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 union_tagged_diff_test() ->
     D1 = {tagged, kukkeluk, {product, #{blip => true, blap => false, blup => extra_old}}},
     D2 = {tagged, kakkelak, {product, #{blip => true, blap => true, blep => extra_new}}},
-    Expected = {sum, sets:from_list([{tagged, kukkeluk, {product, #{blip => true, blap => false, blup => extra_old}}},
+    Expected = {sum, ordsets:from_list([{tagged, kukkeluk, {product, #{blip => true, blap => false, blup => extra_old}}},
                                      {tagged, kakkelak, {product, #{blip => true, blap => true, blep => extra_new}}}])},
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 union_sum_of_products_test() ->
-    D1 = {sum, sets:from_list([{product, #{a => 1, b => 2}}])},
-    D2 = {sum, sets:from_list([{product, #{a => 1, c => 3}}])},
-    Expected = {sum, sets:from_list([{product, #{a => 1, b => 2}}, {product, #{a => 1, c => 3}}])},
+    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2}}])},
+    D2 = {sum, ordsets:from_list([{product, #{a => 1, c => 3}}])},
+    Expected = {sum, ordsets:from_list([{product, #{a => 1, b => 2}}, {product, #{a => 1, c => 3}}])},
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 union_sum_of_many_products_test() ->
-    D1 = {sum, sets:from_list([{product, #{a => 1, b => 2, c => 1}},
-                               {product, #{a => 2, b => 2, c => 2}},
-                               {product, #{a => 1, b => 2, c => 3}},
-                               {product, #{a => 2, b => 2, c => 4}}])},
-    D2 = {sum, sets:from_list([{product, #{a => 1}}])},
-    Expected = {sum, sets:from_list([{product, #{a => 1, b => 2, c => {sum, sets:from_list([1, 3])}}}, 
-                                     {product, #{a => 2, b => 2, c => {sum, sets:from_list([2, 4])}}},
-                                     {product, #{a => 1}}])},
+    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2, c => 1}},
+                                  {product, #{a => 2, b => 2, c => 2}},
+                                  {product, #{a => 1, b => 2, c => 3}},
+                                  {product, #{a => 2, b => 2, c => 4}}])},
+    D2 = {sum, ordsets:from_list([{product, #{a => 1}}])},
+    Expected = {sum, ordsets:from_list([{product, #{a => 1, b => 2, c => {sum, ordsets:from_list([1, 3])}}}, 
+                                        {product, #{a => 2, b => 2, c => {sum, ordsets:from_list([2, 4])}}},
+                                        {product, #{a => 1}}])},
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 union_sum_with_none_test() ->
-    D1 = {sum, sets:from_list([{product, #{a => 1, b => 2, c => 1}}, none])},
-    D2 = {sum, sets:from_list([none])},
+    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2, c => 1}}, none])},
+    D2 = {sum, ordsets:from_list([none])},
     Expected = {product, #{a => 1, b => 2, c => 1}}, 
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 union_sum_with_any_test() ->
-    D1 = {sum, sets:from_list([{product, #{a => 1, b => 2, c => 1}}, any])},
-    D2 = {sum, sets:from_list([none])},
+    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2, c => 1}}, any])},
+    D2 = {sum, ordsets:from_list([none])},
     Expected = any,
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 union_sum_of_products_with_same_keys_test() ->
-    D1 = {sum, sets:from_list([{product, #{a => 1, b => 2}}])},
-    D2 = {sum, sets:from_list([{product, #{a => 1, b => 3}}])},
-    Expected = {product, #{a => 1, b => {sum, sets:from_list([2,3])}}},
+    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2}}])},
+    D2 = {sum, ordsets:from_list([{product, #{a => 1, b => 3}}])},
+    Expected = {product, #{a => 1, b => {sum, ordsets:from_list([2,3])}}},
     Actual = union(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
+
+union_recur_recur_sum_sum_test() ->
+    R = fun R() -> {sum, ordsets:from_list([a, b, {recur, R}])} end,
+    S = fun S() -> {sum, ordsets:from_list([b, c, {recur, S}])} end,
+    Actual = union({recur, R}, {recur, S}),
+    ?assertMatch({sum, [a, b, c, {recur, _}, {recur, _}]}, Actual).
 
 intersection_array_test() ->
     D = blip,
@@ -437,7 +526,7 @@ intersection_product_one_key_test() ->
     ?assertEqual(none, diff(Expected, Actual)).
 
 intersection_product_two_keys_mergeable_test() ->
-    D1 = {product, #{blap => a, blip => {sum, sets:from_list([false,true])}}},
+    D1 = {product, #{blap => a, blip => {sum, ordsets:from_list([false,true])}}},
     D2 = {product, #{blap => a, blip => false}},
     Expected = {product, #{blap => a, blip => false}},
     Actual = intersection(D1, D2),
@@ -465,21 +554,21 @@ intersection_product_non_subset_test() ->
     ?assertEqual(none, diff(Expected, Actual)).
 
 intersection_sum_test() ->
-    D1 = {sum, sets:from_list([a,b,c])},
-    D2 = {sum, sets:from_list([b,c,d])},
-    Expected = {sum, sets:from_list([b,c])},
+    D1 = {sum, ordsets:from_list([a,b,c])},
+    D2 = {sum, ordsets:from_list([b,c,d])},
+    Expected = {sum, ordsets:from_list([b,c])},
     Actual = intersection(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 intersection_sum_any_test() ->
-    D1 = {sum, sets:from_list([any])},
-    D2 = {sum, sets:from_list([a,b])},
-    Expected = {sum, sets:from_list([a,b])},
+    D1 = {sum, ordsets:from_list([any])},
+    D2 = {sum, ordsets:from_list([a,b])},
+    Expected = {sum, ordsets:from_list([a,b])},
     Actual = intersection(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 intersection_tagged_same_test() ->
-    D1 = {tagged, kukkeluk, {product, #{blip => {sum, sets:from_list([false, true])}}}},
+    D1 = {tagged, kukkeluk, {product, #{blip => {sum, ordsets:from_list([false, true])}}}},
     D2 = {tagged, kukkeluk, {product, #{blip => false}}},
     Expected = {tagged, kukkeluk, {product, #{blip => false}}},
     Actual = intersection(D1, D2),
@@ -493,29 +582,29 @@ intersection_tagged_diff_test() ->
     ?assertEqual(none, diff(Expected, Actual)).
 
 intersection_sum_of_products_test() ->
-    D1 = {sum, sets:from_list([{product, #{a => 1, b => 2}}])},
-    D2 = {sum, sets:from_list([{product, #{a => 1, b => {sum, sets:from_list([2,3])}}}])},
+    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2}}])},
+    D2 = {sum, ordsets:from_list([{product, #{a => 1, b => {sum, ordsets:from_list([2,3])}}}])},
     Expected = {product, #{a => 1, b => 2}},
     Actual = intersection(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 intersection_sum_with_none_test() ->
-    D1 = {sum, sets:from_list([{product, #{a => 1, b => 2, c => 1}}, none])},
-    D2 = {sum, sets:from_list([none])},
+    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2, c => 1}}, none])},
+    D2 = {sum, ordsets:from_list([none])},
     Expected = none,
     Actual = intersection(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 intersection_sum_with_any_test() ->
-    D1 = {sum, sets:from_list([{product, #{a => 1, b => 2, c => 1}}])},
-    D2 = {sum, sets:from_list([any])},
+    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2, c => 1}}])},
+    D2 = {sum, ordsets:from_list([any])},
     Expected = {product, #{a => 1, b => 2, c => 1}},
     Actual = intersection(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
 intersection_f_test() ->
     D1 = {f, fun([A], _) -> A end},
-    D2 = {f, fun([A], _) -> {sum, sets:from_list([A, b])} end},
+    D2 = {f, fun([A], _) -> {sum, ordsets:from_list([A, b])} end},
     Expected = a,
     {f, DomainFun} = intersection(D1, D2),
     Actual = DomainFun([a], []),
@@ -528,18 +617,56 @@ intersection_map_map_test() ->
     Actual = intersection(D1, D2),
     ?assertEqual(none, diff(Expected, Actual)).
 
+intersection_recur_val_test() ->
+    R = fun R() -> {sum, ordsets:from_list([{product, #{recurse => {recur, R}}}])} end,
+    Input = {recur, R},
+    ?assertEqual(none, intersection(Input, val)).
+
+intersection_sum_sum_recur_recur_test() ->
+    R = fun R() -> {sum, ordsets:from_list([a, b, {recur, R}])} end,
+    S = fun S() -> {sum, ordsets:from_list([b, c, {recur, S}])} end,
+    Actual = intersection(R(), S()),
+    ?assertMatch({sum, [b, {recur, _}]}, Actual).
+
+intersection_sum_recur_recur_sum_test() ->
+    R = fun R() -> {sum, ordsets:from_list([a, b, {recur, R}])} end,
+    S = fun S() -> {sum, ordsets:from_list([b, c, {recur, S}])} end,
+    Actual = intersection(R(), {recur, S}),
+    ?assertMatch({sum, [b, {recur, _}]}, Actual).
+
+intersection_recur_recur_sum_sum_test() ->
+    R = fun R() -> {sum, ordsets:from_list([a, b, {recur, R}])} end,
+    S = fun S() -> {sum, ordsets:from_list([b, c, {recur, S}])} end,
+    Actual = intersection({recur, R}, {recur, S}),
+    ?assertMatch({sum, [b, {recur, _}]}, Actual).
+
+intersection_recur_recur_sum_sum_product_test() ->
+    P1 = {product, #{a => 1, b => {sum, ordsets:from_list([2,3])}}},
+    P2 = {product, #{a => 1, b => {sum, ordsets:from_list([3,4])}}},
+    R = fun R() -> {sum, ordsets:from_list([P1, {recur, R}])} end,
+    S = fun S() -> {sum, ordsets:from_list([P2, {recur, S}])} end,
+    Actual = intersection({recur, R}, {recur, S}),
+    P3 = {product, #{a => 1, b => 3}},
+    ?assertMatch({sum, [P3, {recur, _}, {recur, _}, {recur, _}]}, Actual).
+
+intersection_infinite_recur_test() ->
+    Inf1 = fun I() -> {recur, I} end,
+    Actual = compact(Inf1()),
+    Expected = {error, [{{possibly_infinite_recursion}, {domain}}]},
+    ?assertEqual(Expected, Actual).
+
 diff_sum_product_test() ->
-    Old = {product, #{blah => {values, sets:from_list([true, false])} } },
-    New = {sum, sets:from_list([true, false])},
+    Old = {product, #{blah => {values, ordsets:from_list([true, false])} } },
+    New = {sum, ordsets:from_list([true, false])},
     Expected = #{old => Old,
                  new => New},
     Actual = diff(Old, New),
     ?assertEqual(Expected, Actual).
 
 diff_sum_sum_test() ->
-    Old = {sum, sets:from_list([blip, blop, honk])},
-    New = {sum, sets:from_list([true, false, honk])},
-    Expected = {sum, #{only_in_old => [blop, blip],
+    Old = {sum, ordsets:from_list([blip, blop, honk])},
+    New = {sum, ordsets:from_list([true, false, honk])},
+    Expected = {sum, #{only_in_old => [blip, blop],
                        only_in_new => [false, true]}},
     Actual = diff(Old, New),
     ?assertEqual(Expected, Actual).
@@ -555,8 +682,8 @@ diff_product_product_test() ->
     ?assertEqual(Expected, Actual).
 
 diff_equal_sum_sum_test() ->
-    Old = {sum, sets:from_list([blip, blop, honk])},
-    New = {sum, sets:from_list([blip, blop, honk])},
+    Old = {sum, ordsets:from_list([blip, blop, honk])},
+    New = {sum, ordsets:from_list([blip, blop, honk])},
     Expected = none,
     Actual = diff(Old, New),
     ?assertEqual(Expected, Actual).
@@ -569,8 +696,8 @@ diff_equal_product_product_test() ->
     ?assertEqual(Expected, Actual).
 
 diff_nested1_test() ->
-    Old = {product, #{blah => {sum, sets:from_list([true, false])} } },
-    New = {product, #{blah => {sum, sets:from_list([true, false, blap])} } },
+    Old = {product, #{blah => {sum, ordsets:from_list([true, false])} } },
+    New = {product, #{blah => {sum, ordsets:from_list([true, false, blap])} } },
     Expected = {product, #{only_in_old => [],
                            only_in_new => [],
                            diff => [{blah, {sum, #{only_in_old => [],
@@ -581,16 +708,16 @@ diff_nested1_test() ->
 diff_nested2_test() ->
     OldProduct = {product, #{blip => true}},
     NewProduct = {product, #{blap => false}},
-    Old = {sum, sets:from_list([OldProduct])},
-    New = {sum, sets:from_list([NewProduct])},
+    Old = {sum, ordsets:from_list([OldProduct])},
+    New = {sum, ordsets:from_list([NewProduct])},
     Expected = {sum, #{only_in_old => [OldProduct],
                        only_in_new => [NewProduct]}},
     Actual = diff(Old, New),
     ?assertEqual(Expected, Actual).
 
 diff_equal_nested1_test() ->
-    Old = {sum, sets:from_list([{product, #{blip => {sum, sets:from_list([c,b,a])}}}])},
-    New = {sum, sets:from_list([{product, #{blip => {sum, sets:from_list([a,b,c])}}}])},
+    Old = {sum, ordsets:from_list([{product, #{blip => {sum, ordsets:from_list([c,b,a])}}}])},
+    New = {sum, ordsets:from_list([{product, #{blip => {sum, ordsets:from_list([a,b,c])}}}])},
     Expected = none,
     Actual = diff(Old, New),
     ?assertEqual(Expected, Actual).
@@ -603,52 +730,98 @@ diff_tagged_test() ->
     ?assertEqual(Expected, Actual).
 
 diff_tagged_sum_test() ->
-    Old = {tagged, kukkeluk, {sum, sets:from_list([a,b])}},
-    New = {tagged, kukkeluk, {sum, sets:from_list([a,b])}},
+    Old = {tagged, kukkeluk, {sum, ordsets:from_list([a,b])}},
+    New = {tagged, kukkeluk, {sum, ordsets:from_list([a,b])}},
     Expected = none,
     Actual = diff(Old, New),
     ?assertEqual(Expected, Actual).
 
+diff_recur_recur_test() ->
+    F = fun() -> f end,
+    G = fun() -> g end,
+    ?assertEqual(none, diff({recur, F}, {recur, F})),
+    Expected = #{old => 'f', new => 'g'},
+    ?assertEqual(Expected, diff({recur, F}, {recur, G})).
+
+diff_recur_other_test() ->
+    R = fun R() -> {product, #{recurse => {recur, R}}} end,
+    ?assertEqual(none, diff(R(), {recur, R})),
+
+    S = fun S() -> {product, #{blup => {recur, S}}} end,
+    Expected = {product, #{only_in_old => [recurse], only_in_new => [blup], diff => []}},
+    ?assertEqual(Expected, diff(R(), {recur, S})).
+
+diff_sum_recur_diff_test() ->
+    Old = fun O() -> {sum, ordsets:from_list([{recur, O}])} end,
+    New = fun N() -> {sum, ordsets:from_list([{recur, N}])} end,
+    ?assertEqual(none, diff(Old(), New())).
+
+
 compact_sum_sum_test() ->
-    Expected = {sum, sets:from_list([a, b, c])},
-    Actual = compact({sum, sets:from_list([a,{sum, sets:from_list([b,c])}])}),
+    Expected = {sum, ordsets:from_list([a, b, c])},
+    Actual = compact({sum, ordsets:from_list([a,{sum, ordsets:from_list([b,c])}])}),
     ?assertEqual(Expected, Actual).
 
 compact_product_sum_sum_test() ->
-    Expected = {product, #{a => {sum, sets:from_list([a, b, c])}}},
-    Actual = compact({product, #{a => {sum, sets:from_list([a,{sum, sets:from_list([b,c])}])}}}),
+    Expected = {product, #{a => {sum, ordsets:from_list([a, b, c])}}},
+    Actual = compact({product, #{a => {sum, ordsets:from_list([a,{sum, ordsets:from_list([b,c])}])}}}),
     ?assertEqual(Expected, Actual).
 
 compact_tagged_sum_sum_test() ->
-    Expected = {tagged, t, {sum, sets:from_list([a, b, c])}},
-    Actual = compact({tagged, t, {sum, sets:from_list([a,{sum, sets:from_list([b,c])}])}}),
+    Expected = {tagged, t, {sum, ordsets:from_list([a, b, c])}},
+    Actual = compact({tagged, t, {sum, ordsets:from_list([a,{sum, ordsets:from_list([b,c])}])}}),
     ?assertEqual(Expected, Actual).
 
 compact_sum_tagged_sum_sum_test() ->
-    Expected = {tagged, t, {sum, sets:from_list([a, b, c])}},
-    Actual = compact({sum, sets:from_list([{tagged, t, {sum, sets:from_list([a,{sum, sets:from_list([b,c])}])}}])}),
+    Expected = {tagged, t, {sum, ordsets:from_list([a, b, c])}},
+    Actual = compact({sum, ordsets:from_list([{tagged, t, {sum, ordsets:from_list([a,{sum, ordsets:from_list([b,c])}])}}])}),
     ?assertEqual(none, diff(Expected, Actual)).
 
 compact_sum_item_test() ->
-    Expected = {sum, sets:from_list([a, b, c])},
-    Actual = compact({sum, sets:from_list([a, b, {sum, sets:from_list([c])}])}),
+    Expected = {sum, ordsets:from_list([a, b, c])},
+    Actual = compact({sum, ordsets:from_list([a, b, {sum, ordsets:from_list([c])}])}),
     ?assertEqual(none, diff(Expected, Actual)).
 
 compact_f_test() ->
-    Input = {f, fun(A1, A2) -> {sum, sets:from_list([{sum, sets:from_list([A1, A2])}])} end},
-    Expected = {sum, sets:from_list([a1, a2])},
+    Input = {f, fun(A1, A2) -> {sum, ordsets:from_list([{sum, ordsets:from_list([A1, A2])}])} end},
+    Expected = {sum, ordsets:from_list([a1, a2])},
     {f, DomainFun} = compact(Input),
     Actual = DomainFun(a1, a2),
     ?assertEqual(none, diff(Expected, Actual)).
 
+compact_recur_test() ->
+    R = fun R() -> {sum, ordsets:from_list([a, {product, #{recurse => {recur, R}}}])} end,
+    Input = {recur, R},
+    Expected = {recur, R},
+    ?assertEqual(none, diff(Expected, compact(Input))).
+
+compact_recur_flatten_test() ->
+    % Sum with one item will be compacted: _____________________________________
+    R = fun R() -> {sum, ordsets:from_list([{product, #{recurse => {recur, R}}}])} end,
+    Input = {recur, R},
+    Actual = compact(Input),
+    ?assertMatch({product, _}, Actual),
+    {product, Map} = Actual,
+    ?assertMatch([{recurse, {recur, _}}], maps:to_list(Map)).
+
+compact_list_test() ->
+    List = fun List() -> {sum, ordsets:from_list(['List/Nil',
+                                                  {tagged, 'List/Cons', 
+                                                   #{head => 'List/Nil',
+                                                     tail => {recur, List}}}])} end,
+    Input = List(),
+    Actual = compact(Input),
+    ?assertEqual(none, diff(Input, Actual)).
+
+
 subset_sum_sum_test() ->
-    D1 = {sum, sets:from_list([a, b, c])},
-    D2 = {sum, sets:from_list([a, b, c, d])},
+    D1 = {sum, ordsets:from_list([a, b, c])},
+    D2 = {sum, ordsets:from_list([a, b, c, d])},
     ?assertEqual(true, subset(D1, D2)).
 
 subset_non_sum_sum_test() ->
-    D1 = {sum, sets:from_list([a, b, c])},
-    D2 = {sum, sets:from_list([b, c, d])},
+    D1 = {sum, ordsets:from_list([a, b, c])},
+    D2 = {sum, ordsets:from_list([b, c, d])},
     ?assertEqual(false, subset(D1, D2)).
     
 subset_product_product_test() ->
@@ -663,19 +836,20 @@ subset_non_product_product_test() ->
 
 subset_tagged_tagged_test() ->
     D1 = {tagged, t, t},
-    D2 = {tagged, t, {sum, sets:from_list([s, t])}},
+    D2 = {tagged, t, {sum, ordsets:from_list([s, t])}},
     ?assertEqual(true, subset(D1, D2)).
 
 subset_non_tagged_tagged_test() ->
     D1 = {tagged, t, t},
-    D2 = {tagged, s, {sum, sets:from_list([s, t])}},
+    D2 = {tagged, s, {sum, ordsets:from_list([s, t])}},
     ?assertEqual(false, subset(D1, D2)).
 
 subset_sum_product_test() ->
     D1 = {product, #{a => 2, b => 3, c => 4}},
-    D2 = {sum, sets:from_list([{product, #{a => 1, b => 2}},
+    D2 = {sum, ordsets:from_list([{product, #{a => 1, b => 2}},
                                {product, #{a => 2, b => 3}}])},
     ?assertEqual(true, subset(D1, D2)).
+
 
 lookup_product_test() ->
     D = {product, #{a => 'A', b => 'B'}},
@@ -684,8 +858,15 @@ lookup_product_test() ->
     Actual = lookup(D, Elems),
     ?assertEqual(none, diff(Expected, Actual)).
 
+lookup_recur_test() ->
+    D = {recur, fun() -> {product, #{a => 'A', b => 'B'}} end},
+    Elems = #{a => any},
+    Expected = {product, #{a => 'A'}},
+    Actual = lookup(D, Elems),
+    ?assertEqual(none, diff(Expected, Actual)).
+
 lookup_domain_intersection_test() ->
-    D = {product, #{a => {sum, sets:from_list(['A', 'B'])}}},
+    D = {product, #{a => {sum, ordsets:from_list(['A', 'B'])}}},
     Elems = #{a => 'A'},
     Expected = {product, #{a => 'A'}},
     Actual = lookup(D, Elems),

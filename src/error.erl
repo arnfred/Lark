@@ -1,40 +1,40 @@
 -module(error).
 
--export([collate/1, map/2]).
+-export([flatten/1, map/2]).
 
 -include_lib("eunit/include/eunit.hrl").
 
 map({ok, E}, F) -> {ok, F(E)};
 map(Err, _) -> Err.
 
-collate(List) when is_list(List) -> collate_ok(List, []).
+flatten(List) when is_list(List) -> flatten_ok(List, []).
 
-collate_ok([], Ret) -> {ok, lists:reverse(Ret)};
-collate_ok([{ok, Head} | Tail], Ret) -> collate_ok(Tail, [Head | Ret]);
-collate_ok([{error, Err} | Tail], _) -> collate_error(Tail, [Err]).
+flatten_ok([], Ret) -> {ok, lists:reverse(Ret)};
+flatten_ok([{ok, Head} | Tail], Ret) -> flatten_ok(Tail, [Head | Ret]);
+flatten_ok([{error, Err} | Tail], _) -> flatten_error(Tail, [Err]).
 
-collate_error([], Ret) -> {error, sets:to_list(sets:from_list(lists:reverse(lists:flatten(Ret))))};
-collate_error([{error, Err} | Tail], Ret) -> collate_error(Tail, [Err | Ret]);
-collate_error([{ok, _} | Tail], Ret) -> collate_error(Tail, Ret).
+flatten_error([], Ret) -> {error, sets:to_list(sets:from_list(lists:reverse(lists:flatten(Ret))))};
+flatten_error([{error, Err} | Tail], Ret) -> flatten_error(Tail, [Err | Ret]);
+flatten_error([{ok, _} | Tail], Ret) -> flatten_error(Tail, Ret).
 
 -ifdef(TEST).
 
-collate_all_ok_test() ->
+flatten_all_ok_test() ->
     Input = [{ok, 1}, {ok, 2}],
     Expected = {ok, [1, 2]},
-    Actual = collate(Input),
+    Actual = flatten(Input),
     ?assertEqual(Expected, Actual).
 
-collate_all_err_test() ->
+flatten_all_err_test() ->
     Input = [{error, 1}, {error, 2}],
     Expected = {error, [2, 1]},
-    Actual = collate(Input),
+    Actual = flatten(Input),
     ?assertEqual(Expected, Actual).
 
-collate_some_err_test() ->
+flatten_some_err_test() ->
     Input = [{ok, 1}, {error, 2}, {ok, 3}, {error, 4}],
     Expected = {error, [2, 4]},
-    Actual = collate(Input),
+    Actual = flatten(Input),
     ?assertEqual(Expected, Actual).
 
 map_ok_elem_test() ->
