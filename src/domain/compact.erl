@@ -6,7 +6,7 @@
 compact({sum, S}) -> compact_sum({sum, S});
 compact({product, Map}) -> compact_product({product, Map});
 compact({tagged, Tag, Domain}) -> {tagged, Tag, compact(Domain)};
-compact({f, DomainFun}) -> {f, mapfun(fun(D) -> compact(D) end, DomainFun)};
+compact({f, Name, F}) -> {f, Name, domain_util:mapfun(fun(D) -> compact(D) end, F)};
 compact({recur, D}) -> {recur, fun() -> compact(D()) end};
 compact(T) -> T.
 
@@ -140,27 +140,5 @@ compact_maps(Maps) ->
             % function recursively
             lists:flatten([Compact(Pivot, Domain, Group) || {Domain, Group} <- Grouped])
     end.
-
-mapfun(Mapper, Fun) -> 
-    case get_arity(Fun) of
-        0  -> Mapper(Fun());
-        1  -> fun(Arg) -> Mapper(Fun(Arg)) end;
-        2  -> fun(A1, A2) -> Mapper(Fun(A1, A2)) end;
-        3  -> fun(A1, A2, A3) -> Mapper(Fun(A1, A2, A3)) end;
-        4  -> fun(A1, A2, A3, A4) -> Mapper(Fun(A1, A2, A3, A4)) end;
-        5  -> fun(A1, A2, A3, A4, A5) -> Mapper(Fun(A1, A2, A3, A4, A5)) end;
-        6  -> fun(A1, A2, A3, A4, A5, A6) -> Mapper(Fun(A1, A2, A3, A4, A5, A6)) end;
-        7  -> fun(A1, A2, A3, A4, A5, A6, A7) -> Mapper(Fun(A1, A2, A3, A4, A5, A6, A7)) end;
-        8  -> fun(A1, A2, A3, A4, A5, A6, A7, A8) -> Mapper(Fun(A1, A2, A3, A4, A5, A6, A7, A8)) end;
-        9  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9) -> Mapper(Fun(A1, A2, A3, A4, A5, A6, A7, A8, A9)) end;
-        10 -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10) -> Mapper(Fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10)) end;
-        11 -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11) -> Mapper(Fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11)) end;
-        12 -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12) -> Mapper(Fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12)) end;
-        13 -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13) -> Mapper(Fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13)) end
-    end.
-
-get_arity(Fun) ->
-    proplists:get_value(arity, erlang:fun_info(Fun)).
-
 
 group_by(F, L) -> dict:to_list(lists:foldr(fun({K,V}, D) -> dict:append(K, V, D) end , dict:new(), [ {F(X), X} || X <- L ])).

@@ -27,9 +27,9 @@ compact_sum_item_test_() ->
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 compact_f_test_() ->
-    Input = {f, fun(A1, A2) -> {sum, ordsets:from_list([{sum, ordsets:from_list([A1, A2])}])} end},
+    Input = {f, name, fun(A1, A2) -> {sum, ordsets:from_list([{sum, ordsets:from_list([A1, A2])}])} end},
     Expected = {sum, ordsets:from_list([a1, a2])},
-    {f, DomainFun} = domain:compact(Input),
+    {f, name, DomainFun} = domain:compact(Input),
     Actual = DomainFun(a1, a2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 

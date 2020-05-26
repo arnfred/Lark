@@ -30,9 +30,10 @@ intersection(D, any) -> D;
 intersection(none, _) -> none;
 intersection(_, none) -> none;
 
-intersection({f, F1}, {f, F2}) -> 
-    case {get_arity(F1), get_arity(F2)} of
-        {N, N} -> {f, mapfun(fun(Res1, Res2) -> intersection(Res1, Res2) end, F1, F2)};
+intersection({f, Name1, F1}, {f, Name2, F2}) -> 
+    Name = list_to_atom(lists:flatten([atom_to_list(Name1), "_", atom_to_list(Name2)])), 
+    case {domain_util:get_arity(F1), domain_util:get_arity(F2)} of
+        {N, N} -> {f, Name, domain_util:mapfun(fun(Res1, Res2) -> intersection(Res1, Res2) end, F1, F2)};
         _ -> none
     end;
 
@@ -60,25 +61,3 @@ propagate_none({tagged, T, {product, Map}}) ->
         false -> {tagged, T, {product, Map}}
     end;
 propagate_none(D) -> D.
-
-get_arity(Fun) ->
-    proplists:get_value(arity, erlang:fun_info(Fun)).
-
-mapfun(Mapper, Fun1, Fun2) -> 
-    case {get_arity(Fun1), get_arity(Fun2)} of
-        {0, 0}   -> Mapper(Fun1(), Fun2());
-        {1, 1}   -> fun(Arg) -> Mapper(Fun1(Arg), Fun2(Arg)) end;
-        {2, 2}   -> fun(A1, A2) -> Mapper(Fun1(A1, A2), Fun2(A1, A2)) end;
-        {3, 3}   -> fun(A1, A2, A3) -> Mapper(Fun1(A1, A2, A3), Fun2(A1, A2, A3)) end;
-        {4, 4}   -> fun(A1, A2, A3, A4) -> Mapper(Fun1(A1, A2, A3, A4), Fun2(A1, A2, A3, A4)) end;
-        {5, 5}   -> fun(A1, A2, A3, A4, A5) -> Mapper(Fun1(A1, A2, A3, A4, A5), Fun2(A1, A2, A3, A4, A5)) end;
-        {6, 6}   -> fun(A1, A2, A3, A4, A5, A6) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6), Fun2(A1, A2, A3, A4, A5, A6)) end;
-        {7, 7}   -> fun(A1, A2, A3, A4, A5, A6, A7) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6, A7), Fun2(A1, A2, A3, A4, A5, A6, A7)) end;
-        {8, 8}   -> fun(A1, A2, A3, A4, A5, A6, A7, A8) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6, A7, A8), Fun2(A1, A2, A3, A4, A5, A6, A7, A8)) end;
-        {9, 9}   -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6, A7, A8, A9), Fun2(A1, A2, A3, A4, A5, A6, A7, A8, A9)) end;
-        {10, 10} -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10), Fun2(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10)) end;
-        {11, 11} -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11), Fun2(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11)) end;
-        {12, 12} -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12), Fun2(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12)) end;
-        {13, 13} -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13) -> Mapper(Fun1(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13), Fun2(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13)) end
-    end.
-

@@ -7,48 +7,34 @@
 
 scan(TypeMod, AST) when is_list(AST) ->
     Scanned = [scan_top_level(TypeMod, Def) || Def <- AST],
-    {Envs, _} = unzip([EnvFun(Scanned) || EnvFun <- Scanned]),
-    maps:from_list(Envs).
+    {_, Names, Domains} = unzip3([EnvFun(Scanned) || EnvFun <- Scanned]),
+    maps:from_list(zip(Names, Domains)).
 
 scan_top_level(TypeMod, {def, _, Name, Args, Cs}) when is_list(Cs) ->
     F = fun(Env, Stack, ArgDomains) ->
-                io:format("Scanning ~p with Domains: ~p and Stack ~p~n", [Name, ArgDomains, Stack]),
-                case check_stack_recursion(Stack, Name, ArgDomains) of
-                    error -> none;
-                    ok -> 
-                        NewStack = [{Name, ArgDomains} | Stack],
-                        ClauseArgs = zip(Args, ArgDomains),
-                        {_, DefDomain} = scan_clauses(Env, NewStack, TypeMod, ClauseArgs, Cs),
-                        DefDomain
-                end
+                NewStack = [{Name, ArgDomains} | Stack],
+                ClauseArgs = zip(Args, ArgDomains),
+                {_, DefDomain} = scan_clauses(Env, NewStack, TypeMod, ClauseArgs, Cs),
+                DefDomain
         end,
-    generate_env_fun(Name, length(Args), F);
+    generate_env_fun(Name, length(Args), F, TypeMod);
 
 scan_top_level(TypeMod, {def, _, Name, Args, Expr}) ->
     F = fun(Env, Stack, ArgDomains) -> 
-                io:format("Stack: ~p~nArgDomains: ~p~n", [Stack, ArgDomains]),
-                case check_stack_recursion(Stack, Name, ArgDomains) of
-                    error -> none;
-                    ok -> 
-                        NewStack = [{Name, ArgDomains} | Stack],
-                        ArgEnv = maps:from_list([{symbol:tag(A), D} || {A, D} <- zip(Args, ArgDomains)]),
-                        NewEnv = intersection(Env, ArgEnv),
-                        {_, DefDomain} = scan(NewEnv, NewStack, TypeMod, Expr),
-                        DefDomain
-                end
+                NewStack = [{Name, ArgDomains} | Stack],
+                ArgEnv = maps:from_list([{symbol:tag(A), D} || {A, D} <- zip(Args, ArgDomains)]),
+                NewEnv = intersection(Env, ArgEnv),
+                {_, DefDomain} = scan(NewEnv, NewStack, TypeMod, Expr),
+                DefDomain
         end,
-    generate_env_fun(Name, length(Args), F).
+    generate_env_fun(Name, length(Args), F, TypeMod).
 
-scan(Env, Stack, TypeMod, {application, _, Expr, Args} = Current) ->
+scan(Env, Stack, TypeMod, {application, _, Expr, Args} = Parsnip) ->
     {ArgEnvs, ArgDomains} = unzip([scan(Env, Stack, TypeMod, A) || A <- Args]),
     {ExprEnv, ExprDomain} = scan(Env, Stack, TypeMod, Expr),
     io:format("Args: ~p~n", [Args]),
     io:format("ArgDomains: ~p~n", [ArgDomains]),
-    Domain = case ExprDomain of
-                 {f, DomainFun} -> DomainFun(Stack, ArgDomains);
-                 {error, Err}   -> {error, Err};
-                 D              -> {error, [{Current, {expected_function_domain, D}, Stack}]}
-             end,
+    Domain = apply_domain(ExprDomain, Stack, ArgDomains, Parsnip),
     {intersection([ExprEnv | ArgEnvs]), Domain};
 
 scan(Env, Stack, TypeMod, {lookup, _, Var, Elems} = Current) ->
@@ -72,19 +58,15 @@ scan(Env, Stack, TypeMod, {match, _, Arg, Clauses}) ->
     {_, ArgDomain} = scan(Env, Stack, TypeMod, Arg),
     scan_clauses(Env, Stack, TypeMod, [{symbol:id(''), ArgDomain}], Clauses);
 
-scan(Env, _, TypeMod, {lambda, _, Cs}) -> 
+scan(Env, _, TypeMod, {lambda, _, [{clause, _, Ps, _} | _] = Cs}) -> 
     Name = symbol:id('lambda'),
-    F = fun(ArgDomains, Stack) -> 
-                case check_stack_recursion(Stack, Name, ArgDomains) of
-                    error -> none;
-                    ok -> 
-                        NewStack = [{Name, ArgDomains}],
-                        Args = [{symbol:id(''), ArgD} || ArgD <- ArgDomains],
-                        {_, LDomain} = scan_clauses(Env, NewStack, TypeMod, Args, Cs),
-                        LDomain
-                end
+    F = fun(Stack, ArgDomains) -> 
+                NewStack = [{Name, ArgDomains} | Stack],
+                Args = [{symbol:id(''), ArgD} || ArgD <- ArgDomains],
+                {_, LDomain} = scan_clauses(Env, NewStack, TypeMod, Args, Cs),
+                LDomain
         end,
-    {Env, {f, F}};
+    {Env, two_step_pass_stack(F, Name, length(Ps))};
 
 scan(Env, Stack, TypeMod, {tuple, _, Elems}) -> fold(Env, Stack, TypeMod, Elems);
 
@@ -92,7 +74,11 @@ scan(Env, _, _, {variable, _, _, Tag}) ->
     D = maps:get(Tag, Env, any),
     {#{Tag => D}, D};
 
-scan(_, _, TypeMod, {type, _, _} = T) -> {#{}, TypeMod:domain(symbol:tag(T))};
+scan(_, _, TypeMod, {type, _, _} = T) -> 
+    Domain = case TypeMod:domain(symbol:tag(T)) of
+                 {f, Name, F}   -> two_step_ignore_stack(F, Name);
+                 D              -> D end,
+    {#{}, Domain};
 
 scan(_, _, _, {key, _, Key}) -> {#{}, Key};
 
@@ -104,7 +90,7 @@ scan_clauses(Env, Stack, TypeMod, Args, Clauses) ->
     Scan = fun S([]) -> [];
                S([Clause | Cs]) ->
                    case scan_clause(Env, Stack, TypeMod, Args, Clause) of
-                       skip -> S(Cs);
+                       skip_clause -> S(Cs);
                        {E, D, PsDomains} ->
 
                            % Only scan patterns until (and including) the first pattern which domain
@@ -136,7 +122,7 @@ scan_clause(Env, Stack, TypeMod, Args, {clause, _, Patterns, Expr}) ->
     % since a Domain of `none` entails that the domain can take no values
     HasNone = lists:any(fun(D) -> D =:= none end, PsDomains),
     case HasNone of
-        true    -> skip;
+        true    -> skip_clause;
         _       -> {ExprEnv, ExprDomain} = scan(intersection([Env | PsEnvs]), Stack, TypeMod, Expr),
                    {ExprEnv, ExprDomain, PsDomains}
     end.
@@ -145,7 +131,7 @@ scan_clause(Env, Stack, TypeMod, Args, {clause, _, Patterns, Expr}) ->
 % Pattern of: `T(a, b)`
 scan_pattern(Domain, TypeMod, {application, _, {type, _, T}, Args}) ->
     {ArgEnvs, ArgDomains} = unzip([scan_pattern(any, TypeMod, A) || A <- Args]),
-    {f, TDomainFun} = TypeMod:domain(T), 
+    {f, _, TDomainFun} = TypeMod:domain(T), 
     {intersection(ArgEnvs), intersection(Domain, TDomainFun(ArgDomains))};
 
 % Pattern of: `T { k: v, ... }`
@@ -199,27 +185,50 @@ fold(Env, Stack, TypeMod, Elements) when is_list(Elements) ->
 
 % This is a bit of a funky pattern that is going to be hard to understand when
 % reading the code. In short, what's going on here is that we want the domain
-% function in `{f, DomainFun}` to be purely a function that accepts a domain as
-% a parameter and returns a domain. However, when the function is executed, it
-% executes the scan of the AST and needs an environment of other top level
-% functions available. This isn't known at the time we generate the domain
-% function, so we can't store it in the clojure. Instead I'm using this kludge
-% to make sure it's passed in after we've created a domain function for all
-% top-level functions.
+% function in `{f, Name, DomainFun}` to be purely a function that accepts a
+% domain as a parameter and returns a domain. However, when the function is
+% executed, it executes the scan of the AST and needs an environment of other
+% top level functions available. This isn't known at the time we generate the
+% domain function, so we can't store it in the clojure. Instead I'm using this
+% kludge to make sure it's passed in after we've created a domain function for
+% all top-level functions.
 %
 % To understand what's going on in the code a bit better, have a look at the
 % commit commit message of `ac6dcd61822ecfde1aeaa75482f059a9fe1f6d24`.
-generate_env_fun(Name, Length, DomainFromEnv) -> 
+generate_env_fun(Name, Length, DomainFromEnv, TypeMod) -> 
     fun(EnvFunctions) ->
-            DomainFun = fun(Stack, ArgDomains) ->
-                                {Envs, _} = unzip([EnvF(EnvFunctions) || EnvF <- EnvFunctions]),
-                                Env = maps:from_list(Envs),
-                                DomainFromEnv(Env, Stack, ArgDomains)
-                        end,
-            {{{Name, Length}, {f, DomainFun}}, {f, DomainFun}}
+            F = fun(Stack, Inputs) ->
+                        ArgDomains = [get_domain(TypeMod, I) || I <- Inputs],
+                        {Envs, _, _} = unzip3([EnvF(EnvFunctions) || EnvF <- EnvFunctions]),
+                        Env = maps:from_list(Envs),
+                        DomainFromEnv(Env, Stack, ArgDomains)
+                end,
+            {f, Name, DomainFun} = two_step_pass_stack(F, Name, Length),
+            Domain = DomainFun([]), % Pass empty stack for top-level domain
+            {{{Name, Length}, {f, Name, DomainFun}}, {Name, Length}, Domain}
     end.
 
+get_domain(_, any)                              -> any;
+get_domain(_, none)                             -> none;
+get_domain(TypeMod, Atom) when is_atom(Atom)    -> element(2, scan([], [], TypeMod, get_type(Atom)));
+get_domain(_, Tuple) when is_tuple(Tuple)       -> Tuple;
+get_domain(_, D)                                -> D.
 
+get_type(Atom) when is_atom(Atom) -> {type, 0, get_type(atom_to_list(Atom))};
+get_type([]) -> [];
+get_type([$/ | Tail]) -> get_type(Tail);
+get_type(List) when is_list(List) ->
+    {Element, Rest} = lists:splitwith(fun(C) -> not(C =:= $/) end, List),
+    [list_to_atom(Element) | get_type(Rest)].
+
+apply_domain({f, Name, StackFun}, Stack, Args, _) ->
+    case check_stack_recursion(Stack, Name, Args) of
+        error -> none;
+        ok -> {f, Name, DomainFun} = StackFun(Stack),
+              erlang:apply(DomainFun, Args)
+    end;
+apply_domain({error, Err}, _, _, _) -> {error, Err};
+apply_domain(D, Stack, _, Parsnip) -> {error, [{Parsnip, {expected_function_domain, D}, Stack}]}.
 
 check_stack_recursion([], _, _) -> ok;
 check_stack_recursion([{Name, Domains} | Stack], Name, ArgDomains) ->
@@ -229,6 +238,55 @@ check_stack_recursion([{Name, Domains} | Stack], Name, ArgDomains) ->
     end;
 check_stack_recursion([_ | Stack], Name, ArgDomains) -> 
     check_stack_recursion(Stack, Name, ArgDomains).
+
+
+% This function is responsible for two things:
+% - It wraps the function domain inside another function domain in order to
+%   pass the Stack
+% - It generates a function which takes arguments as individual parameters
+%   instead of an argument list
+% We need to pass the stack to avoid recursions. Check the corresponding git
+% commit message for more details.
+two_step_pass_stack(F, Name, N) ->
+    StepOne = fun(Stack) -> 
+                      StepTwo = spread(fun(Args) -> F(Stack, Args) end, N),
+                      {f, Name, StepTwo}
+              end,
+    {f, Name, StepOne}.
+
+% In cases where we don't need to pass the stack, we still want to wrap the
+% function domains in another domain to keep things consistent
+two_step_ignore_stack(F, Name) -> {f, Name, fun(_) -> {f, Name, F} end}.
+
+spread(F, N) ->
+    case N of
+        0  -> F;
+        1  -> fun(A1) -> F([A1]) end;
+        2  -> fun(A1, A2) -> F([A1, A2]) end;
+        3  -> fun(A1, A2, A3) -> F([A1, A2, A3]) end;
+        4  -> fun(A1, A2, A3, A4) -> F([A1, A2, A3, A4]) end;
+        5  -> fun(A1, A2, A3, A4, A5) -> F([A1, A2, A3, A4, A5]) end;
+        6  -> fun(A1, A2, A3, A4, A5, A6) -> F([A1, A2, A3, A4, A5, A6]) end;
+        7  -> fun(A1, A2, A3, A4, A5, A6, A7) -> F([A1, A2, A3, A4, A5, A6, A7]) end;
+        8  -> fun(A1, A2, A3, A4, A5, A6, A7, A8) -> F([A1, A2, A3, A4, A5, A6, A7, A8]) end;
+        9  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9]) end;
+        10  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10]) end;
+        11  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11]) end;
+        12  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12]) end;
+        13  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13]) end;
+        14  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14]) end;
+        15  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15]) end;
+        16  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16]) end;
+        17  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17]) end;
+        18  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18]) end;
+        19  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19]) end;
+        20  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20]) end;
+        21  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21]) end;
+        22  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22]) end;
+        23  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23]) end;
+        24  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24]) end;
+        25  -> fun(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24, A25) -> F([A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24, A25]) end
+    end.
 
 -ifdef(TEST).
 
@@ -247,7 +305,7 @@ env_gen_test() ->
     AST = [{def, 1, function1, [], []}, {def, 2, function2, [], []}],
     Output = scan({}, AST),
     ExpectedDomains = [none, none],
-    ActualDomains = [DomainFun([], []) || {_, {f, DomainFun}} <- maps:to_list(Output)],
+    ActualDomains = [DomainFun([]) || {_, {f, _, DomainFun}} <- maps:to_list(Output)],
     ExpectedKeys = [{function1, 0}, {function2, 0}],
     ActualKeys = [Key || {Key, _} <- maps:to_list(Output)],
     ?assertEqual(ExpectedDomains, ActualDomains),
@@ -260,22 +318,22 @@ run_xor_test() ->
            " | False, True -> b\n"
            " | _, _ -> False",
     RunAsserts = fun(Env) ->
-                         {f, DomainFun} = maps:get({'xor', 2}, Env),
+                         {f, 'xor', DomainFun} = maps:get({'xor', 2}, Env),
 
-                         Actual1 = DomainFun([], [any, any]),
+                         Actual1 = DomainFun(any, any),
                          Expected1 = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
                          ?assertEqual(none, domain:diff(Expected1, Actual1)),
 
-                         Actual2 = DomainFun([], ['Boolean/True', 'Boolean/False']),
+                         Actual2 = DomainFun('Boolean/True', 'Boolean/False'),
                          Expected2 = 'Boolean/True',
                          ?assertEqual(none, domain:diff(Expected2, Actual2)),
 
                          Boolean = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
-                         Actual3 = DomainFun([], [Boolean, Boolean]),
+                         Actual3 = DomainFun(Boolean, Boolean),
                          Expected3 = Boolean,
                          ?assertEqual(none, domain:diff(Expected3, Actual3)),
 
-                         Actual4 = DomainFun([], ['Boolean/True', 'Boolean/True']),
+                         Actual4 = DomainFun('Boolean/True', 'Boolean/True'),
                          Expected4 = 'Boolean/False',
                          ?assertEqual(none, domain:diff(Expected4, Actual4))
                  end,
@@ -289,13 +347,13 @@ direct_recursion_test() ->
            " | Stop -> state",
 
     RunAsserts = fun(Env) ->
-                         {f, DomainFun} = maps:get({g, 1}, Env),
+                         {f, g, DomainFun} = maps:get({g, 1}, Env),
 
-                         Actual1 = DomainFun([], ['State/Stop']),
+                         Actual1 = DomainFun('State/Stop'),
                          Expected1 = 'State/Stop',
                          ?assertEqual(none, domain:diff(Expected1, Actual1)),
 
-                         Actual2 = DomainFun([], ['State/Start']),
+                         Actual2 = DomainFun('State/Start'),
                          Expected2 = 'State/Stop',
                          ?assertEqual(none, domain:diff(Expected2, Actual2))
                  end,
@@ -304,9 +362,9 @@ direct_recursion_test() ->
 infinite_recursion_test() ->
     Code = "def recurse a -> recurse(a)",
     RunAsserts = fun(Env) ->
-                         {f, DomainFun} = maps:get({recurse, 1}, Env),
+                         {f, recurse, DomainFun} = maps:get({recurse, 1}, Env),
                          Expected = none,
-                         Actual = DomainFun([], ['_']),
+                         Actual = DomainFun(['_']),
                          ?assertEqual(Expected, Actual)
                  end,
     run(Code, RunAsserts).
@@ -316,9 +374,9 @@ infinite_co_recursion_test() ->
            "def g a -> h(a)\n"
            "def h a -> f(a)",
     RunAsserts = fun(Env) ->
-                         {f, DomainFun} = maps:get({f, 1}, Env),
+                         {f, f, DomainFun} = maps:get({f, 1}, Env),
                          Expected = none,
-                         Actual = DomainFun([], ['_']),
+                         Actual = DomainFun(['_']),
                          ?assertEqual(Expected, Actual)
                  end,
     run(Code, RunAsserts).
@@ -326,32 +384,30 @@ infinite_co_recursion_test() ->
 application_error_test() ->
     Code = "def f a -> a(f)",
     RunAsserts = fun(Env) ->
-                         {f, DomainFun} = maps:get({f, 1}, Env),
-                         {error, Error} = DomainFun([], [any]),
+                         {f, f, DomainFun} = maps:get({f, 1}, Env),
+                         {error, Error} = DomainFun(any),
                          ExpectedError = expected_function_domain,
                          ExpectedDomain = any,
-                         ExpectedStack = [{f, [any]}],
-                         [{_, {ActualError, ActualDomain}, ActualStack}] = Error,
+                         [{_, {ActualError, ActualDomain}, _}] = Error,
                          ?assertEqual(ExpectedError, ActualError),
-                         ?assertEqual(ExpectedDomain, ActualDomain),
-                         ?assertEqual(ExpectedStack, ActualStack)
+                         ?assertEqual(ExpectedDomain, ActualDomain)
                  end,
     run(Code, RunAsserts).
 
 lookup_expr_product_test() ->
     Code ="def f t -> t { a, b }",
     RunAsserts = fun(Env) ->
-                         {f, DomainFun} = maps:get({f, 1}, Env),
+                         {f, f, DomainFun} = maps:get({f, 1}, Env),
                          Expected1 = {product, #{a => 'A', b => 'B'}},
-                         Actual1 = DomainFun([], [{product, #{a => 'A', b => 'B', c => 'C'}}]),
+                         Actual1 = DomainFun({product, #{a => 'A', b => 'B', c => 'C'}}),
                          ?assertEqual(none, diff(Expected1, Actual1)),
 
                          Expected2 = {product, #{a => 'A', b => 'B'}},
-                         Actual2 = DomainFun([], [{tagged, tag, {product, #{a => 'A', b => 'B'}}}]),
+                         Actual2 = DomainFun({tagged, tag, {product, #{a => 'A', b => 'B'}}}),
                          ?assertEqual(none, diff(Expected2, Actual2)),
 
                          Expected3 = none,
-                         Actual3 = DomainFun([], [{product, #{c => 'C', d => 'D'}}]),
+                         Actual3 = DomainFun({product, #{c => 'C', d => 'D'}}),
                          ?assertEqual(none, diff(Expected3, Actual3))
                  end,
     run(Code, RunAsserts).
@@ -362,9 +418,9 @@ lookup_expr_sum_test() ->
            "def f a\n"
            " | (t: T) -> t { blup }",
     RunAsserts = fun(Env) ->
-                         {f, DomainFun} = maps:get({f, 1}, Env),
+                         {f, f, DomainFun} = maps:get({f, 1}, Env),
                          Expected = {product, #{blup => {sum, ordsets:from_list(['T/Blup', 'T/Blap'])}}},
-                         Actual = DomainFun([], [any]),
+                         Actual = DomainFun(any),
                          ?assertEqual(none, diff(Expected, Actual))
                  end,
     run(Code, RunAsserts).
@@ -372,9 +428,9 @@ lookup_expr_sum_test() ->
 lookup_error_propagation_test() ->
     Code = "def f t -> t { a }",
     RunAsserts = fun(Env) ->
-                         {f, DomainFun} = maps:get({f, 1}, Env),
+                         {f, f, DomainFun} = maps:get({f, 1}, Env),
                          StackError = {error, [some_error]},
-                         Actual1 = DomainFun([], [StackError]),
+                         Actual1 = DomainFun(StackError),
                          Expected1 = StackError,
                          ?assertEqual(none, diff(Expected1, Actual1))
                  end,
@@ -383,9 +439,9 @@ lookup_error_propagation_test() ->
 lookup_non_product_or_tagged_domain_test() ->
     Code = "def f t -> t { a }",
     RunAsserts = fun(Env) ->
-                         {f, DomainFun} = maps:get({f, 1}, Env),
+                         {f, f, DomainFun} = maps:get({f, 1}, Env),
                          Expected = {expected_product_domain, any},
-                         {error, [{_, Error, _}]} = DomainFun([], [any]),
+                         {error, [{_, Error, _}]} = DomainFun(any),
                          ?assertEqual(none, diff(Expected, Error))
                  end,
     run(Code, RunAsserts).
@@ -394,25 +450,29 @@ pair_values_refinement_test() ->
     Code = "type Boolean -> True | False\n"
            "def f t -> t: Boolean",
     RunAsserts = fun(Env) ->
-                         {f, DomainFun} = maps:get({f, 1}, Env),
+                         {f, f, DomainFun} = maps:get({f, 1}, Env),
                          Expected = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
-                         Actual = DomainFun([], [any]),
+                         Actual = DomainFun(any),
                          ?assertEqual(none, diff(Expected, Actual))
                  end,
     run(Code, RunAsserts).
 
-%pair_expressions_refinement_test() ->
-%    Code = "type Boolean -> True | False\n"
-%           "type Option a -> a | None\n"
-%           "def id a -> a\n"
-%           "def f t -> id(t): Option(True)",
-%    RunAsserts = fun(Env) ->
-%                         {f, DomainFun} = maps:get({f, 1}, Env),
-%                         Expected = {sum, ordsets:from_list(['Boolean/True', 'Option/None'])},
-%                         Actual = DomainFun([], [any]),
-%                         ?assertEqual(none, diff(Expected, Actual))
-%                 end,
-%    run(Code, RunAsserts).
+pair_expressions_refinement_test() ->
+    Code = "type Boolean -> True | False\n"
+           "type Option a -> a | None\n"
+           "def id a -> a\n"
+           "def f t -> id(t): Option(True)",
+    RunAsserts = fun(Env) ->
+                         {f, f, DomainFun} = maps:get({f, 1}, Env),
+                         Actual1 = DomainFun(any),
+                         Expected1 = {sum, ordsets:from_list(['Boolean/True', 'Option/None'])},
+                         ?assertEqual(none, diff(Expected1, Actual1)),
+
+                         Actual2 = DomainFun('Boolean'),
+                         Expected2 = 'Boolean/True',
+                         ?assertEqual(none, diff(Expected2, Actual2))
+                 end,
+    run(Code, RunAsserts).
 
 
 -endif.

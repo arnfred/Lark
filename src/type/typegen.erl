@@ -28,7 +28,7 @@ compile(Tag, Env, TypeDefs) ->
     {Vars, Domain} = maps:get(Tag, Env),
     case Vars of
         [] -> error:map(abstract_form(Env, TypeDefs, Domain), fun(Form) -> {Tag, Form} end);
-        _N -> error:map(abstract_form(Env, TypeDefs, {f, Vars, Domain}), fun(Form) -> {Tag, Form} end)
+        _N -> error:map(abstract_form(Env, TypeDefs, {f, Tag, Vars, Domain}), fun(Form) -> {Tag, Form} end)
     end.
 
 gen_top_level_def(Name, []) ->
@@ -105,10 +105,10 @@ domains(Path, _, {type, _, _} = Type) ->
 domains(_, _, {key, _, Key}) -> 
     {[], [], Key}.
 
-abstract_form(Env, TypeDefs, {f, Vars, Domain}) ->
+abstract_form(Env, TypeDefs, {f, Tag, Vars, Domain}) ->
     error:map(abstract_form(Env, TypeDefs, Domain), fun(DomainForm) ->
         ArgsForm = [cerl:c_var(V) || V <- Vars],
-        cerl:c_tuple([cerl:c_atom(f), cerl:c_fun(ArgsForm, DomainForm)]) end);
+        cerl:c_tuple([cerl:c_atom(f), cerl:c_atom(Tag), cerl:c_fun(ArgsForm, DomainForm)]) end);
 
 abstract_form(Env, TypeDefs, {sum, Set}) -> 
     case error:flatten([abstract_form(Env, TypeDefs, Elem) || Elem <- ordsets:to_list(Set)]) of
@@ -195,7 +195,7 @@ group_by(F, L) -> dict:to_list(lists:foldr(fun({K,V}, D) -> dict:append(K, V, D)
 unsafe_call_form(NameForm, ArgForms) ->
     cerl:c_apply(
       cerl:c_call(cerl:c_atom(erlang), cerl:c_atom(element), 
-                  [cerl:c_int(2), cerl:c_apply(cerl:c_fname(domain, 1), [NameForm])]),
+                  [cerl:c_int(3), cerl:c_apply(cerl:c_fname(domain, 1), [NameForm])]),
       ArgForms).
 
 -ifdef(TEST).
@@ -250,7 +250,7 @@ type_parameter_test() ->
            "type T -> A | B",
     RunAsserts = fun(Mod) -> 
                          ?assertEqual('T/A', Mod:'Id'('T/A')),
-                         {f, DomainFun} = Mod:domain('Id'),
+                         {f, 'Id', DomainFun} = Mod:domain('Id'),
                          ?assertEqual('T/B', DomainFun('T/B'))
                  end,
     run(Code, RunAsserts).
@@ -302,7 +302,7 @@ buried_var_test() ->
     RunAsserts = fun(Mod) ->
                          Expected = {tagged, 'Buried/Bottom', 
                                      {product, #{var => 'Hidden/Treasure'}}},
-                         {f, DomainFun} = Mod:domain('Buried/Bottom'),
+                         {f, 'Buried/Bottom', DomainFun} = Mod:domain('Buried/Bottom'),
                          Actual = DomainFun('Hidden/Treasure'),
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
@@ -317,7 +317,7 @@ var_order_test() ->
                                                            {tagged, 'Order/C', 'Args/C'},
                                                            {tagged, 'Order/A', 'Args/A'},
                                                            {tagged, 'Order/B', 'Args/B'}])}},
-                         {f, DomainFun} = Mod:domain('Order/T'),
+                         {f, 'Order/T', DomainFun} = Mod:domain('Order/T'),
                          Actual = DomainFun('Args/A', 'Args/B', 'Args/C'),
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
@@ -364,7 +364,7 @@ application_first_order_type_test() ->
            "type AnyOption f a -> f(a)",
     RunAsserts = fun(Mod) ->
                          Expected = {sum, ordsets:from_list(['Option/None', 'Args/Arg1'])},
-                         {f, DomainFun} = Mod:domain('AnyOption'),
+                         {f, 'AnyOption', DomainFun} = Mod:domain('AnyOption'),
                          Actual = DomainFun('Option', 'Args/Arg1'),
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
@@ -373,9 +373,7 @@ application_first_order_type_test() ->
 recursion_top_level_f_test() ->
     Code = "type List a -> Nil | Cons: {head: a, tail: List(a)}",
     RunAsserts = fun(Mod) ->
-                         {f, DomainFun} = Mod:domain('List'),
-                         ?debugVal(Mod:domain('List/Nil')),
-                         ?debugHere,
+                         {f, 'List', DomainFun} = Mod:domain('List'),
                          Actual = DomainFun('List/Nil'),
                          ?assertMatch({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, Actual),
                          {_, [_, {_, _, {recur, RecurFun}}]} = Actual,

@@ -34,6 +34,10 @@ diff(Path, {tagged, Tag, Old}, {tagged, Tag, New}) ->
         Diff -> {tagged, Tag, Diff}
     end;
 
+diff(Path, {f, Name, F1}, {f, Name, F2}) -> none;
+diff(Path, {f, _, _} = Old, {f, _, _} = New) -> #{old => Old,
+                                                  new => New};
+
 diff(Path, Old, New) when is_map(Old), is_map(New) -> 
     Keys = ordsets:to_list(ordsets:from_list(maps:keys(Old) ++ maps:keys(New))),
     OnlyInOld = [Key || Key <- Keys, not maps:is_key(Key, New)],

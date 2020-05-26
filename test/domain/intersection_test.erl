@@ -93,11 +93,11 @@ intersection_sum_with_any_test_() ->
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 intersection_f_test_() ->
-    D1 = {f, fun([A], _) -> A end},
-    D2 = {f, fun([A], _) -> {sum, ordsets:from_list([A, b])} end},
+    D1 = {f, d1, fun(A) -> A end},
+    D2 = {f, d2, fun(A) -> {sum, ordsets:from_list([A, b])} end},
+    {f, d1_d2, DomainFun} = domain:intersection(D1, D2),
+    Actual = DomainFun(a),
     Expected = a,
-    {f, DomainFun} = domain:intersection(D1, D2),
-    Actual = DomainFun([a], []),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 intersection_map_map_test_() ->
