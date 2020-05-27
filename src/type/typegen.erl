@@ -133,7 +133,7 @@ abstract_form(Env, TypeDefs, {tagged, Tag, Domain}) ->
         cerl:c_tuple([cerl:c_atom(tagged), cerl:c_atom(Tag), DomainForm]) end);
 
 abstract_form(_, _, {variable, Tag}) -> 
-    {ok, cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_var(Tag)])};
+    {ok, cerl:c_var(Tag)};
 
 abstract_form(Env, TypeDefs, {type, Tag}) -> 
     case maps:get(Tag, Env) of
@@ -141,8 +141,7 @@ abstract_form(Env, TypeDefs, {type, Tag}) ->
         {_, Domain} -> {ok, abstract_form(Env, TypeDefs, Domain)}
     end;
 
-abstract_form(Env, _, {recur, Tag}) ->
-    {_, Domain} = maps:get(Tag, Env),
+abstract_form(_, _, {recur, Tag}) ->
     BranchFun = cerl:c_fun([], cerl:c_apply(cerl:c_atom(domain), [cerl:c_atom(Tag)])),
     cerl:c_tuple([cerl:c_atom(recur), BranchFun]);
 
@@ -291,7 +290,7 @@ sum_var_test() ->
                          Expected = {sum, ordsets:from_list(['Boolean/True',
                                                           'Boolean/False',
                                                           'Option/None'])},
-                         Actual = Mod:'Option'('Boolean'),
+                         Actual = Mod:'Option'({sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])}),
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
     run(Code, RunAsserts).

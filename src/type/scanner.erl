@@ -1,6 +1,6 @@
 -module(scanner).
 -import(lists, [zip/2, unzip/1, unzip3/1, seq/2, nth/2]).
--import(domain, [diff/2, union/1, union/2, intersection/1, intersection/2]).
+-import(domain, [intersection/1, intersection/2, union/1, union/2]).
 -export([scan/2]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -37,7 +37,7 @@ scan(Env, Stack, TypeMod, {application, _, Expr, Args} = Parsnip) ->
     Domain = apply_domain(ExprDomain, Stack, ArgDomains, Parsnip),
     {intersection([ExprEnv | ArgEnvs]), Domain};
 
-scan(Env, Stack, TypeMod, {lookup, _, Var, Elems} = Current) ->
+scan(Env, Stack, TypeMod, {lookup, _, Var, Elems} = Parsnip) ->
     {_, ElemDomains} = unzip([scan(Env, Stack, TypeMod, E) || E <- Elems]),
     Entries = maps:from_list([{symbol:name(E), D} || {E, D} <- zip(Elems, ElemDomains)]),
     io:format("Elem Entires: ~p~n", [Entries]),
@@ -45,46 +45,57 @@ scan(Env, Stack, TypeMod, {lookup, _, Var, Elems} = Current) ->
                            {E, {product,_} = D} -> {E, domain:lookup(D, Entries)};
                            {E, {tagged,_,_} = D} -> {E, domain:lookup(D, Entries)};
                            {E, {error, Err}} -> {E, {error, Err}};
-                           {E, D} -> {E, {error, [{Current, {expected_product_domain, D}, Stack}]}}
+                           {E, D} -> {E, {error, [{Parsnip, {expected_product_domain, D}, Stack}]}}
                        end,
     {intersection(VarEnv, Env), Domain};
 
-scan(Env, Stack, TypeMod, {pair, _, Key, Value}) ->
+scan(Env, Stack, TypeMod, {pair, _, Key, Value} = Parsnip) ->
     {ValueEnv, ValueDomain} = scan(Env, Stack, TypeMod, Value),
     {KeyEnv, KeyDomain} = scan(Env, Stack, TypeMod, Key),
-    {intersection(KeyEnv, ValueEnv), intersection(ValueDomain, KeyDomain)};
+    Domain = intersection(ValueDomain, KeyDomain),
+    NewEnv = intersection(KeyEnv, ValueEnv),
+    case domain:subset(KeyDomain, ValueDomain) of
+        false      -> {NewEnv, {error, [{Parsnip, {not_a_subset, KeyDomain, ValueDomain}, Stack}]}};
+        true       -> {NewEnv, Domain}
+    end;
 
-scan(Env, Stack, TypeMod, {match, _, Arg, Clauses}) ->
-    {_, ArgDomain} = scan(Env, Stack, TypeMod, Arg),
-    scan_clauses(Env, Stack, TypeMod, [{symbol:id(''), ArgDomain}], Clauses);
-
-scan(Env, _, TypeMod, {lambda, _, [{clause, _, Ps, _} | _] = Cs}) -> 
-    Name = symbol:id('lambda'),
+scan(Env, _, TypeMod, {lambda, Line, [{clause, _, Ps, _} | _] = Cs} = Parsnip) -> 
+    Name = symbol:id(['lambda', list_to_atom(integer_to_list(Line))]),
     F = fun(Stack, ArgDomains) -> 
                 NewStack = [{Name, ArgDomains} | Stack],
-                Args = [{symbol:id(''), ArgD} || ArgD <- ArgDomains],
-                {_, LDomain} = scan_clauses(Env, NewStack, TypeMod, Args, Cs),
-                LDomain
+                Tags = [symbol:id(Name) || _ <- ArgDomains],
+                Args = [{{variable, 0, '', Tag}, ArgD} || {Tag, ArgD} <- zip(Tags, ArgDomains)],
+                {LEnv, LDomain} = scan_clauses(Env, NewStack, TypeMod, Args, Cs),
+                IsSubset = fun({D1, D2}) -> domain:subset(D1, D2) end,
+                ActualDomains = [maps:get(Tag, LEnv) || Tag <- Tags],
+                case lists:all(IsSubset, zip(ArgDomains, ActualDomains)) of
+                    false      -> {error, [{Parsnip, {arguments_not_subsets, ArgDomains, ActualDomains}, NewStack}]};
+                    true       -> LDomain
+                end
         end,
     {Env, two_step_pass_stack(F, Name, length(Ps))};
 
 scan(Env, Stack, TypeMod, {tuple, _, Elems}) -> fold(Env, Stack, TypeMod, Elems);
 
+scan(Env, Stack, TypeMod, {match, _, Arg, Clauses}) ->
+    {_, ArgDomain} = scan(Env, Stack, TypeMod, Arg),
+    scan_clauses(Env, Stack, TypeMod, [{symbol:id(''), ArgDomain}], Clauses);
+
 scan(Env, _, _, {variable, _, _, Tag}) -> 
     D = maps:get(Tag, Env, any),
-    {#{Tag => D}, D};
+    {intersection(Env, #{Tag => D}), D};
 
-scan(_, _, TypeMod, {type, _, _} = T) -> 
+scan(Env, _, TypeMod, {type, _, _} = T) -> 
     Domain = case TypeMod:domain(symbol:tag(T)) of
                  {f, Name, F}   -> two_step_ignore_stack(F, Name);
                  D              -> D end,
-    {#{}, Domain};
+    {Env, Domain};
 
-scan(_, _, _, {key, _, Key}) -> {#{}, Key};
+scan(Env, _, _, {key, _, Key}) -> {Env, Key};
 
 scan(Env, _, _, {qualified_symbol, _, S}) ->
     D = maps:get(S, Env, any),
-    {#{S => D}, D}.
+    {intersection(Env, #{S => D}), D}.
 
 scan_clauses(Env, Stack, TypeMod, Args, Clauses) ->
     Scan = fun S([]) -> [];
@@ -118,12 +129,14 @@ scan_clause(Env, Stack, TypeMod, Args, {clause, _, Patterns, Expr}) ->
     {PsEnvs, PsDomains} = unzip([Scan(Arg, Domain, Pattern) || 
                                  {{Arg, Domain}, Pattern} <- zip(Args, Patterns)]),
 
+    ClauseEnv = intersection([Env | PsEnvs]),
+
     % If any pattern has a domain of `none` there's no point in scanning the expression
     % since a Domain of `none` entails that the domain can take no values
     HasNone = lists:any(fun(D) -> D =:= none end, PsDomains),
     case HasNone of
         true    -> skip_clause;
-        _       -> {ExprEnv, ExprDomain} = scan(intersection([Env | PsEnvs]), Stack, TypeMod, Expr),
+        _       -> {ExprEnv, ExprDomain} = scan(ClauseEnv, Stack, TypeMod, Expr),
                    {ExprEnv, ExprDomain, PsDomains}
     end.
 
@@ -225,6 +238,7 @@ apply_domain({f, Name, StackFun}, Stack, Args, _) ->
     case check_stack_recursion(Stack, Name, Args) of
         error -> none;
         ok -> {f, Name, DomainFun} = StackFun(Stack),
+              io:format("Args for ~p: ~p~n", [Name, Args]),
               erlang:apply(DomainFun, Args)
     end;
 apply_domain({error, Err}, _, _, _) -> {error, Err};
@@ -400,15 +414,15 @@ lookup_expr_product_test() ->
                          {f, f, DomainFun} = maps:get({f, 1}, Env),
                          Expected1 = {product, #{a => 'A', b => 'B'}},
                          Actual1 = DomainFun({product, #{a => 'A', b => 'B', c => 'C'}}),
-                         ?assertEqual(none, diff(Expected1, Actual1)),
+                         ?assertEqual(none, domain:diff(Expected1, Actual1)),
 
                          Expected2 = {product, #{a => 'A', b => 'B'}},
                          Actual2 = DomainFun({tagged, tag, {product, #{a => 'A', b => 'B'}}}),
-                         ?assertEqual(none, diff(Expected2, Actual2)),
+                         ?assertEqual(none, domain:diff(Expected2, Actual2)),
 
                          Expected3 = none,
                          Actual3 = DomainFun({product, #{c => 'C', d => 'D'}}),
-                         ?assertEqual(none, diff(Expected3, Actual3))
+                         ?assertEqual(none, domain:diff(Expected3, Actual3))
                  end,
     run(Code, RunAsserts).
 
@@ -421,7 +435,7 @@ lookup_expr_sum_test() ->
                          {f, f, DomainFun} = maps:get({f, 1}, Env),
                          Expected = {product, #{blup => {sum, ordsets:from_list(['T/Blup', 'T/Blap'])}}},
                          Actual = DomainFun(any),
-                         ?assertEqual(none, diff(Expected, Actual))
+                         ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
     run(Code, RunAsserts).
            
@@ -432,7 +446,7 @@ lookup_error_propagation_test() ->
                          StackError = {error, [some_error]},
                          Actual1 = DomainFun(StackError),
                          Expected1 = StackError,
-                         ?assertEqual(none, diff(Expected1, Actual1))
+                         ?assertEqual(none, domain:diff(Expected1, Actual1))
                  end,
     run(Code, RunAsserts).
 
@@ -442,7 +456,7 @@ lookup_non_product_or_tagged_domain_test() ->
                          {f, f, DomainFun} = maps:get({f, 1}, Env),
                          Expected = {expected_product_domain, any},
                          {error, [{_, Error, _}]} = DomainFun(any),
-                         ?assertEqual(none, diff(Expected, Error))
+                         ?assertEqual(none, domain:diff(Expected, Error))
                  end,
     run(Code, RunAsserts).
 
@@ -451,9 +465,13 @@ pair_values_refinement_test() ->
            "def f t -> t: Boolean",
     RunAsserts = fun(Env) ->
                          {f, f, DomainFun} = maps:get({f, 1}, Env),
-                         Expected = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
-                         Actual = DomainFun(any),
-                         ?assertEqual(none, diff(Expected, Actual))
+                         Actual1 = DomainFun('Boolean/True'),
+                         Expected1 = 'Boolean/True',
+                         ?assertEqual(none, domain:diff(Expected1, Actual1)),
+
+                         Actual2 = DomainFun('any'),
+                         Constraint = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
+                         ?assertMatch({error, [{_, {not_a_subset, any, Constraint}, _}]}, Actual2)
                  end,
     run(Code, RunAsserts).
 
@@ -461,19 +479,42 @@ pair_expressions_refinement_test() ->
     Code = "type Boolean -> True | False\n"
            "type Option a -> a | None\n"
            "def id a -> a\n"
-           "def f t -> id(t): Option(True)",
+           "def f t -> id(t): Option(Boolean)",
     RunAsserts = fun(Env) ->
                          {f, f, DomainFun} = maps:get({f, 1}, Env),
-                         Actual1 = DomainFun(any),
-                         Expected1 = {sum, ordsets:from_list(['Boolean/True', 'Option/None'])},
-                         ?assertEqual(none, diff(Expected1, Actual1)),
+                         Actual1 = DomainFun('Boolean'),
+                         Expected1 = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
+                         ?assertEqual(none, domain:diff(Expected1, Actual1)),
 
-                         Actual2 = DomainFun('Boolean'),
-                         Expected2 = 'Boolean/True',
-                         ?assertEqual(none, diff(Expected2, Actual2))
+                         Actual2 = DomainFun('any'),
+                         Constraint = {sum, ordsets:from_list(['Boolean/True',
+                                                               'Boolean/False',
+                                                               'Option/None'])},
+                         ?assertMatch({error, [{_, {not_a_subset, any, Constraint}, _}]}, Actual2)
                  end,
     run(Code, RunAsserts).
 
+lambda_clause_test() ->
+    Code = "type Boolean -> True | False\n"
+           "def ap f a -> f(a)\n"
+           "def test a -> ap(True -> False\n"
+           "                 False -> False,\n"
+           "                 a)",
+    RunAsserts = fun(Env) ->
+                         {f, test, DomainFun} = maps:get({test, 1}, Env),
+                         Actual = DomainFun('Boolean'),
+                         Expected = 'Boolean/False',
+                         ?assertEqual(none, domain:diff(Expected, Actual)),
+
+                         {f, test, DomainFun} = maps:get({test, 1}, Env),
+                         Actual2 = DomainFun(any),
+                         Constraint = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
+                         ?assertMatch({error, 
+                                       [{_, 
+                                         {arguments_not_subsets, [any], [Constraint]}, 
+                                         [_, {ap, _}, {test, _}]}]}, Actual2)
+                 end,
+    run(Code, RunAsserts).
 
 -endif.
 
