@@ -1,6 +1,8 @@
 -module(intersection).
 -export([intersection/2]).
 
+intersection(D, D) -> D;
+
 intersection({recur, S}, {recur, T}) -> {recur, fun() -> intersection(S(), T()) end};
 intersection({recur, S}, {sum, _} = D) -> {recur, fun() -> intersection(S(), D) end};
 intersection({recur, S}, {product, _} = D) -> {recur, fun() -> intersection(S(), D) end};
@@ -47,7 +49,6 @@ intersection({tagged, Tag, D1}, {tagged, Tag, D2}) ->
     propagate_none({tagged, Tag, intersection(D1, D2)});
 intersection({product, D1}, {product, D2}) -> propagate_none({product, intersection(D1, D2)});
 
-intersection(D, D) -> D;
 intersection(_, _) -> none.
 
 propagate_none({product, Map}) -> 

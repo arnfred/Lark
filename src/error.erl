@@ -1,8 +1,10 @@
 -module(error).
 
--export([flatten/1, map/2]).
+-export([collect/1, map/2, leftbias/2, format/2, format/2]).
 
 -include_lib("eunit/include/eunit.hrl").
+
+format(Type, Context) -> {error, [{Type, Context}]}.
 
 map({ok, E}, F) -> {ok, F(E)};
 map({error, E}, _) -> {error, E};
@@ -14,34 +16,39 @@ map2({error, E1}, _, _) -> {error, E1};
 map2(_, {error, E2}, _) -> {error, E2};
 map2(D1, D2, F) -> F(D1, D2).
 
-flatten(List) when is_list(List) -> flatten_ok(List, []).
+leftbias({error, _} = E, _) -> E;
+leftbias(_, E) -> E.
 
-flatten_ok([], Ret) -> {ok, lists:reverse(Ret)};
-flatten_ok([{ok, Head} | Tail], Ret) -> flatten_ok(Tail, [Head | Ret]);
-flatten_ok([{error, Err} | Tail], _) -> flatten_error(Tail, [Err]).
+collect(List) when is_list(List) -> collect_ok(List, []).
 
-flatten_error([], Ret) -> {error, sets:to_list(sets:from_list(lists:reverse(lists:flatten(Ret))))};
-flatten_error([{error, Err} | Tail], Ret) -> flatten_error(Tail, [Err | Ret]);
-flatten_error([{ok, _} | Tail], Ret) -> flatten_error(Tail, Ret).
+collect_ok([], Ret) -> {ok, lists:reverse(Ret)};
+collect_ok([{ok, Head} | Tail], Ret) -> collect_ok(Tail, [Head | Ret]);
+collect_ok([{error, Err} | Tail], _) -> collect_error(Tail, [Err]);
+collect_ok([Head | Tail], Ret) -> collect_ok(Tail, [Head | Ret]).
+
+collect_error([], Ret) -> {error, sets:to_list(sets:from_list(lists:reverse(lists:flatten(Ret))))};
+collect_error([{error, Err} | Tail], Ret) -> collect_error(Tail, [Err | Ret]);
+collect_error([{ok, _} | Tail], Ret) -> collect_error(Tail, Ret);
+collect_error([_ | Tail], Ret) -> collect_error(Tail, Ret).
 
 -ifdef(TEST).
 
-flatten_all_ok_test() ->
+collect_all_ok_test() ->
     Input = [{ok, 1}, {ok, 2}],
     Expected = {ok, [1, 2]},
-    Actual = flatten(Input),
+    Actual = collect(Input),
     ?assertEqual(Expected, Actual).
 
-flatten_all_err_test() ->
+collect_all_err_test() ->
     Input = [{error, [1]}, {error, [2]}],
     Expected = {error, [2, 1]},
-    Actual = flatten(Input),
+    Actual = collect(Input),
     ?assertEqual(Expected, Actual).
 
-flatten_some_err_test() ->
+collect_some_err_test() ->
     Input = [{ok, 1}, {error, [2]}, {ok, 3}, {error, [4]}],
     Expected = {error, [2, 4]},
-    Actual = flatten(Input),
+    Actual = collect(Input),
     ?assertEqual(Expected, Actual).
 
 map_ok_elem_test() ->

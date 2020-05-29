@@ -3,7 +3,6 @@
 -import(symbol, [tag/1]).
 -export([gen/2]).
 
--include_lib("eunit/include/eunit.hrl").
 
 gen(Module, AST) when is_list(AST) ->
     TypeDefs = maps:from_list([{Name, Args} || {type_def, _, Name, Args, _} <- AST]),
@@ -11,7 +10,7 @@ gen(Module, AST) when is_list(AST) ->
     Env = gen_env(Mappings),
     io:format("Type Env: ~p~n", [Env]),
 
-    case error:flatten([compile(Tag, Env, TypeDefs) || Tag <- maps:keys(Env)]) of
+    case error:collect([compile(Tag, Env, TypeDefs) || Tag <- maps:keys(Env)]) of
         {error, Errs} -> {error, Errs};
         {ok, AllTypes} ->
             % Generate the function for `TypeMod:domain(T)`
@@ -111,8 +110,8 @@ abstract_form(Env, TypeDefs, {f, Tag, Vars, Domain}) ->
         cerl:c_tuple([cerl:c_atom(f), cerl:c_atom(Tag), cerl:c_fun(ArgsForm, DomainForm)]) end);
 
 abstract_form(Env, TypeDefs, {sum, Set}) -> 
-    case error:flatten([abstract_form(Env, TypeDefs, Elem) || Elem <- ordsets:to_list(Set)]) of
-        {error, Err} -> {error, Err};
+    case error:collect([abstract_form(Env, TypeDefs, Elem) || Elem <- ordsets:to_list(Set)]) of
+        {error, Errs} -> {error, Errs};
         {ok, ElemForms} ->
             Elements = cerl:make_list(ElemForms),
             DomainSet = cerl:c_call(cerl:c_atom(ordsets), cerl:c_atom(from_list), [Elements]),
@@ -120,8 +119,8 @@ abstract_form(Env, TypeDefs, {sum, Set}) ->
     end;
 
 abstract_form(Env, TypeDefs, {product, Map}) ->
-    case error:flatten([abstract_form(Env, TypeDefs, D) || D <- maps:values(Map)]) of
-        {error, Errors} -> {error, Errors};
+    case error:collect([abstract_form(Env, TypeDefs, D) || D <- maps:values(Map)]) of
+        {error, Errs} -> {error, Errs};
         {ok, Forms} ->
             Entries = [cerl:c_map_pair(cerl:c_atom(K), Form) || {Form, K} <- zip(Forms, maps:keys(Map))],
             DomainMap = cerl:c_map(Entries),
@@ -146,7 +145,7 @@ abstract_form(_, _, {recur, Tag}) ->
     cerl:c_tuple([cerl:c_atom(recur), BranchFun]);
 
 abstract_form(Env, TypeDefs, {application, Expr, Args} = Current) ->
-    CompiledArgs = error:flatten([abstract_form(Env, TypeDefs, A) || A <- Args]),
+    CompiledArgs = error:collect([abstract_form(Env, TypeDefs, A) || A <- Args]),
     case {Expr, CompiledArgs} of
 
         {_, {error, E}} -> {error, E};
@@ -158,28 +157,27 @@ abstract_form(Env, TypeDefs, {application, Expr, Args} = Current) ->
         {{type, Tag}, {ok, ArgForms}} ->
             case {maps:get(Tag, Env), maps:is_key(Tag, TypeDefs)} of
 
-                {_, false} -> {error, [{{nonexistent_type_def, Tag}, {typegen, Current}}]};
+                {_, false} -> error:format({nonexistent_type_def, Tag}, {typegen, Current});
 
                 {{Vars, _}, _} when length(Vars) =:= length(Args) -> 
-                    io:format("Compiling application of Tag: ~p with Args: ~p~n", [Tag, ArgForms]),
                     {ok, cerl:c_apply(cerl:c_fname(Tag, length(Args)), ArgForms)};
 
                 {{Vars, _}, _} ->                     
-                    {error, [{{wrong_number_of_arguments, Tag, length(Args), length(Vars)}, {typegen, Current}}]}
+                    error:format({wrong_number_of_arguments, Tag, Args, Vars}, {typegen, Current})
             end;
 
         % type recursion e.g.: List a -> Nil | Cons: { head: a, tail: List(a) }
         {{recur, Tag}, {ok, ArgForms}} ->
             case {maps:get(Tag, Env), maps:is_key(Tag, TypeDefs)} of
 
-                {_, false} -> {error, [{{nonexistent_type_def, Tag}, {typegen, Current}}]};
+                {_, false} -> error:format({nonexistent_type_def, Tag}, {typegen, Current});
 
                 {{Vars, _}, _} when length(Vars) =:= length(Args) -> 
                     BranchFun = cerl:c_fun([], unsafe_call_form(cerl:c_atom(Tag), ArgForms)),
                     {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
 
                 {{Vars, _}, _} ->                     
-                    {error, [{{wrong_number_of_arguments, Tag, length(Args), length(Vars)}, {typegen, Current}}]}
+                    error:format({wrong_number_of_arguments, Tag, Args, Vars}, {typegen, Current})
             end
     end;
 
@@ -196,192 +194,3 @@ unsafe_call_form(NameForm, ArgForms) ->
       cerl:c_call(cerl:c_atom(erlang), cerl:c_atom(element), 
                   [cerl:c_int(3), cerl:c_apply(cerl:c_fname(domain, 1), [NameForm])]),
       ArgForms).
-
--ifdef(TEST).
-
-run(Code, RunAsserts) ->
-    {ok, _, {TypeAST, _}} = kind:get_AST(Code),
-    io:format("TypeAST: ~p~n", [TypeAST]),
-    case typer:load("test", TypeAST) of
-        {error, Errs} -> RunAsserts({error, Errs});
-        {ok, TypeMod} ->
-            io:format("TypeMod: ~p~n", [TypeMod]),
-            RunAsserts(TypeMod),
-            true = code:soft_purge(TypeMod),
-            true = code:delete(TypeMod)
-    end.
-
-sum_type_boolean_test() ->
-    Code = "type Boolean -> True | False",
-    RunAsserts = fun(Mod) ->
-                         Expected = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
-                         Actual = Mod:domain('Boolean'),
-                         ?assertEqual(none, domain:diff(Expected, Actual)),
-                         Actual2 = Mod:'Boolean'(),
-                         ?assertEqual(none, domain:diff(Expected, Actual2))
-                 end,
-    run(Code, RunAsserts).
-
-product_type_test() ->
-    Code = "type P -> {a: A, b: B}",
-    RunAsserts = fun(Mod) ->
-                         Expected = {product, #{a => 'P/A', b => 'P/B'}},
-                         Actual = Mod:domain('P'),
-                         ?assertEqual(none, domain:diff(Expected, Actual)),
-                         Actual2 = Mod:'P'(),
-                         ?assertEqual(none, domain:diff(Expected, Actual2))
-                 end,
-    run(Code, RunAsserts).
-
-tagged_type_test() ->
-    Code = "type P -> K: {a: A, b: B}",
-    RunAsserts = fun(Mod) ->
-                         Expected = {tagged, 'P/K', {product, #{a => 'P/A', b => 'P/B'}}},
-                         Actual = Mod:domain('P'),
-                         ?assertEqual(none, domain:diff(Expected, Actual)),
-                         Actual2 = Mod:'P'(),
-                         ?assertEqual(none, domain:diff(Expected, Actual2))
-                 end,
-    run(Code, RunAsserts).
-
-type_parameter_test() ->
-    Code = "type Id a -> a\n"
-           "type T -> A | B",
-    RunAsserts = fun(Mod) -> 
-                         ?assertEqual('T/A', Mod:'Id'('T/A')),
-                         {f, 'Id', DomainFun} = Mod:domain('Id'),
-                         ?assertEqual('T/B', DomainFun('T/B'))
-                 end,
-    run(Code, RunAsserts).
-
-tagged_type_reuse_name_test() ->
-    Code = "type P -> P: Int",
-    RunAsserts = fun(Mod) ->
-                         Expected = {tagged, 'P', 'P/Int'},
-                         Actual = Mod:domain('P'),
-                         ?assertEqual(none, domain:diff(Expected, Actual)),
-                         Actual2 = Mod:'P'(),
-                         ?assertEqual(none, domain:diff(Expected, Actual2))
-                 end,
-    run(Code, RunAsserts).
-
-tagged_subtype_test() ->
-    Code = "type TimeUnit -> Hour: Int | Minute: Int | Second: Int",
-    RunAsserts = fun(Mod) ->
-                         Expected = {tagged, 'TimeUnit/Minute', 'TimeUnit/Int'},
-                         Actual = Mod:domain('TimeUnit/Minute'),
-                         ?assertEqual(none, domain:diff(Expected, Actual))
-                 end,
-    run(Code, RunAsserts).
-
-tagged_product_subset_test() ->
-    Code = "type Time -> {hour: (Hour: Int), minute: (Minute: Int), second: (Second: Int)}",
-    RunAsserts = fun(Mod) ->
-                         Actual = Mod:domain('Time/Minute'),
-                         Expected = {tagged, 'Time/Minute', 'Time/Int'},
-                         ?assertEqual(none, domain:diff(Expected, Actual))
-                 end,
-    run(Code, RunAsserts).
-
-sum_var_test() ->
-    Code = "type Boolean -> True | False\n"
-           "type Option a -> a | None",
-    RunAsserts = fun(Mod) ->
-                         Expected = {sum, ordsets:from_list(['Boolean/True',
-                                                          'Boolean/False',
-                                                          'Option/None'])},
-                         Actual = Mod:'Option'({sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])}),
-                         ?assertEqual(none, domain:diff(Expected, Actual))
-                 end,
-    run(Code, RunAsserts).
-
-buried_var_test() ->
-    Code = "type Buried a -> Surface | Bottom: { var: a }\n"
-           "type Hidden -> Treasure",
-    RunAsserts = fun(Mod) ->
-                         Expected = {tagged, 'Buried/Bottom', 
-                                     {product, #{var => 'Hidden/Treasure'}}},
-                         {f, 'Buried/Bottom', DomainFun} = Mod:domain('Buried/Bottom'),
-                         Actual = DomainFun('Hidden/Treasure'),
-                         ?assertEqual(none, domain:diff(Expected, Actual))
-                 end,
-    run(Code, RunAsserts).
-
-var_order_test() ->
-    Code = "type Order a b c -> T: (C: c | B: b | A: a)\n"
-           "type Args -> A | B | C",
-    RunAsserts = fun(Mod) ->
-                         Expected = {tagged, 'Order/T', 
-                                     {sum, ordsets:from_list([
-                                                           {tagged, 'Order/C', 'Args/C'},
-                                                           {tagged, 'Order/A', 'Args/A'},
-                                                           {tagged, 'Order/B', 'Args/B'}])}},
-                         {f, 'Order/T', DomainFun} = Mod:domain('Order/T'),
-                         Actual = DomainFun('Args/A', 'Args/B', 'Args/C'),
-                         ?assertEqual(none, domain:diff(Expected, Actual))
-                 end,
-    run(Code, RunAsserts).
-
-application_top_level_f_test() ->
-    Code = "type Option a -> a | None\n"
-           "type BlahOption -> Option(blah)",
-    RunAsserts = fun(Mod) ->
-                         Expected = {sum, ordsets:from_list(['BlahOption/blah', 'Option/None'])},
-                         Actual = Mod:domain('BlahOption'),
-                         ?assertEqual(none, domain:diff(Expected, Actual))
-                 end,
-    run(Code, RunAsserts).
-
-application_wrong_number_of_args_test() ->
-    Code = "type Option a -> a | None\n"
-           "type BlahOption -> Option(blip, blup)",
-    RunAsserts = fun({error, [{{ActualType, ActualTag, ActualGivenNumber, ActualExpectedNumber}, _}]}) ->
-                         ExpectedType = wrong_number_of_arguments,
-                         ExpectedTag = 'Option',
-                         ExpectedGivenNumber = 2,
-                         ExpectedExpectedNumber = 1,
-                         ?assertEqual(ExpectedType, ActualType),
-                         ?assertEqual(ExpectedTag, ActualTag),
-                         ?assertEqual(ExpectedGivenNumber, ActualGivenNumber),
-                         ?assertEqual(ExpectedExpectedNumber, ActualExpectedNumber)
-                 end,
-    run(Code, RunAsserts).
-
-application_inner_level_f_test() ->
-    Code = "type Option a -> P: {a: a} | None | O: P(a)\n",
-    RunAsserts = fun({error, [{{ActualType, ActualTag}, _}]}) ->
-                         ExpectedType = nonexistent_type_def,
-                         ExpectedTag = 'Option/P',
-                         ?assertEqual(ExpectedType, ActualType),
-                         ?assertEqual(ExpectedTag, ActualTag)
-                 end,
-    run(Code, RunAsserts).
-
-application_first_order_type_test() ->
-    Code = "type Args -> Arg1 | Arg2\n"
-           "type Option a -> None | a\n"
-           "type AnyOption f a -> f(a)",
-    RunAsserts = fun(Mod) ->
-                         Expected = {sum, ordsets:from_list(['Option/None', 'Args/Arg1'])},
-                         {f, 'AnyOption', DomainFun} = Mod:domain('AnyOption'),
-                         Actual = DomainFun('Option', 'Args/Arg1'),
-                         ?assertEqual(none, domain:diff(Expected, Actual))
-                 end,
-    run(Code, RunAsserts).
-
-recursion_top_level_f_test() ->
-    Code = "type List a -> Nil | Cons: {head: a, tail: List(a)}",
-    RunAsserts = fun(Mod) ->
-                         {f, 'List', DomainFun} = Mod:domain('List'),
-                         Actual = DomainFun('List/Nil'),
-                         ?assertMatch({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, Actual),
-                         {_, [_, {_, _, {recur, RecurFun}}]} = Actual,
-                         ?assertMatch({product, _}, RecurFun()),
-                         {product, ProductMap} = RecurFun(),
-                         ?assertEqual('List/Nil', maps:get(head, ProductMap)),
-                         ?assertMatch({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, maps:get(tail, ProductMap))
-                 end,
-    run(Code, RunAsserts).
-
-
--endif.
