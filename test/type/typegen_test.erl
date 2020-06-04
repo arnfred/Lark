@@ -138,9 +138,9 @@ var_order_test() ->
 
 application_top_level_f_test() ->
     Code = "type Option a -> a | None\n"
-           "type BlahOption -> Option(blah)",
+           "type BlahOption -> Option(Blah)",
     RunAsserts = fun(Mod) ->
-                         Expected = {sum, ordsets:from_list(['BlahOption/blah', 'Option/None'])},
+                         Expected = {sum, ordsets:from_list(['BlahOption/Blah', 'Option/None'])},
                          Actual = Mod:domain('BlahOption'),
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
@@ -210,6 +210,29 @@ pattern_type_test() ->
                          {f, 'F', DomainFun} = Mod:domain('F'),
                          Actual = DomainFun('F/A'),
                          ?assertMatch('F/B', Actual)
+                 end,
+    run(Code, RunAsserts).
+
+pattern_variable1_test() ->
+    Code = "type X a\n"
+           " | T -> T\n"
+           " | t -> {t: t}",
+    RunAsserts = fun(Mod) ->
+                         {f, 'X', DomainFun} = Mod:domain('X'),
+                         ?assertEqual('X/T', DomainFun('X/T')),
+                         ?assertEqual(none, domain:diff({product, #{t => 'S'}}, DomainFun('S')))
+                 end,
+    run(Code, RunAsserts).
+
+pattern_variable2_test() ->
+    Code = "type Args -> A | B | C\n"
+           "type X a\n"
+           " | Args/A -> Args/B\n"
+           " | t -> t",
+    RunAsserts = fun(Mod) ->
+                         {f, 'X', DomainFun} = Mod:domain('X'),
+                         ?assertMatch('Args/B', DomainFun('Args/A')),
+                         ?assertMatch('Args/C', DomainFun('Args/C'))
                  end,
     run(Code, RunAsserts).
 

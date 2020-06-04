@@ -1,6 +1,6 @@
 Terminals
     def type val 
-    symbol match_keyword
+    type_symbol var_symbol match_keyword
     integer float string
     open close square_open square_close curly_open curly_close
     apply comma newline assign
@@ -16,8 +16,8 @@ Nonterminals
     noun verb expression
     collection tuple list dict
     sum sum_list sum_or_expression
-    symbols newlines elements 
-    literal element pair qualified_symbol
+    symbol symbols newlines elements 
+    literal element pair qualified_type qualified_variable qualified_type_type
     separator secondary_separator.
 
 Rootsymbol all.
@@ -47,6 +47,9 @@ function -> def symbols newlines def_clauses        : {def, line('$1'), name('$2
 newtype -> type symbols implies sum_or_expression   : {type_def, line('$1'), name('$2'), args('$2'), '$4'}.
 newtype -> type symbols newlines type_clauses       : {type_def, line('$1'), name('$2'), args('$2'), '$4'}.
 
+symbol -> type_symbol : make_symbol('$1').
+symbol -> var_symbol : make_symbol('$1').
+
 symbols -> symbol           : ['$1'].
 symbols -> symbol symbols   : ['$1' | '$2'].
 
@@ -63,11 +66,18 @@ pattern -> literal          : '$1'.
 pattern -> verb             : '$1'.
 
 verb -> symbol              : '$1'.
-verb -> qualified_symbol    : {qualified_symbol, line('$1'), unwrap_symbols('$1')}.
+verb -> qualified_type      : {qualified_type, line('$1'), unwrap_symbols('$1')}.
+verb -> qualified_variable  : {qualified_variable, line('$1'), unwrap_symbols('$1')}.
 verb -> collection          : '$1'.
 
-qualified_symbol -> symbol slash symbol           : ['$1', '$3'].
-qualified_symbol -> symbol slash qualified_symbol : ['$1' | '$3'].
+qualified_type -> var_symbol slash qualified_type_type          : [make_symbol('$1') | '$3'].
+qualified_type -> qualified_variable slash qualified_type_type  : '$1' ++ '$3'.
+qualified_type -> qualified_type_type                           : '$1'.
+qualified_type_type -> type_symbol slash type_symbol            : [make_symbol('$1'), make_symbol('$3')].
+qualified_type_type -> type_symbol slash qualified_type_type    : [make_symbol('$1') | '$3'].
+
+qualified_variable -> var_symbol slash var_symbol               : [make_symbol('$1'), make_symbol('$3')].
+qualified_variable -> var_symbol slash qualified_variable       : [make_symbol('$1') | '$3'].
 
 literal -> string   : '$1'.
 literal -> integer  : '$1'.
@@ -153,13 +163,16 @@ Erlang code.
 unpack_tuple([T]) -> T;
 unpack_tuple([T | _] = Terms) -> {tuple, line(T), Terms}.
 
-name([{symbol, _, S} | _]) -> S.
+name([{symbol, _, _, S} | _]) -> S.
 args([_ | Args]) -> Args.
 
 unwrap({_,V})   -> V;
 unwrap({_,_,V}) -> V.
 
-unwrap_symbols(Symbols) -> [S || {symbol, _, S} <- Symbols].
+make_symbol({var_symbol, L, S}) -> {symbol, L, variable, S};
+make_symbol({type_symbol, L, S}) -> {symbol, L, type, S}.
+
+unwrap_symbols(Symbols) -> [{T, S} || {_, _, T, S} <- Symbols].
 
 line({_, Line})         -> Line;
 line({_, Line, _})      -> Line;

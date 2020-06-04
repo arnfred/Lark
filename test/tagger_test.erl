@@ -31,16 +31,6 @@ pattern_match2_test() ->
     [{variable, _, a, TaggedArg}] = Args,
     {clause, _, _, {variable, _, a, TaggedArg}} = Clause.
 
-pattern_match3_test() ->
-    Code = 
-        "def not a\n"
-        " | a -> a",
-    {_, Tagged} = tag_AST(Code),
-    [{def, _, _, Args, [Clause]}] = Tagged,
-    [{variable, _, a, TaggedDefArg}] = Args,
-    {clause, _, [{variable, _, a, TaggedArg}], {variable, _, a, TaggedArg}} = Clause,
-    ?assertNotEqual(TaggedDefArg, TaggedArg).
-
 tuple_test() ->
     Code = "def not a -> (a, a)",
     {_, [{def, _, _, Args, {tuple, _, [L1, L2]}}]} = tag_AST(Code),
@@ -63,13 +53,13 @@ dict_pair_test() ->
     Code = "def f -> {a: b}",
     {_, Tagged} = tag_AST(Code),
     [{def, _, _, [], {dict, _, [{pair, _, Key, _}]}}] = Tagged,
-    ?assertEqual({key, 1, a}, Key).
+    ?assertMatch({variable, 1, a, _}, Key).
 
 dict_value_test() ->
     Code = "def f -> {a}",
     {_, Tagged} = tag_AST(Code),
     [{def, _, _, [], {dict, _, [Key]}}] = Tagged,
-    ?assertEqual({key, 1, a}, Key).
+    ?assertMatch({variable, 1, a, _}, Key).
 
 
 simple_sum_type_test() ->
@@ -108,17 +98,16 @@ simple_product_type_test() ->
     Code =
         "type Monkey -> Monkey: { food: Banana, plant: Trees }",
     {Typed, _} = tag_AST(Code),
-    Expected = [{type_def, 1, 'Monkey', [],
+    ?assertMatch([{type_def, 1, 'Monkey', [],
                  {pair, 1,
                   {type, 1, ['Monkey']},
                   {dict, 1,
                    [{pair,1,
-                     {key,1,food},
+                     {variable,1,food,_},
                      {type,1,['Monkey', 'Banana']}},
                     {pair,1,
-                     {key,1,plant},
-                     {type,1,['Monkey', 'Trees']}}]}}}],
-    ?assertEqual(Expected, Typed).
+                     {variable,1,plant,_},
+                     {type,1,['Monkey', 'Trees']}}]}}}], Typed).
 
 complex_type_test() ->
     Code =
@@ -126,18 +115,18 @@ complex_type_test() ->
         "                             cons: BooleanList }\n"
         "                     Nil)",
     {Typed, _} = tag_AST(Code),
-    ?assertEqual([{type_def,1,'BooleanList',[],
+    ?assertMatch([{type_def,1,'BooleanList',[],
                    {tuple,1,
                     [{pair,1,
                       {type,1,['BooleanList','Cons']},
                       {dict,1,
                        [{pair,1,
-                         {key,1,value},
+                         {variable,1,value,_},
                          {tuple,1,
                           [{type,1,['BooleanList','True']},
                            {type,1,['BooleanList','False']}]}},
                         {pair,2,
-                         {key,2,cons},
+                         {variable,2,cons,_},
                          {type,1,['BooleanList']}}]}},
                      {type,3,['BooleanList','Nil']}]}}], Typed).
 
@@ -146,7 +135,7 @@ product_key_not_propagated_test() ->
         "type Blip -> { blup: blyp }\n"
         "def blap -> blup",
     {Typed, Tagged} = tag_AST(Code),
-    [{type_def, 1, 'Blip', [], {dict, _, [{pair, 1, {key, _, BlupKey}, _}]}}] = Typed,
+    [{type_def, 1, 'Blip', [], {dict, _, [{pair, 1, {variable, 1, 'blup', BlupKey}, _}]}}] = Typed,
     [{def, 2, 'blap', [], {variable, 2, 'blup', BlupTag}}] = Tagged,
     ?assertNotEqual(BlupKey, BlupTag).
 

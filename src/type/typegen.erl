@@ -77,8 +77,7 @@ domain(Path, Args, {clauses, Clauses}) ->
     {Env, Args, Domain};
 
 domain(Path, Args, {clause, _, Patterns, Expr}) ->
-    {_, PatternDomains} = unzip([pattern_domain(Pattern) || 
-                                               {Arg, Pattern} <- zip(Args, Patterns)]),
+    {_, PatternDomains} = unzip([pattern_domain(Pattern) || Pattern <- Patterns]),
     {Env, _, ExprDomain} = domain(Path, Args, Expr),
     {Env, [], {clause, PatternDomains, ExprDomain}};
 
@@ -91,7 +90,6 @@ domain(Path, Args, {tuple, _, Expressions}) ->
 
 
 domain(Path, Args, {dict, _, Elems}) ->
-    io:format("Elems: ~p~n", [Elems]),
     {EnvList, Vars, Domains} = unzip3([domain(Path, Args, Expr) || {pair, _, _, Expr} <- Elems]),
     Keys = [symbol:name(P) || P <- Elems],
     {lists:flatten(EnvList), order(Args, Vars), {product, maps:from_list(zip(Keys, Domains))}};
@@ -118,10 +116,7 @@ domain(Path, _, {type, _, _} = Type) ->
     case lists:member(Tag, Path) of
         true -> {[], [], {recur, Tag}};
         false -> {[{Tag, [], {type, Tag}}], [], {type, Tag}}
-    end;
-
-domain(_, _, {key, _, Key}) -> 
-    {[], [], Key}.
+    end.
 
 %pattern_domain([], Args, {dict, _, Elems}) ->
 %    io:format("Elems: ~p~n", [Elems]),
@@ -132,6 +127,8 @@ domain(_, _, {key, _, Key}) ->
 %    {EnvList, Vars, Domains} = unzip3([domain([], Args, Expr) || {pair, _, _, Expr} <- Elems]),
 %    Keys = [symbol:name(P) || P <- Elems],
 %    {lists:flatten(EnvList), order(Args, Vars), {product, maps:from_list(zip(Keys, Domains))}};
+
+pattern_domain({variable, _, _, Tag}) -> {[Tag], {variable, Tag}};
 
 pattern_domain({type, _, _} = Type) -> {[], {type, tag(Type)}}.
 
@@ -168,8 +165,7 @@ abstract_form(Env, TypeDefs, {tagged, Tag, Domain}) ->
     error:map(abstract_form(Env, TypeDefs, Domain), fun(DomainForm) ->
         cerl:c_tuple([cerl:c_atom(tagged), cerl:c_atom(Tag), DomainForm]) end);
 
-abstract_form(_, _, {variable, Tag}) -> 
-    {ok, cerl:c_var(Tag)};
+abstract_form(_, _, {variable, Tag}) -> {ok, cerl:c_var(Tag)};
 
 abstract_form(Env, TypeDefs, {type, Tag}) -> 
     case maps:get(Tag, Env) of
@@ -234,6 +230,7 @@ abstract_form(Env, TypeDefs, {clause, PatternDomains, ExprDomain}) ->
 
 abstract_form(_, _, Key) -> {ok, cerl:c_atom(Key)}.
 
+abstract_pattern(_, _, {variable, Tag}) -> {ok, cerl:c_var(Tag)};
 
 abstract_pattern(Env, TypeDefs, {type, Tag}) ->
     case maps:get(Tag, Env) of

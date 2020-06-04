@@ -8,12 +8,12 @@ id(Symbol) -> id([Symbol]).
 
 tag({type, _, Symbols}) -> 
     list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)]));
-tag({symbol, _, S}) -> S;
+tag({symbol, _, _, S}) -> S;
 tag({variable, _, _, Tag}) -> Tag;
 tag({key, _, K}) -> K.
 
 name({pair, _, K, _}) -> name(K);
-name({symbol, _, S}) -> S;
+name({symbol, _, _, S}) -> S;
 name({variable, _, Key, _}) -> Key;
 name({key, _, K}) -> K.
 

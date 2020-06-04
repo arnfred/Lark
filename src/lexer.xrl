@@ -1,10 +1,11 @@
 Definitions.
 
-Symbol          = [a-zA-Z_][a-zA-Z0-9_-]*
-Number          = [0-9]
-String          = "(\\\^.|\\.|[^\"])*"
-RightArrow      = ->
-LeftArrow       = <-
+Symbol            = [a-z_][a-zA-Z0-9_-]*
+Type_Symbol       = [A-Z][a-zA-Z0-9_-]*
+Number            = [0-9]
+String            = "(\\\^.|\\.|[^\"])*"
+RightArrow        = ->
+LeftArrow         = <-
 
 Rules.
 
@@ -26,7 +27,8 @@ val                     : {token, {val,             TokenLine, list_to_atom(Toke
 {LeftArrow}             : {token, {left_arrow,      TokenLine, list_to_atom(TokenChars)}}.
 type                    : {token, {type,            TokenLine, list_to_atom(TokenChars)}}.
 match                   : {token, {match_keyword,   TokenLine, list_to_atom(TokenChars)}}.
-{Symbol}                : {token, {symbol,          TokenLine, list_to_atom(TokenChars)}}.
+{Symbol}                : {token, {var_symbol,      TokenLine, list_to_atom(TokenChars)}}.
+{Type_Symbol}           : {token, {type_symbol,     TokenLine, list_to_atom(TokenChars)}}.
 [\n]+                   : {token, {newline,	        TokenLine, list_to_atom(TokenChars)}}.
 [\s]+                   : skip_token.
 #.*                     : skip_token.
