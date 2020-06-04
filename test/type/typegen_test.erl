@@ -7,9 +7,9 @@ run(Code, RunAsserts) ->
     {ok, _, {TypeAST, _}} = kind:get_AST(Code),
     io:format("TypeAST: ~p~n", [TypeAST]),
     case typer:load("test", TypeAST) of
-        {error, Errs} -> RunAsserts({error, Errs});
+        {error, Errs} -> 
+            RunAsserts({error, Errs});
         {ok, TypeMod} ->
-            io:format("TypeMod: ~p~n", [TypeMod]),
             RunAsserts(TypeMod),
             true = code:soft_purge(TypeMod),
             true = code:delete(TypeMod)
@@ -99,6 +99,16 @@ sum_var_test() ->
                  end,
     run(Code, RunAsserts).
 
+product_sum_test() ->
+    Code = "type Args -> A | B | C\n"
+           "type Elems -> {elem: Args}",
+    RunAsserts = fun(Mod) ->
+                         Actual = Mod:domain('Elems'),
+                         Expected = {product, #{elem => {sum, ['Args/A', 'Args/B', 'Args/C']}}},
+                         ?assertEqual(none, domain:diff(Expected, Actual))
+                 end,
+    run(Code, RunAsserts).
+
 buried_var_test() ->
     Code = "type Buried a -> Surface | Bottom: { var: a }\n"
            "type Hidden -> Treasure",
@@ -176,3 +186,43 @@ recursion_top_level_f_test() ->
                          ?assertMatch({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, maps:get(tail, ProductMap))
                  end,
     run(Code, RunAsserts).
+
+recursion_top_level_non_function_test() ->
+    Code = "type Args -> A | B | C\n"
+           "type List -> Nil | Cons: {elem: Args, tail: List}",
+    RunAsserts = fun(Mod) ->
+                         Actual = Mod:domain('List'),
+                         ?assertMatch({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, Actual),
+                         {_, [_, {_, _, {recur, RecurFun}}]} = Actual,
+                         ?assertMatch({product, _}, RecurFun()),
+                         {product, ProductMap} = RecurFun(),
+                         ?assertMatch({sum, ['Args/A', 'Args/B', 'Args/C']}, maps:get(elem, ProductMap)),
+                         ?assertMatch({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, maps:get(tail, ProductMap))
+                 end,
+    run(Code, RunAsserts).
+
+pattern_type_test() ->
+    Code = "type F a\n"
+           " | A -> B\n"
+           " | B -> C\n"
+           " | C -> A",
+    RunAsserts = fun(Mod) ->
+                         {f, 'F', DomainFun} = Mod:domain('F'),
+                         Actual = DomainFun('F/A'),
+                         ?assertMatch('F/B', Actual)
+                 end,
+    run(Code, RunAsserts).
+
+%pattern_dict_test() ->
+%    Code = "type Args -> A | B | C\n"
+%           "type Test a\n"
+%           " | {a, b} -> a | b",
+%    RunAsserts = fun(Mod) ->
+%                         {f, 'F', DomainFun} = Mod:domain('F'),
+%                         Actual = DomainFun({product, #{a => 'Args/A', b => 'Args/B', c => 'Args/C'}}),
+%                         Expected = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
+%                         ?assertMatch(none, domain:diff(Expected, Actual))
+%                 end,
+%    run(Code, RunAsserts).
+
+

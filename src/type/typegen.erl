@@ -6,7 +6,7 @@
 
 gen(Module, AST) when is_list(AST) ->
     TypeDefs = maps:from_list([{Name, Args} || {type_def, _, Name, Args, _} <- AST]),
-    {Mappings, _, _} = unzip3([domains([], [], TypeDef) || TypeDef <- AST]),
+    {Mappings, _, _} = unzip3([domain([], [], TypeDef) || TypeDef <- AST]),
     Env = gen_env(Mappings),
     io:format("Type Env: ~p~n", [Env]),
 
@@ -60,54 +60,87 @@ gen_env(Envs) when is_list(Envs) ->
                             end, Grouped),
     maps:from_list([{Tag, {Vars, Domain}} || {Tag, Vars, Domain} <- Deduped]).
 
-domains([], [], {type_def, _, Name, Args, Expr}) -> 
+domain([], [], {type_def, _, Name, Args, Clauses}) when is_list(Clauses) -> 
     DefArgs = [tag(A) || A <- Args],
-    {Env, _, Domain} = domains([Name], DefArgs, Expr),
+    {Env, _, Domain} = domain([Name], DefArgs, {clauses, Clauses}),
     {[{Name, DefArgs, Domain} | Env], DefArgs, Domain};
 
-domains(Path, Args, {tuple, _, [Expr]}) -> domains(Path, Args, Expr);
+domain([], [], {type_def, _, Name, Args, Expr}) -> 
+    DefArgs = [tag(A) || A <- Args],
+    {Env, _, Domain} = domain([Name], DefArgs, Expr),
+    {[{Name, DefArgs, Domain} | Env], DefArgs, Domain};
 
-domains(Path, Args, {tuple, _, Expressions}) ->
-    {EnvList, Vars, Domains} = unzip3([domains(Path, Args, Expr) || Expr <- Expressions]),
-    Domain = domain:compact({sum, ordsets:from_list(Domains)}),
+domain(Path, Args, {clauses, Clauses}) ->
+    {Envs, _, ClauseDomains} = unzip3([domain(Path, Args, Clause) || Clause <- Clauses]),
+    Domain = {clauses, Args, ClauseDomains},
+    Env = lists:flatten(Envs),
+    {Env, Args, Domain};
+
+domain(Path, Args, {clause, _, Patterns, Expr}) ->
+    {_, PatternDomains} = unzip([pattern_domain(Pattern) || 
+                                               {Arg, Pattern} <- zip(Args, Patterns)]),
+    {Env, _, ExprDomain} = domain(Path, Args, Expr),
+    {Env, [], {clause, PatternDomains, ExprDomain}};
+
+domain(Path, Args, {tuple, _, [Expr]}) -> domain(Path, Args, Expr);
+
+domain(Path, Args, {tuple, _, Expressions}) ->
+    {EnvList, Vars, Domains} = unzip3([domain(Path, Args, Expr) || Expr <- Expressions]),
+    Domain = {sum, ordsets:from_list(Domains)},
     {lists:flatten(EnvList), order(Args, Vars), Domain};
 
-domains(Path, Args, {dict, _, Pairs}) ->
-    {EnvList, Vars, Domains} = unzip3([domains(Path, Args, Expr) || {pair, _, _, Expr} <- Pairs]),
-    Keys = [symbol:name(P) || P <- Pairs],
+
+domain(Path, Args, {dict, _, Elems}) ->
+    io:format("Elems: ~p~n", [Elems]),
+    {EnvList, Vars, Domains} = unzip3([domain(Path, Args, Expr) || {pair, _, _, Expr} <- Elems]),
+    Keys = [symbol:name(P) || P <- Elems],
     {lists:flatten(EnvList), order(Args, Vars), {product, maps:from_list(zip(Keys, Domains))}};
 
-domains(Path, Args, {pair, _, Key, Expr}) ->
+domain(Path, Args, {pair, _, Key, Expr}) ->
     Tag = tag(Key),
     NewPath = [Tag | Path],
-    {Env, Vars, ExprDomain} = domains(NewPath, Args, Expr),
+    {Env, Vars, ExprDomain} = domain(NewPath, Args, Expr),
     Domain = {tagged, Tag, ExprDomain},
     {[{Tag, order(Args, Vars), Domain} | Env], order(Args, Vars), Domain};
 
-domains(_, _, {variable, _, _, Tag}) -> {[], [Tag], {variable, Tag}};
+domain(_, _, {variable, _, _, Tag}) -> {[], [Tag], {variable, Tag}};
 
-domains(Path, Args, {application, _, Expr, AppArgs}) ->
-    {ExprEnv, ExprVars, ExprDomain} = domains(Path, Args, Expr),
-    {ArgsEnvs, ArgVars, ArgDomains} = unzip3([domains(Path, Args, A) || A <- AppArgs]),
+domain(Path, Args, {application, _, Expr, AppArgs}) ->
+    {ExprEnv, ExprVars, ExprDomain} = domain(Path, Args, Expr),
+    {ArgsEnvs, ArgVars, ArgDomains} = unzip3([domain(Path, Args, A) || A <- AppArgs]),
     Env = lists:flatten(ArgsEnvs) ++ ExprEnv,
     Vars = ordsets:to_list(ordsets:from_list(ExprVars ++ ArgVars)),
     Domain = {application, ExprDomain, ArgDomains},
     {Env, order(Args, Vars), Domain};
 
-domains(Path, _, {type, _, _} = Type) -> 
+domain(Path, _, {type, _, _} = Type) -> 
     Tag = tag(Type),
     case lists:member(Tag, Path) of
         true -> {[], [], {recur, Tag}};
         false -> {[{Tag, [], {type, Tag}}], [], {type, Tag}}
     end;
 
-domains(_, _, {key, _, Key}) -> 
+domain(_, _, {key, _, Key}) -> 
     {[], [], Key}.
 
+%pattern_domain([], Args, {dict, _, Elems}) ->
+%    io:format("Elems: ~p~n", [Elems]),
+%    Tag = fun({pair, _, Key, Val}) ->
+%                  {KeyEnv, KeyVars, KeyDomain} = domain([], Args, Key),
+%                  {ValEnv, ValVars, ValDomain} = domain([], Args, Val),
+%                  {
+%    {EnvList, Vars, Domains} = unzip3([domain([], Args, Expr) || {pair, _, _, Expr} <- Elems]),
+%    Keys = [symbol:name(P) || P <- Elems],
+%    {lists:flatten(EnvList), order(Args, Vars), {product, maps:from_list(zip(Keys, Domains))}};
+
+pattern_domain({type, _, _} = Type) -> {[], {type, tag(Type)}}.
+
 abstract_form(Env, TypeDefs, {f, Tag, Vars, Domain}) ->
-    error:map(abstract_form(Env, TypeDefs, Domain), fun(DomainForm) ->
-        ArgsForm = [cerl:c_var(V) || V <- Vars],
-        cerl:c_tuple([cerl:c_atom(f), cerl:c_atom(Tag), cerl:c_fun(ArgsForm, DomainForm)]) end);
+    FDomain = abstract_form(Env, TypeDefs, Domain),
+    ArgsForm = [cerl:c_var(V) || V <- Vars],
+    error:map(
+      FDomain,
+      fun(FD) -> cerl:c_tuple([cerl:c_atom(f), cerl:c_atom(Tag), cerl:c_fun(ArgsForm, FD)]) end);
 
 abstract_form(Env, TypeDefs, {sum, Set}) -> 
     case error:collect([abstract_form(Env, TypeDefs, Elem) || Elem <- ordsets:to_list(Set)]) of
@@ -119,9 +152,13 @@ abstract_form(Env, TypeDefs, {sum, Set}) ->
     end;
 
 abstract_form(Env, TypeDefs, {product, Map}) ->
-    case error:collect([abstract_form(Env, TypeDefs, D) || D <- maps:values(Map)]) of
+    io:format("Map: ~p~n", [Map]),
+    RawForms = [abstract_form(Env, TypeDefs, D) || D <- maps:values(Map)],
+    io:format("Raw Forms: ~p~n", [RawForms]),
+    case error:collect(RawForms) of
         {error, Errs} -> {error, Errs};
         {ok, Forms} ->
+            io:format("Abstract Form Sum Forms: ~p~n", [Forms]),
             Entries = [cerl:c_map_pair(cerl:c_atom(K), Form) || {Form, K} <- zip(Forms, maps:keys(Map))],
             DomainMap = cerl:c_map(Entries),
             {ok, cerl:c_tuple([cerl:c_atom(product), DomainMap])}
@@ -137,12 +174,12 @@ abstract_form(_, _, {variable, Tag}) ->
 abstract_form(Env, TypeDefs, {type, Tag}) -> 
     case maps:get(Tag, Env) of
         {_, {type, Tag}} -> {ok, cerl:c_atom(Tag)};
-        {_, Domain} -> {ok, abstract_form(Env, TypeDefs, Domain)}
+        {_, Domain} -> error:map(Domain, fun(D) -> abstract_form(Env, TypeDefs, D) end)
     end;
 
 abstract_form(_, _, {recur, Tag}) ->
-    BranchFun = cerl:c_fun([], cerl:c_apply(cerl:c_atom(domain), [cerl:c_atom(Tag)])),
-    cerl:c_tuple([cerl:c_atom(recur), BranchFun]);
+    BranchFun = cerl:c_fun([], cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)])),
+    {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
 
 abstract_form(Env, TypeDefs, {application, Expr, Args} = Current) ->
     CompiledArgs = error:collect([abstract_form(Env, TypeDefs, A) || A <- Args]),
@@ -181,7 +218,29 @@ abstract_form(Env, TypeDefs, {application, Expr, Args} = Current) ->
             end
     end;
 
+abstract_form(Env, TypeDefs, {clauses, Args, ClauseDomains}) ->
+    CompiledClauses = error:collect([abstract_form(Env, TypeDefs, Clause) || Clause <- ClauseDomains]),
+    CompiledArgs = error:collect([cerl:c_var(A) || A <- Args]),
+    error:map2(CompiledArgs,
+               CompiledClauses,
+               fun(CArgs, CClauses) -> cerl:c_case(cerl:c_values(CArgs), CClauses) end);
+
+abstract_form(Env, TypeDefs, {clause, PatternDomains, ExprDomain}) ->
+    CompiledPatterns = error:collect([abstract_pattern(Env, TypeDefs, P) || P <- PatternDomains]),
+    CompiledExpr = abstract_form(Env, TypeDefs, ExprDomain),
+    error:map2(CompiledPatterns,
+               CompiledExpr,
+               fun(CPs, CExpr) -> cerl:c_clause(CPs, CExpr) end);
+
 abstract_form(_, _, Key) -> {ok, cerl:c_atom(Key)}.
+
+
+abstract_pattern(Env, TypeDefs, {type, Tag}) ->
+    case maps:get(Tag, Env) of
+        {_, {type, Tag}} -> {ok, cerl:c_atom(Tag)};
+        {_, Domain} -> error:map(Domain, fun(D) -> abstract_pattern(Env, TypeDefs, D) end)
+    end.
+
 
 order(Args, Vars) ->
     FlatVars = lists:flatten(Vars),

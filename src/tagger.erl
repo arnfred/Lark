@@ -1,8 +1,6 @@
 -module(tagger).
 -export([tag/1]).
 
--include_lib("eunit/include/eunit.hrl").
-
 tag(AST) -> 
     {TypeEnv, TaggedTypes} = tag_types(AST),
     {DefEnv, TaggedDefs} = tag_defs(TypeEnv, AST),
@@ -11,7 +9,8 @@ tag(AST) ->
 tag_types(AST) ->
     Types = lists:filter(fun(A) -> element(1,A) =:= type_def end, AST),
     TagType = fun(Path, {symbol, Line, T}) -> {type, Line, lists:reverse([T | Path])} end,
-    InitEnv = maps:from_list([{Name, TagType([], {symbol, Line, Name})} || {type_def, Line, Name, _, _} <- Types]),
+    InitEnv = maps:from_list([{Name, TagType([], {symbol, Line, Name})} || 
+                              {type_def, Line, Name, _, _} <- Types]),
     map(InitEnv, Types, [], TagType).
 
 tag_defs(TypeEnv, AST) ->
@@ -73,6 +72,12 @@ tag(Env, {lookup, Line, Var, Elems}, Path, TagFun) ->
     {NewEnv, TaggedElems} = map(VarEnv, Elems, Path, TagFun),
     {NewEnv, {lookup, Line, TaggedVar, TaggedElems}};
 
+tag(Env, {val, Line, Pattern, Expr}, Path, TagFun) ->
+    {PatternEnv, TaggedPattern} = tag(#{}, Pattern, Path, TagFun),
+    {_, TaggedExpr} = tag(Env, Expr, Path, TagFun),
+    NewEnv = maps:merge(Env, PatternEnv),
+    {NewEnv, {val, Line, TaggedPattern, TaggedExpr}};
+
 tag(Env, {match, Line, Expr, Clauses}, Path, TagFun) ->
     {ExprEnv, TaggedExpr} = tag(Env, Expr, Path, TagFun),
     {ClausesEnv, TaggedClauses} = map(ExprEnv, Clauses, Path, TagFun),
@@ -90,8 +95,11 @@ tag(Env, {type_def, Line, Name, Args, Body}, Path, TagFun) ->
     NewPath = [Name | Path],
     MakeVar = fun(L, S) -> {variable, L, S, symbol:id(lists:reverse([S | NewPath]))} end,
     TaggedArgs = [MakeVar(L, S) || {symbol, L, S} <- Args],
-    ArgEnv = maps:from_list([{S, Arg} || {_, _, S, _} = Arg <- TaggedArgs]),
-    {BodyEnv, TaggedBody} = tag(maps:merge(Env, ArgEnv), Body, NewPath, TagFun),
+    ArgsEnv = maps:from_list([{S, Arg} || {_, _, S, _} = Arg <- TaggedArgs]),
+    {BodyEnv, TaggedBody} = case Body of
+                                _ when is_list(Body) -> map(maps:merge(Env, ArgsEnv), Body, NewPath, TagFun);
+                                _ -> tag(maps:merge(Env, ArgsEnv), Body, NewPath, TagFun)
+                            end,
     {BodyEnv, {type_def, Line, Name, TaggedArgs, TaggedBody}};
 
 tag(Env, {pair, Line, Key, Value}, Path, TagFun) ->
@@ -106,11 +114,23 @@ tag(Env, {symbol, _, S} = Symbol, Path, TagFun) ->
     NewEnv = maps:put(S, NewSymbol, Env),
     {NewEnv, NewSymbol}.
 
+%% When we map a dictionary _in_ a pattern, we include the keys in the
+%% environment because they get mapped to variables
+map_dict(Env, Elements, Path, TagFun) when map_size(Env) == 0 -> % Env is empty for patterns
+    Tag = fun({pair, Line, Key, Val}) ->
+                  {KeyEnv, TaggedKey} = tag(Env, Key, Path, TagFun),
+                  {ValEnv, TaggedVal} = tag(Env, Val, Path, TagFun),
+                  {maps:merge(KeyEnv, ValEnv), {pair, Line, TaggedKey, TaggedVal}};
+             ({symbol, _, _} = S) -> tag(Env, S, Path, TagFun) end,
+    {EnvList, Tagged} = lists:unzip([Tag(E) || E <- Elements]),
+    NewEnv = lists:foldl(fun(M1, M2) -> maps:merge(M1, M2) end, #{}, EnvList),
+    {NewEnv, Tagged};
 
-%% We deliberately don't include the KeyEnv in the environment that is
-%% returned. This is because the key of the pair in turn becomes an accessor
-%% function, but we want local definitions and assignments to have precedence
-%% over type product accessor functions.
+%% When we map a dictionary that _isn't_ in a pattern, we deliberately don't
+%% include the KeyEnv in the environment that is returned. This is because the
+%% key of the pair in turn becomes an accessor function, but we want local
+%% definitions and assignments to have precedence over type product accessor
+%% functions.
 map_dict(Env, Elements, Path, TagFun) when is_list(Elements) ->
     TagKey = fun(_, Symbol) -> {key, element(2, Symbol), symbol:name(Symbol)} end,
     Tag = fun({pair, Line, Key, Val}) ->
@@ -126,6 +146,7 @@ map_dict(Env, Elements, Path, TagFun) when is_list(Elements) ->
     {NewEnv, Tagged}.
 
 
+
 map(Env, Elements, Path, TagFun) when is_list(Elements) ->
     {EnvList, Tagged} = lists:unzip([tag(Env, E, Path, TagFun) || E <- Elements]),
     NewEnv = lists:foldl(fun(M1, M2) -> maps:merge(M1, M2) end, #{}, EnvList),
@@ -138,156 +159,3 @@ fold(Env, Elements, Path, TagFun) when is_list(Elements) ->
         end,
     {NewEnv, TaggedElements} = lists:foldl(F, {Env, []}, Elements),
     {NewEnv, lists:reverse(TaggedElements)}.
-
--ifdef(TEST).
-
-tag_AST(Code) ->
-    {ok, Tokens, _} = lexer:string(Code),
-    io:format("Tokens are ~p~n", [Tokens]),
-    {ok, AST} = parser:parse(Tokens),
-    io:format("AST is ~p~n", [AST]),
-    {ok, _, Tagged} = tag(AST),
-    Tagged.
-
-identity_function_test() ->
-    {_, [{def, _, _, Args, Body}]} = tag_AST("def id a -> a"),
-    {variable, _, a, TaggedArg} = Body,
-    [{variable, _, a, TaggedBody}] = Args,
-    ?assertEqual(TaggedArg, TaggedBody).
-
-pattern_match1_test() ->
-    Code = 
-        "def not a\n"
-        " | b -> b",
-    {_, [{def, _, _, _, [Clause]}]} = tag_AST(Code),
-    {clause, _, [{variable, _, b, TaggedArg}], {variable, _, b, TaggedArg}} = Clause.
-
-pattern_match2_test() ->
-    Code = 
-        "def not a\n"
-        " | b -> a",
-    {_, [{def, _, _, Args, [Clause]}]} = tag_AST(Code),
-    [{variable, _, a, TaggedArg}] = Args,
-    {clause, _, _, {variable, _, a, TaggedArg}} = Clause.
-
-pattern_match3_test() ->
-    Code = 
-        "def not a\n"
-        " | a -> a",
-    {_, Tagged} = tag_AST(Code),
-    [{def, _, _, Args, [Clause]}] = Tagged,
-    [{variable, _, a, TaggedDefArg}] = Args,
-    {clause, _, [{variable, _, a, TaggedArg}], {variable, _, a, TaggedArg}} = Clause,
-    ?assertNotEqual(TaggedDefArg, TaggedArg).
-
-tuple_test() ->
-    Code = "def not a -> (a, a)",
-    {_, [{def, _, _, Args, {tuple, _, [L1, L2]}}]} = tag_AST(Code),
-    [{variable, _, a, TaggedArg}] = Args,
-    {variable, _, a, TaggedArg} = L1,
-    {variable, _, a, TaggedArg} = L2.
-    
-anonymous_function_test() ->
-    Code = 
-        "def blap a -> a.blip(b -> b\n"
-        "                     _ -> a)",
-    {_, Tagged} = tag_AST(Code),
-    [{def, _, _, DefArgs, {application, _, _, Args}}] = Tagged,
-    [_, {lambda, _, [Clause1, Clause2]}] = Args,
-    [{variable, _, a, TaggedA}] = DefArgs,
-    {clause, _, [{variable, _, b, TaggedB}], {variable, _, b, TaggedB}} = Clause1,
-    {clause, _, _, {variable, _, a, TaggedA}} = Clause2.
-
-dict_pair_test() ->
-    Code = "def f -> {a: b}",
-    {_, Tagged} = tag_AST(Code),
-    [{def, _, _, [], {dict, _, [{pair, _, Key, _}]}}] = Tagged,
-    ?assertEqual({key, 1, a}, Key).
-
-dict_value_test() ->
-    Code = "def f -> {a}",
-    {_, Tagged} = tag_AST(Code),
-    [{def, _, _, [], {dict, _, [Key]}}] = Tagged,
-    ?assertEqual({key, 1, a}, Key).
-
-
-simple_sum_type_test() ->
-    Code =
-        "type Boolean -> True | False\n"
-        "def blah a\n"
-        " | True -> False",
-    {Typed, Tagged} = tag_AST(Code),
-    [{type_def, _, _, _, {tuple, _, [{_, _, True}, {_, _, False}]}}] = Typed,
-    ?assertEqual(True, ['Boolean','True']),
-    ?assertEqual(False, ['Boolean', 'False']),
-    [{def, _, _, _, [Clause]}] = Tagged,
-    {clause, _, [{_, _, TrueClause}], {_, _, FalseExpr}} = Clause,
-    ?assertEqual(TrueClause, ['Boolean', 'True']),
-    ?assertEqual(FalseExpr, ['Boolean', 'False']).
-
-complex_sum_syntax_test() ->
-    Code =
-        "\n"
-        "type Animal -> (Cat | Dog\n"
-        "                Parrot | Seagull\n"
-        "                Brontosaurus)",
-    {Typed, _} = tag_AST(Code),
-    [{type_def, _, _, _, {tuple, _, [{_, _, Cat}, 
-                                     {_, _, Dog},
-                                     {_, _, Parrot},
-                                     {_, _, Seagull},
-                                     {_, _, Brontosaurus}]}}] = Typed,
-    ?assertEqual(Cat, ['Animal','Cat']),
-    ?assertEqual(Dog, ['Animal','Dog']),
-    ?assertEqual(Parrot, ['Animal','Parrot']),
-    ?assertEqual(Seagull, ['Animal','Seagull']),
-    ?assertEqual(Brontosaurus, ['Animal','Brontosaurus']).
-
-simple_product_type_test() ->
-    Code =
-        "type Monkey -> Monkey: { food: Banana, plant: Trees }",
-    {Typed, _} = tag_AST(Code),
-    Expected = [{type_def, 1, 'Monkey', [],
-                 {pair, 1,
-                  {type, 1, ['Monkey']},
-                  {dict, 1,
-                   [{pair,1,
-                     {key,1,food},
-                     {type,1,['Monkey', 'Banana']}},
-                    {pair,1,
-                     {key,1,plant},
-                     {type,1,['Monkey', 'Trees']}}]}}}],
-    ?assertEqual(Expected, Typed).
-
-complex_type_test() ->
-    Code =
-        "type BooleanList -> (Cons: { value: (True | False)\n"
-        "                             cons: BooleanList }\n"
-        "                     Nil)",
-    {Typed, _} = tag_AST(Code),
-    ?assertEqual([{type_def,1,'BooleanList',[],
-                   {tuple,1,
-                    [{pair,1,
-                      {type,1,['BooleanList','Cons']},
-                      {dict,1,
-                       [{pair,1,
-                         {key,1,value},
-                         {tuple,1,
-                          [{type,1,['BooleanList','True']},
-                           {type,1,['BooleanList','False']}]}},
-                        {pair,2,
-                         {key,2,cons},
-                         {type,1,['BooleanList']}}]}},
-                     {type,3,['BooleanList','Nil']}]}}], Typed).
-
-product_key_not_propagated_test() ->
-    Code =
-        "type Blip -> { blup: blyp }\n"
-        "def blap -> blup",
-    {Typed, Tagged} = tag_AST(Code),
-    [{type_def, 1, 'Blip', [], {dict, _, [{pair, 1, {key, _, BlupKey}, _}]}}] = Typed,
-    [{def, 2, 'blap', [], {variable, 2, 'blup', BlupTag}}] = Tagged,
-    ?assertNotEqual(BlupKey, BlupTag).
-
-
--endif.

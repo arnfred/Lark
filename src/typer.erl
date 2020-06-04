@@ -13,7 +13,9 @@ type(Module, TypeDefs, Defs) ->
 load(Module, TypeDefs) ->
     TypeMod = lists:flatten([Module, "_types"]),
     case typegen:gen(TypeMod, TypeDefs) of
-        {error, Errs} -> {error, Errs};
+        {error, Errs} -> 
+            io:format("Errs: ~p~n", [Errs]),
+            {error, Errs};
         {ok, Forms} ->
             io:format("Forms are ~p~n", [Forms]),
             {ok, Mod, TypeBin} = compile:forms(Forms, [report, verbose, from_core]),

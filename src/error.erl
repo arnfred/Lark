@@ -1,6 +1,6 @@
 -module(error).
 
--export([collect/1, map/2, leftbias/2, format/2, format/2]).
+-export([collect/1, map/2, map2/3, leftbias/2, format/2]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -21,15 +21,23 @@ leftbias(_, E) -> E.
 
 collect(List) when is_list(List) -> collect_ok(List, []).
 
-collect_ok([], Ret) -> {ok, lists:reverse(Ret)};
+collect_ok([], Ret) -> {ok, unique(lists:reverse(Ret))};
 collect_ok([{ok, Head} | Tail], Ret) -> collect_ok(Tail, [Head | Ret]);
 collect_ok([{error, Err} | Tail], _) -> collect_error(Tail, [Err]);
 collect_ok([Head | Tail], Ret) -> collect_ok(Tail, [Head | Ret]).
 
-collect_error([], Ret) -> {error, sets:to_list(sets:from_list(lists:reverse(lists:flatten(Ret))))};
+collect_error([], Ret) -> {error, unique(lists:reverse(lists:flatten(Ret)))};
 collect_error([{error, Err} | Tail], Ret) -> collect_error(Tail, [Err | Ret]);
 collect_error([{ok, _} | Tail], Ret) -> collect_error(Tail, Ret);
 collect_error([_ | Tail], Ret) -> collect_error(Tail, Ret).
+
+unique(L) -> 
+    {Out, _} = lists:foldl(fun(Elem, {Out, Seen}) -> 
+                                      case ordsets:is_element(Elem, Seen) of
+                                          true -> {Out, Seen};
+                                          false -> {[Elem | Out], ordsets:add_element(Elem, Seen)}
+                                      end end, {[], ordsets:new()}, L),
+    lists:reverse(Out).
 
 -ifdef(TEST).
 
@@ -41,7 +49,7 @@ collect_all_ok_test() ->
 
 collect_all_err_test() ->
     Input = [{error, [1]}, {error, [2]}],
-    Expected = {error, [2, 1]},
+    Expected = {error, [1, 2]},
     Actual = collect(Input),
     ?assertEqual(Expected, Actual).
 

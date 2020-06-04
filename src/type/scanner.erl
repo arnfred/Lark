@@ -8,14 +8,14 @@ scan(TypeMod, AST) when is_list(AST) ->
     {_, Names, Domains} = unzip3([EnvFun(Scanned) || EnvFun <- Scanned]),
     maps:from_list(zip(Names, Domains)).
 
-scan_top_level(TypeMod, {def, _, Name, Args, Cs} = Parsnip) when is_list(Cs) ->
+scan_top_level(TypeMod, {def, _, Name, Args, Cs} = Def) when is_list(Cs) ->
     F = fun(Env, Stack, ArgDomains) ->
                 NewStack = [{Name, ArgDomains} | Stack],
                 ClauseArgs = zip(Args, ArgDomains),
                 {DefEnv, DefDomain} = scan_clauses(Env, NewStack, TypeMod, ClauseArgs, Cs),
                 ActualDomains = [maps:get(Tag, DefEnv) || {_, _, _, Tag} <- Args],
                 Error = error:format({arguments_not_subsets, ArgDomains, ActualDomains},
-                                     {scanner, Parsnip, NewStack}), 
+                                     {scanner, Def, NewStack}), 
                 IsSubset = fun({D1, D2}) -> domain:subset(D1, D2) end,
                 case lists:all(IsSubset, zip(ArgDomains, ActualDomains)) of
                     false      -> error:leftbias(DefDomain, Error);
@@ -24,7 +24,7 @@ scan_top_level(TypeMod, {def, _, Name, Args, Cs} = Parsnip) when is_list(Cs) ->
         end,
     generate_env_fun(Name, length(Args), F, TypeMod);
 
-scan_top_level(TypeMod, {def, _, Name, Args, Expr} = Parsnip) ->
+scan_top_level(TypeMod, {def, _, Name, Args, Expr} = Def) ->
     F = fun(Env, Stack, ArgDomains) -> 
                 NewStack = [{Name, ArgDomains} | Stack],
                 ArgEnv = maps:from_list([{symbol:tag(A), D} || {A, D} <- zip(Args, ArgDomains)]),
@@ -32,7 +32,7 @@ scan_top_level(TypeMod, {def, _, Name, Args, Expr} = Parsnip) ->
                 {DefEnv, DefDomain} = scan(NewEnv, NewStack, TypeMod, Expr),
                 ActualDomains = [maps:get(Tag, DefEnv) || {_, _, _, Tag} <- Args],
                 Error = error:format({arguments_not_subsets, ArgDomains, ActualDomains},
-                                     {scanner, Parsnip, NewStack}),
+                                     {scanner, Def, NewStack}),
                 IsSubset = fun({D1, D2}) -> domain:subset(D1, D2) end,
                 case lists:all(IsSubset, zip(ArgDomains, ActualDomains)) of
                     false      -> error:leftbias(DefDomain, Error);
@@ -58,18 +58,18 @@ scan(Env, Stack, TypeMod, {lookup, _, Var, Elems} = Parsnip) ->
         D                   -> {intersection(VarEnv, Env), error:leftbias(D, Error)}
     end;
 
-scan(Env, Stack, TypeMod, {pair, _, Key, Value} = Parsnip) ->
+scan(Env, Stack, TypeMod, {pair, _, Key, Value} = Pair) ->
     {ValueEnv, ValueDomain} = scan(Env, Stack, TypeMod, Value),
     {KeyEnv, KeyDomain} = scan(Env, Stack, TypeMod, Key),
     Domain = intersection(ValueDomain, KeyDomain),
     NewEnv = intersection(KeyEnv, ValueEnv),
-    Error = error:format({not_a_subset, KeyDomain, ValueDomain}, {scanner, Parsnip, Stack}),
+    Error = error:format({pair_not_subset, KeyDomain, ValueDomain}, {scanner, Pair, Stack}),
     case domain:subset(KeyDomain, ValueDomain) of
         false      -> {NewEnv, error:leftbias(Domain, Error)};
         true       -> {NewEnv, Domain}
     end;
 
-scan(Env, _, TypeMod, {lambda, Line, [{clause, _, Ps, _} | _] = Cs} = Parsnip) -> 
+scan(Env, _, TypeMod, {lambda, Line, [{clause, _, Ps, _} | _] = Cs} = Lambda) -> 
     Name = symbol:id(['lambda', list_to_atom(integer_to_list(Line))]),
     F = fun(Stack, ArgDomains) -> 
                 NewStack = [{Name, ArgDomains} | Stack],
@@ -79,7 +79,7 @@ scan(Env, _, TypeMod, {lambda, Line, [{clause, _, Ps, _} | _] = Cs} = Parsnip) -
                 IsSubset = fun({D1, D2}) -> domain:subset(D1, D2) end,
                 ActualDomains = [maps:get(Tag, LEnv) || Tag <- Tags],
                 Error = error:format({arguments_not_subsets, ArgDomains, ActualDomains}, 
-                                     {scanner, Parsnip, NewStack}),
+                                     {scanner, Lambda, NewStack}),
                 case lists:all(IsSubset, zip(ArgDomains, ActualDomains)) of
                     false      -> error:leftbias(LDomain, Error);
                     true       -> LDomain
@@ -87,13 +87,22 @@ scan(Env, _, TypeMod, {lambda, Line, [{clause, _, Ps, _} | _] = Cs} = Parsnip) -
         end,
     {Env, two_step_pass_stack(F, Name, length(Ps))};
 
+scan(Env, Stack, TypeMod, {val, _, Pattern, Expr}) ->
+    {_, ExprDomain} = scan(Env, Stack, TypeMod, Expr),
+    {PatternEnv, PatternDomain} = scan_pattern(ExprDomain, TypeMod, Stack, Pattern),
+    NewEnv = intersection(Env, PatternEnv),
+    NewDomain = intersection(PatternDomain, ExprDomain),
+    {NewEnv, NewDomain};
+
 scan(Env, Stack, TypeMod, {tuple, _, Elems}) -> fold(Env, Stack, TypeMod, Elems);
 
 scan(Env, Stack, TypeMod, {match, _, Arg, Clauses}) ->
     {_, ArgDomain} = scan(Env, Stack, TypeMod, Arg),
-    scan_clauses(Env, Stack, TypeMod, [{symbol:id(''), ArgDomain}], Clauses);
+    Var = {variable, 0, '', symbol:id('')},
+    scan_clauses(Env, Stack, TypeMod, [{Var, ArgDomain}], Clauses);
 
 scan(Env, _, _, {variable, _, _, Tag}) -> 
+    io:format("variable Env for ~p: ~p~n", [Tag, Env]),
     D = maps:get(Tag, Env, any),
     {intersection(Env, #{Tag => D}), D};
 
@@ -136,10 +145,9 @@ scan_clauses(Env, Stack, TypeMod, Args, Clauses) ->
         true -> {union(EnvCs), union(DomainCs)}
     end.
 
-scan_clause(Env, Stack, TypeMod, Args, {clause, _, Patterns, Expr} = Parsnip) ->
+scan_clause(Env, Stack, TypeMod, Args, {clause, _, Patterns, Expr}) ->
     Scan = fun(Arg, Domain, Pattern) ->
-                   ErrContext = {scanner, Parsnip, Stack},
-                   {E, D} = scan_pattern(Domain, TypeMod, ErrContext, Pattern),
+                   {E, D} = scan_pattern(Domain, TypeMod, Stack, Pattern),
                    {intersection(E, #{symbol:tag(Arg) => D}), D}
            end,
     {PsEnvs, PsDomains} = unzip([Scan(Arg, ArgDomain, Pattern) || 
@@ -154,47 +162,76 @@ scan_clause(Env, Stack, TypeMod, Args, {clause, _, Patterns, Expr} = Parsnip) ->
                        {ExprEnv, ExprDomain, PsDomains}
     end.
 
-
 % Pattern of: `T(a, b)`
-scan_pattern(Domain, TypeMod, ErrContext, {application, _, {type, _, T}, Args}) ->
-    {ArgEnvs, ArgDomains} = unzip([scan_pattern(any, TypeMod, ErrContext, A) || A <- Args]),
+scan_pattern(Domain, TypeMod, Stack, {application, _, {type, _, T}, Args}) ->
+    {ArgEnvs, ArgDomains} = unzip([scan_pattern(any, TypeMod, Stack, A) || A <- Args]),
     {f, _, TDomainFun} = TypeMod:domain(T), 
     {intersection(ArgEnvs), intersection(Domain, TDomainFun(ArgDomains))};
 
 % Pattern of: `T { k: v, ... }`
 % The dictionary either contains pairs or variables named after product keywords
-scan_pattern(Domain, TypeMod, ErrContext, {lookup, Line, Var, Elems}) ->
-    {VarEnv, VarDomain} = scan_pattern(Domain, TypeMod, ErrContext, Var),
-    {ElemsEnv, ElemsDomain} = scan_pattern(VarDomain, TypeMod, ErrContext, {dict, Line, Elems}),
-    {intersection(ElemsEnv, VarEnv), intersection(VarDomain, ElemsDomain)};
+scan_pattern(Domain, TypeMod, Stack, {lookup, Line, Var, Elems}) ->
+    {VarEnv, VarDomain} = scan_pattern(Domain, TypeMod, Stack, Var),
+    {ElemsEnv, ElemsDomain} = scan_pattern(VarDomain, TypeMod, Stack, {dict, Line, Elems}),
+
+    % `ElemsDomain` as a domain of a Dict will always be a product, but
+    % `VarDomain` can legitimately (and will often) be a tagged product. To
+    % make sure the intersection isn't none, we make sure intersect the two
+    % products.
+    NewDomain = case VarDomain of
+                    {tagged, Tag, D} -> {tagged, Tag, intersection(ElemsDomain, D)};
+                    D -> intersection(ElemsDomain, D)
+                end,
+    % TODO: The error coming out of the tag not being unwrapped was hella
+    % confusing. Might make sense to see that it gets carried through ok
+    {intersection(ElemsEnv, VarEnv), NewDomain};
 
 % Pattern of: `{ k: v, ... }`
-scan_pattern(Domain, TypeMod, ErrContext, {dict, _, Elems}) ->
-    GetKey = fun({pair, _, {variable, _, Key, _}, _}) -> Key;
-                ({variable, _, Key, _}) -> Key;
-                ({key, _, Key}) -> Key
-             end,
-    GetDomain = fun F(Elem, D) -> case D of
-                                    {product, M} -> maps:get(GetKey(Elem), M, any);
-                                    {sum, S} -> union([F(Elem, E) || E <- ordsets:from_list(S)]);
-                                    {tagged, _, T} -> F(Elem, T);
-                                    any -> any;
-                                    _ -> none
-                               end end,
-    Scan = fun(E) -> scan_pattern(GetDomain(E, Domain), TypeMod, ErrContext, E) end,
-    {ArgEnvs, ArgDomainList} = unzip([Scan(E) || E <- Elems]),
-    ArgDomain = maps:from_list([{GetKey(E), D} || {E, D} <- zip(Elems, ArgDomainList)]),
-    {intersection(ArgEnvs), {product, ArgDomain}};
+scan_pattern(Domain, TypeMod, Stack, {dict, _, Keys} = Dict) ->
 
-% Pattern of: `( ... )`
-scan_pattern(Domain, TypeMod, ErrContext, {tuple, _, [Elem]}) ->
-    scan_pattern(Domain, TypeMod, ErrContext, Elem);
+    ErrContext = {scanner, Dict, Stack},
+    case get_domain_map(Domain, Keys, ErrContext) of
+        none                 -> {#{}, error:format({non_dict_lookup, Domain}, ErrContext)};
+        {error, Errs}        -> {#{}, {error, Errs}};
+        Map when is_map(Map) ->
+            Scan = fun(Key) -> case maps:get(symbol:name(Key), Map) of
+                                   KeyDomain -> scan_pattern(KeyDomain, TypeMod, Stack, Key)
+                               end end,
+            {KeyEnvs, KeyDomainList} = unzip([Scan(K) || K <- Keys]),
+            KeyDomain = maps:from_list([{symbol:name(K), D} || {K, D} <- zip(Keys, KeyDomainList)]),
+
+            % If any of the dictionary elements cause a `nonexistent_key`
+            % error, only those errors should be propagated
+            case error:collect(KeyDomainList) of
+                {error, Errs} -> {intersection(KeyEnvs), {error, Errs}};
+                _             -> 
+                    RetDomain = intersection({product, Map}, {product, KeyDomain}),
+                    {intersection(KeyEnvs), RetDomain}
+            end
+    end;
+
+% Pattern of: `(Pattern)`
+scan_pattern(Domain, TypeMod, Stack, {tuple, _, [Elem]}) ->
+    scan_pattern(Domain, TypeMod, Stack, Elem);
+
+% Pattern of: `(Pattern | Pattern)`, e.g. a sum of types
+scan_pattern(Domain, TypeMod, Stack, {tuple, _, Elements}) ->
+    {TupleEnvs, TupleDomains} = unzip([scan_pattern(Domain, TypeMod, Stack, E) || E <- Elements]),
+    {union(TupleEnvs), union(TupleDomains)};
 
 % Pattern of: `T` for some defined type `T`
-scan_pattern(Domain, TypeMod, ErrContext, {type, _, _} = T) -> 
+scan_pattern(Domain, TypeMod, Stack, {type, _, _} = T) -> 
     TDomain = TypeMod:domain(symbol:tag(T)),
+
+    % Why checking for intersection and not if `T` is a subset of `Domain`?
+    % ---------------------------------------------------------------------
+    % Because at compile time, we don't know what value a variable can have,
+    % and for that reason which branch of the pattern match it might take. If a
+    % branch is marked as an error because it isn't a subset at compile time,
+    % we lose the domain information of the variable, should it end up having a
+    % value that would lead it down this branch.
     case intersection(Domain, TDomain) of
-        none -> {#{}, error:format({no_intersection, Domain, TDomain}, ErrContext)};
+        none -> {#{}, error:format({no_intersection, Domain, TDomain}, {scanner, T, Stack})};
         D -> {#{}, D}
     end;
 
@@ -202,16 +239,37 @@ scan_pattern(Domain, TypeMod, ErrContext, {type, _, _} = T) ->
 scan_pattern(Domain, _, _, {variable, _, _, _} = Var) -> {#{symbol:tag(Var) => Domain}, Domain};
 
 % Pattern of `k: T`
-scan_pattern(Domain, TypeMod, ErrContext, {pair, _, Key, Val}) ->
-    {ValEnv, ValDomain} = scan_pattern(Domain, TypeMod, ErrContext, Val),
+scan_pattern(Domain, TypeMod, Stack, {pair, _, Key, Val}) ->
+    {ValEnv, ValDomain} = scan_pattern(Domain, TypeMod, Stack, Val),
     {intersection(ValEnv, #{symbol:tag(Key) => ValDomain}), ValDomain}.
 
+
+get_domain_map({product, M}, [], _) -> M;
+get_domain_map({product, M} = P, [K | Keys], ErrContext) -> 
+    case maps:is_key(symbol:name(K), M) of
+        true -> get_domain_map(P, Keys, ErrContext);
+        false -> intersection(error:format({nonexistent_key, symbol:name(K), P}, ErrContext), 
+                              get_domain_map(P, Keys, ErrContext))
+    end;
+get_domain_map({tagged, _, D}, Keys, ErrContext) -> get_domain_map(D, Keys, ErrContext);
+get_domain_map({recur, F}, Keys, ErrContext) -> get_domain_map(F(), Keys, ErrContext);
+get_domain_map({sum, Ds}, Keys, ErrContext) -> union([get_domain_map(D, Keys, ErrContext) || D <- Ds]);
+get_domain_map({error, _} = E, _, _) -> E;
+get_domain_map(_, _, _) -> none.
+
+
 fold(Env, Stack, TypeMod, Elements) when is_list(Elements) ->
-    F = fun(Elem, {EnvAcc, _}) -> 
+    F = fun(Elem, {EnvAcc, DomainAcc}) -> 
                 {ElemEnv, Domain} = scan(EnvAcc, Stack, TypeMod, Elem),
-                {intersection([EnvAcc, ElemEnv]), Domain} 
+                {intersection([EnvAcc, ElemEnv]), [Domain | DomainAcc]} 
         end,
-    lists:foldl(F, {Env, any}, Elements).
+    %{NewEnv, [Domain | _]} = lists:foldl(F, {Env, any}, Elements),
+    {NewEnv, Domains} = lists:foldl(F, {Env, []}, Elements),
+    case error:collect(Domains) of
+        {ok, [Domain | _]} -> {NewEnv, Domain};
+        {error, Errs} -> {NewEnv, {error, Errs}}
+    end.
+
 
 pivot([]) -> [];
 pivot([H | _] = ListOfLists) ->

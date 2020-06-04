@@ -9,7 +9,9 @@ Terminals
 Nonterminals
     all definitions definition
     assignment function newtype implies
-    pattern_match clause flat_clause pattern patterns clauses def_clauses clause_tuple pattern_tuple
+    pattern_match clause pattern patterns clauses clause_tuple pattern_tuple
+    def_clauses flat_clause
+    type_clauses flat_type_clause
     application index lookup
     noun verb expression
     collection tuple list dict
@@ -39,10 +41,11 @@ definition -> newtype           : '$1'.
 implies -> right_arrow          : '$1'.
 implies -> right_arrow newlines : '$1'.
 
-assignment -> val noun assign expression            : {val, line('$1'), unwrap('$2'), '$4'}.
+assignment -> val expression assign expression      : {val, line('$1'), '$2', '$4'}.
 function -> def symbols implies expression          : {def, line('$1'), name('$2'), args('$2'), '$4'}.
 function -> def symbols newlines def_clauses        : {def, line('$1'), name('$2'), args('$2'), '$4'}.
 newtype -> type symbols implies sum_or_expression   : {type_def, line('$1'), name('$2'), args('$2'), '$4'}.
+newtype -> type symbols newlines type_clauses       : {type_def, line('$1'), name('$2'), args('$2'), '$4'}.
 
 symbols -> symbol           : ['$1'].
 symbols -> symbol symbols   : ['$1' | '$2'].
@@ -82,6 +85,12 @@ def_clauses -> pipe flat_clause newlines def_clauses : ['$2' | '$4'].
 
 flat_clause -> pattern implies expression           : {clause, line('$2'), ['$1'], '$3'}.
 flat_clause -> patterns implies expression          : {clause, line('$2'), '$1', '$3'}.
+
+type_clauses -> pipe flat_type_clause                       : ['$2'].
+type_clauses -> pipe flat_type_clause newlines type_clauses : ['$2' | '$4'].
+
+flat_type_clause -> pattern implies sum_or_expression  : {clause, line('$2'), ['$1'], '$3'}.
+flat_type_clause -> patterns implies sum_or_expression : {clause, line('$2'), '$1', '$3'}.
 
 patterns -> pattern separator pattern    : ['$1', '$3'].
 patterns -> pattern separator patterns   : ['$1' | '$3'].

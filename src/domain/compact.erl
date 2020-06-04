@@ -12,7 +12,6 @@ compact(T) -> T.
 
 compact_product({product, ProductMap}) ->
     Elements = [{K, compact(V)} || {K, V} <- maps:to_list(ProductMap)],
-    io:format("Elements: ~p~n", [Elements]),
     IsRecur = fun({_, {recur, _}}) -> true;
                  (_) -> false end,
     case lists:partition(IsRecur, Elements) of
@@ -27,9 +26,7 @@ compact_product({product, ProductMap}) ->
     end.
 
 compact_sum({sum, SumSet}) ->
-    io:format("Sum: ~p~n", [SumSet]),
     Elements = [compact(E) || E <- ordsets:to_list(SumSet)],
-    io:format("Elements: ~p~n", [Elements]),
     IsRecur = fun({recur, _}) -> true;
                  (_) -> false end,
     case lists:partition(IsRecur, Elements) of
