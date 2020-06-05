@@ -118,15 +118,15 @@ domain(Path, _, {type, _, _} = Type) ->
         false -> {[{Tag, [], {type, Tag}}], [], {type, Tag}}
     end.
 
-%pattern_domain([], Args, {dict, _, Elems}) ->
-%    io:format("Elems: ~p~n", [Elems]),
-%    Tag = fun({pair, _, Key, Val}) ->
-%                  {KeyEnv, KeyVars, KeyDomain} = domain([], Args, Key),
-%                  {ValEnv, ValVars, ValDomain} = domain([], Args, Val),
-%                  {
-%    {EnvList, Vars, Domains} = unzip3([domain([], Args, Expr) || {pair, _, _, Expr} <- Elems]),
-%    Keys = [symbol:name(P) || P <- Elems],
-%    {lists:flatten(EnvList), order(Args, Vars), {product, maps:from_list(zip(Keys, Domains))}};
+pattern_domain({dict, _, Elems}) ->
+    io:format("Elems: ~p~n", [Elems]),
+    Domain = fun({pair, _, {variable, _, Name, _}, Val}) ->
+                  {ValVars, ValDomain} = pattern_domain(Val),
+                  {ValVars, {Name, ValDomain}};
+                 ({variable, _, Name, Tag}) -> {[Tag], {Name, {variable, Tag}}}
+              end,
+    {Vars, Pairs} = unzip([Domain(E) || E <- Elems]),
+    {Vars, {product, maps:from_list(Pairs)}};
 
 pattern_domain({variable, _, _, Tag}) -> {[Tag], {variable, Tag}};
 
@@ -216,7 +216,7 @@ abstract_form(Env, TypeDefs, {application, Expr, Args} = Current) ->
 
 abstract_form(Env, TypeDefs, {clauses, Args, ClauseDomains}) ->
     CompiledClauses = error:collect([abstract_form(Env, TypeDefs, Clause) || Clause <- ClauseDomains]),
-    CompiledArgs = error:collect([cerl:c_var(A) || A <- Args]),
+    CompiledArgs = {ok, [cerl:c_var(A) || A <- Args]},
     error:map2(CompiledArgs,
                CompiledClauses,
                fun(CArgs, CClauses) -> cerl:c_case(cerl:c_values(CArgs), CClauses) end);
@@ -236,7 +236,22 @@ abstract_pattern(Env, TypeDefs, {type, Tag}) ->
     case maps:get(Tag, Env) of
         {_, {type, Tag}} -> {ok, cerl:c_atom(Tag)};
         {_, Domain} -> error:map(Domain, fun(D) -> abstract_pattern(Env, TypeDefs, D) end)
-    end.
+    end;
+
+abstract_pattern(Env, TypeDefs, M) when is_map(M) ->
+    F = fun(Key, Val) -> error:map2(abstract_pattern(Env, TypeDefs, Key),
+                                    abstract_pattern(Env, TypeDefs, Val),
+                                    fun(K, V) -> cerl:c_map_pair_exact(K, V) end) end,
+    Elems = error:collect([F(Key, Val) || {Key, Val} <- maps:to_list(M)]),
+    error:map(Elems, fun(Es) -> cerl:c_map_pattern(Es) end);
+
+abstract_pattern(_, _, A) when is_atom(A) -> {ok, cerl:c_atom(A)};
+
+abstract_pattern(Env, TypeDefs, T) when is_tuple(T) -> 
+    Elems = error:collect([abstract_pattern(Env, TypeDefs, element(I, T)) || 
+                           I <- lists:seq(1, size(T))]),
+    error:map(Elems, fun(Es) -> cerl:c_tuple(Es) end).
+
 
 
 order(Args, Vars) ->
@@ -250,3 +265,16 @@ unsafe_call_form(NameForm, ArgForms) ->
       cerl:c_call(cerl:c_atom(erlang), cerl:c_atom(element), 
                   [cerl:c_int(3), cerl:c_apply(cerl:c_fname(domain, 1), [NameForm])]),
       ArgForms).
+
+catchall(N, Args) -> 
+    FormatString = cerl:c_string("Catchall Input: ~p~n"),
+    InputForms = cerl:make_list([cerl:make_list([cerl:c_var(A) || A <- Args])]),
+    Print = cerl:c_call(cerl:c_atom(io), cerl:c_atom(format), [FormatString, InputForms]),
+    cerl:c_clause([cerl:c_atom('_') || _ <- lists:seq(1, N)], Print). 
+
+debug(Name, Arg, Rest) ->
+    FormatString = cerl:c_string("~p: ~p~n"),
+    InputForms = cerl:make_list([cerl:c_atom(Name), cerl:c_var(Arg)]),
+    Print = cerl:c_call(cerl:c_atom(io), cerl:c_atom(format), [FormatString, InputForms]),
+    cerl:c_let([cerl:c_var('_throwaway')], Print, Rest).
+

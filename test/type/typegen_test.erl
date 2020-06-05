@@ -236,16 +236,61 @@ pattern_variable2_test() ->
                  end,
     run(Code, RunAsserts).
 
-%pattern_dict_test() ->
-%    Code = "type Args -> A | B | C\n"
-%           "type Test a\n"
-%           " | {a, b} -> a | b",
-%    RunAsserts = fun(Mod) ->
-%                         {f, 'F', DomainFun} = Mod:domain('F'),
-%                         Actual = DomainFun({product, #{a => 'Args/A', b => 'Args/B', c => 'Args/C'}}),
-%                         Expected = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
-%                         ?assertMatch(none, domain:diff(Expected, Actual))
-%                 end,
-%    run(Code, RunAsserts).
+pattern_dict_test() ->
+    Code = "type Args -> A | B | C\n"
+           "type Test t\n"
+           " | {a, b} -> a | b",
+    RunAsserts = fun(Mod) ->
+                         {f, 'Test', DomainFun} = Mod:domain('Test'),
+                         Input = {product, #{a => 'Args/A', b => 'Args/B'}},
+                         Actual = DomainFun(Input),
+                         Expected = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
+                         ?assertEqual(none, domain:diff(Expected, Actual))
+                 end,
+    run(Code, RunAsserts).
 
+pattern_dict_unused_key_test() ->
+    Code = "type Args -> A | B | C\n"
+           "type Test t\n"
+           " | {a, b} -> a | b",
+    RunAsserts = fun(Mod) ->
+                         {f, 'Test', DomainFun} = Mod:domain('Test'),
+                         Input = {product, #{a => 'Args/A', b => 'Args/B', c => 'Args/C'}},
+                         Actual = DomainFun(Input),
+                         Expected = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
+                         ?assertEqual(none, domain:diff(Expected, Actual))
+                 end,
+    run(Code, RunAsserts).
 
+pattern_dict_pair_test() ->
+    Code = "type Args -> A | B | C\n"
+           "type Test t\n"
+           " | {a: s, b} -> s | b",
+    RunAsserts = fun(Mod) ->
+                         {f, 'Test', DomainFun} = Mod:domain('Test'),
+                         Input = {product, #{a => 'Args/A', b => 'Args/B', c => 'Args/C'}},
+                         Actual = DomainFun(Input),
+                         Expected = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
+                         ?assertEqual(none, domain:diff(Expected, Actual))
+                 end,
+    run(Code, RunAsserts).
+
+pattern_dict_dict_test() ->
+    Code = "type Args -> A | B | C\n"
+           "type Test t\n"
+           " | {a, b: Args/C} -> a\n"
+           " | {a: {a}, b} -> a | b",
+    RunAsserts = fun(Mod) ->
+                         {f, 'Test', DomainFun} = Mod:domain('Test'),
+                         Input1 = {product, #{a => {product, #{a => 'Args/A'}}, 
+                                              b => 'Args/B', 
+                                              c => 'Args/C'}},
+                         Actual1 = DomainFun(Input1),
+                         Expected1 = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
+                         ?assertEqual(none, domain:diff(Expected1, Actual1)),
+
+                         Input2 = {product, #{a => 'Args/A', 
+                                              b => 'Args/C'}},
+                         ?assertEqual('Args/A', DomainFun(Input2))
+                 end,
+    run(Code, RunAsserts).
