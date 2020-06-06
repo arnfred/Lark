@@ -68,7 +68,6 @@ tag(Env, {application, Line, Name, Args}, Path, IsPattern) ->
 
 tag(Env, {lookup, Line, Var, Elems}, Path, IsPattern) ->
     {VarEnv, TaggedVar} = tag(Env, Var, Path, IsPattern),
-    io:format("Env: ~p~nVarEnv: ~p~n", [Env, VarEnv]),
     {NewEnv, TaggedElems} = map(VarEnv, Elems, Path, IsPattern),
     {NewEnv, {lookup, Line, TaggedVar, TaggedElems}};
 

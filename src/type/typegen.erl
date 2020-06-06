@@ -26,8 +26,10 @@ gen(Module, AST) when is_list(AST) ->
 compile(Tag, Env, TypeDefs) -> 
     {Vars, Domain} = maps:get(Tag, Env),
     case Vars of
-        [] -> error:map(abstract_form(Env, TypeDefs, Domain), fun(Form) -> {Tag, Form} end);
-        _N -> error:map(abstract_form(Env, TypeDefs, {f, Tag, Vars, Domain}), fun(Form) -> {Tag, Form} end)
+        [] -> error:map(abstract_form(Env, TypeDefs, Domain),
+                        fun(Form) -> {Tag, Form} end);
+        _N -> error:map(abstract_form(Env, TypeDefs, {f, Tag, Vars, Domain}),
+                        fun(Form) -> {Tag, Form} end)
     end.
 
 gen_top_level_def(Name, []) ->
@@ -45,7 +47,7 @@ gen_domain_def([]) -> {cerl:c_fname(domain, 1),
 gen_domain_def(DomainList) ->
     Domains = ordsets:to_list(ordsets:from_list(DomainList)),
     Clauses = [cerl:c_clause([cerl:c_atom(Tag)], Form) || {Tag, Form} <- Domains],
-    Arg = cerl:c_var(type),
+    Arg = cerl:c_var('_type'),
     Body = cerl:c_case(Arg, Clauses),
     Compacted = cerl:c_call(cerl:c_atom(domain), cerl:c_atom(compact), [Body]),
     Name = cerl:c_fname(domain, 1),
@@ -119,7 +121,6 @@ domain(Path, _, {type, _, _} = Type) ->
     end.
 
 pattern_domain({dict, _, Elems}) ->
-    io:format("Elems: ~p~n", [Elems]),
     Domain = fun({pair, _, {variable, _, Name, _}, Val}) ->
                   {ValVars, ValDomain} = pattern_domain(Val),
                   {ValVars, {Name, ValDomain}};
@@ -128,12 +129,17 @@ pattern_domain({dict, _, Elems}) ->
     {Vars, Pairs} = unzip([Domain(E) || E <- Elems]),
     {Vars, {product, maps:from_list(Pairs)}};
 
+pattern_domain({lookup, L, {type, _, _} = T, Elems}) ->
+    {Vars, Domain} = pattern_domain({dict, L, Elems}),
+    {Vars, {tagged, symbol:tag(T), Domain}};
+
 pattern_domain({variable, _, _, Tag}) -> {[Tag], {variable, Tag}};
 
 pattern_domain({type, _, _} = Type) -> {[], {type, tag(Type)}}.
 
 abstract_form(Env, TypeDefs, {f, Tag, Vars, Domain}) ->
     FDomain = abstract_form(Env, TypeDefs, Domain),
+    io:format("Domain: ~p~nFDomain: ~p~n", [Domain, FDomain]),
     ArgsForm = [cerl:c_var(V) || V <- Vars],
     error:map(
       FDomain,
@@ -149,21 +155,19 @@ abstract_form(Env, TypeDefs, {sum, Set}) ->
     end;
 
 abstract_form(Env, TypeDefs, {product, Map}) ->
-    io:format("Map: ~p~n", [Map]),
     RawForms = [abstract_form(Env, TypeDefs, D) || D <- maps:values(Map)],
-    io:format("Raw Forms: ~p~n", [RawForms]),
     case error:collect(RawForms) of
         {error, Errs} -> {error, Errs};
         {ok, Forms} ->
-            io:format("Abstract Form Sum Forms: ~p~n", [Forms]),
             Entries = [cerl:c_map_pair(cerl:c_atom(K), Form) || {Form, K} <- zip(Forms, maps:keys(Map))],
             DomainMap = cerl:c_map(Entries),
             {ok, cerl:c_tuple([cerl:c_atom(product), DomainMap])}
     end;
 
 abstract_form(Env, TypeDefs, {tagged, Tag, Domain}) ->
-    error:map(abstract_form(Env, TypeDefs, Domain), fun(DomainForm) ->
-        cerl:c_tuple([cerl:c_atom(tagged), cerl:c_atom(Tag), DomainForm]) end);
+    error:map(abstract_form(Env, TypeDefs, Domain), 
+              fun(DomainForm) ->
+                      cerl:c_tuple([cerl:c_atom(tagged), cerl:c_atom(Tag), DomainForm]) end);
 
 abstract_form(_, _, {variable, Tag}) -> {ok, cerl:c_var(Tag)};
 
@@ -216,19 +220,19 @@ abstract_form(Env, TypeDefs, {application, Expr, Args} = Current) ->
 
 abstract_form(Env, TypeDefs, {clauses, Args, ClauseDomains}) ->
     CompiledClauses = error:collect([abstract_form(Env, TypeDefs, Clause) || Clause <- ClauseDomains]),
-    CompiledArgs = {ok, [cerl:c_var(A) || A <- Args]},
-    error:map2(CompiledArgs,
-               CompiledClauses,
-               fun(CArgs, CClauses) -> cerl:c_case(cerl:c_values(CArgs), CClauses) end);
+    CompiledArgs = [cerl:c_var(A) || A <- Args],
+    CatchAllError = catchall(Args),
+    error:map(CompiledClauses,
+              fun(CClauses) -> 
+                      cerl:c_case(cerl:c_values(CompiledArgs), CClauses ++ [CatchAllError])
+               end);
 
 abstract_form(Env, TypeDefs, {clause, PatternDomains, ExprDomain}) ->
     CompiledPatterns = error:collect([abstract_pattern(Env, TypeDefs, P) || P <- PatternDomains]),
     CompiledExpr = abstract_form(Env, TypeDefs, ExprDomain),
     error:map2(CompiledPatterns,
                CompiledExpr,
-               fun(CPs, CExpr) -> cerl:c_clause(CPs, CExpr) end);
-
-abstract_form(_, _, Key) -> {ok, cerl:c_atom(Key)}.
+               fun(CPs, CExpr) -> cerl:c_clause(CPs, CExpr) end).
 
 abstract_pattern(_, _, {variable, Tag}) -> {ok, cerl:c_var(Tag)};
 
@@ -266,15 +270,12 @@ unsafe_call_form(NameForm, ArgForms) ->
                   [cerl:c_int(3), cerl:c_apply(cerl:c_fname(domain, 1), [NameForm])]),
       ArgForms).
 
-catchall(N, Args) -> 
-    FormatString = cerl:c_string("Catchall Input: ~p~n"),
-    InputForms = cerl:make_list([cerl:make_list([cerl:c_var(A) || A <- Args])]),
-    Print = cerl:c_call(cerl:c_atom(io), cerl:c_atom(format), [FormatString, InputForms]),
-    cerl:c_clause([cerl:c_atom('_') || _ <- lists:seq(1, N)], Print). 
-
-debug(Name, Arg, Rest) ->
-    FormatString = cerl:c_string("~p: ~p~n"),
-    InputForms = cerl:make_list([cerl:c_atom(Name), cerl:c_var(Arg)]),
-    Print = cerl:c_call(cerl:c_atom(io), cerl:c_atom(format), [FormatString, InputForms]),
-    cerl:c_let([cerl:c_var('_throwaway')], Print, Rest).
-
+catchall(Args) ->
+    Error = cerl:c_tuple([cerl:c_atom(error),
+                          cerl:make_list(
+                            [cerl:c_tuple(
+                               [cerl:c_tuple(
+                                  [cerl:c_atom(no_matching_pattern),
+                                   cerl:make_list([cerl:c_var(A) || A <- Args])]),
+                                cerl:c_tuple([cerl:c_atom(no_context)])])])]),
+    cerl:c_clause([cerl:c_var(symbol:id('_')) || _ <- lists:seq(1, length(Args))], Error).

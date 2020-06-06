@@ -294,3 +294,25 @@ pattern_dict_dict_test() ->
                          ?assertEqual('Args/A', DomainFun(Input2))
                  end,
     run(Code, RunAsserts).
+
+pattern_tagged_test() ->
+    Code = "type Args -> T: {a: A, b: B}\n"
+           "type Test t\n"
+           " | Args/T {a: s, b} -> s | b",
+    RunAsserts = fun(Mod) ->
+                         {f, 'Test', DomainFun} = Mod:domain('Test'),
+                         Actual = DomainFun(Mod:domain('Args')),
+                         Expected = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
+                         ?assertEqual(none, domain:diff(Expected, Actual))
+                 end,
+    run(Code, RunAsserts).
+
+pattern_error_test() ->
+    Code = "type Test t\n"
+           " | T -> T | S",
+    RunAsserts = fun(Mod) ->
+                         {f, 'Test', DomainFun} = Mod:domain('Test'),
+                         Actual = DomainFun('Test/S'),
+                         ?errorMatch({no_matching_pattern, ['Test/S']}, Actual)
+                 end,
+    run(Code, RunAsserts).

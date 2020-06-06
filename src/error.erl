@@ -5,6 +5,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 format(Type, Context) -> {error, [{Type, Context}]}.
+format(Type) -> {error, [{Type, no_context}]}.
 
 map({ok, E}, F) -> {ok, F(E)};
 map({error, E}, _) -> {error, E};
