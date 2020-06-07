@@ -251,7 +251,7 @@ get_domain_map({product, M} = P, [K | Keys], ErrContext) ->
     end;
 get_domain_map({tagged, _, D}, Keys, ErrContext) -> get_domain_map(D, Keys, ErrContext);
 get_domain_map({recur, F}, Keys, ErrContext) -> get_domain_map(F(), Keys, ErrContext);
-get_domain_map({sum, Ds}, Keys, ErrContext) -> union([get_domain_map(D, Keys, ErrContext) || D <- Ds]);
+get_domain_map({sum, M}, Keys, ErrContext) -> union([get_domain_map(D, Keys, ErrContext) || D <- maps:keys(M)]);
 get_domain_map({error, _} = E, _, _) -> E;
 get_domain_map(_, _, _) -> none.
 

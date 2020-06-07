@@ -40,9 +40,9 @@ intersection({f, Name1, F1}, {f, Name2, F2}) ->
     end;
 
 intersection({sum, D1}, {sum, D2}) -> 
-    {sum, ordsets:from_list([intersection(Dj, Di) || Di <- D1, Dj <- D2])}; 
+    {sum, maps:from_list([{intersection(Dj, Di), true} || Di <- maps:keys(D1), Dj <- maps:keys(D2)])}; 
 intersection({sum, D1}, D) -> 
-    {sum, ordsets:from_list([intersection(D, Di) || Di <- D1])};
+    {sum, maps:from_list([{intersection(D, Di), true} || Di <- maps:keys(D1)])};
 intersection(D, {sum, D1}) -> intersection({sum, D1}, D);
 
 intersection({tagged, Tag, D1}, {tagged, Tag, D2}) -> 
