@@ -25,8 +25,8 @@ compact_product({product, ProductMap}) ->
             {recur, F}
     end.
 
-compact_sum({sum, SumMap}) ->
-    Elements = [compact(E) || E <- maps:keys(SumMap)],
+compact_sum({sum, SumSet}) ->
+    Elements = [compact(E) || E <- ordsets:to_list(SumSet)],
     IsRecur = fun({recur, _}) -> true;
                  (_) -> false end,
     case lists:partition(IsRecur, Elements) of
@@ -50,8 +50,9 @@ compact_sum_groups(Elements) ->
     
     % Based on domain type compact appropriately
     L = lists:map(fun({product, Products}) -> compact_product_list(Products);
-                     ({sum, Sums})         -> Elems = lists:flatten([maps:keys(M) || {sum, M} <- Sums]),
-                                              compact_sum_groups(Elems);
+                     ({sum, Sums})         -> Sets = [Set || {sum, Set} <- Sums],
+                                              SumElements = ordsets:to_list(ordsets:union(Sets)),
+                                              compact_sum_groups(SumElements);
                      ({recur, Rs})         -> F = fun() -> union:union([D() || {_, D} <- Rs]) end,
                                               [{recur, F}];
                      ({none, _})           -> [];
@@ -67,7 +68,7 @@ list_to_sum(Elems) when is_list(Elems) ->
     NoNones = [E || E <- Elems, not(E =:= none)],
     case lists:member(any, NoNones) of 
         true -> any; 
-        _ -> {sum, maps:from_list([{E, true} || E <- Elems])} 
+        _ -> {sum, ordsets:from_list(Elems)} 
     end;
 list_to_sum(Domain) -> Domain.
 
@@ -103,7 +104,7 @@ compact_product_list(Products) ->
 compact_maps([]) -> [];
 compact_maps([M]) -> [M];
 compact_maps(Maps) ->
-    % Select the key with most different values associated with it as the first pivot key
+    % Select the key appearing in most products as the first pivot key
     CountDomains = fun(Key) -> ordsets:size(ordsets:from_list([maps:get(Key, M, undefined) || M <- Maps])) end,
     Compare = fun(K1, K2) -> CountDomains(K1) < CountDomains(K2) end,
     Keys = lists:sort(Compare, lists:flatten([maps:keys(M) || M <- Maps])),

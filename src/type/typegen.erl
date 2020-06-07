@@ -87,7 +87,7 @@ domain(Path, Args, {tuple, _, [Expr]}) -> domain(Path, Args, Expr);
 
 domain(Path, Args, {tuple, _, Expressions}) ->
     {EnvList, Vars, Domains} = unzip3([domain(Path, Args, Expr) || Expr <- Expressions]),
-    Domain = {sum, maps:from_list([{E, true} || E <- Domains])},
+    Domain = {sum, ordsets:from_list(Domains)},
     {lists:flatten(EnvList), order(Args, Vars), Domain};
 
 
@@ -139,17 +139,19 @@ pattern_domain({type, _, _} = Type) -> {[], {type, tag(Type)}}.
 
 abstract_form(Env, TypeDefs, {f, Tag, Vars, Domain}) ->
     FDomain = abstract_form(Env, TypeDefs, Domain),
+    io:format("Domain: ~p~nFDomain: ~p~n", [Domain, FDomain]),
     ArgsForm = [cerl:c_var(V) || V <- Vars],
     error:map(
       FDomain,
       fun(FD) -> cerl:c_tuple([cerl:c_atom(f), cerl:c_atom(Tag), cerl:c_fun(ArgsForm, FD)]) end);
 
-abstract_form(Env, TypeDefs, {sum, Map}) -> 
-    case error:collect([abstract_form(Env, TypeDefs, Elem) || Elem <- maps:keys(Map)]) of
+abstract_form(Env, TypeDefs, {sum, Set}) -> 
+    case error:collect([abstract_form(Env, TypeDefs, Elem) || Elem <- ordsets:to_list(Set)]) of
         {error, Errs} -> {error, Errs};
         {ok, ElemForms} ->
-            DomainMap = cerl:c_map([cerl:c_map_pair(Elem, cerl:c_atom(true)) || Elem <- ElemForms]),
-            {ok, cerl:c_tuple([cerl:c_atom(sum), DomainMap])}
+            Elements = cerl:make_list(ElemForms),
+            DomainSet = cerl:c_call(cerl:c_atom(ordsets), cerl:c_atom(from_list), [Elements]),
+            {ok, cerl:c_tuple([cerl:c_atom(sum), DomainSet])}
     end;
 
 abstract_form(Env, TypeDefs, {product, Map}) ->

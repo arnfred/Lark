@@ -34,14 +34,14 @@ run_xor_test() ->
                          {f, 'xor', DomainFun} = maps:get({'xor', 2}, Env),
 
                          Actual1 = DomainFun(any, any),
-                         Expected1 = {sum, #{'Boolean/True' => true, 'Boolean/False' => true}},
+                         Expected1 = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
                          ?assertEqual(none, domain:diff(Expected1, Actual1)),
 
                          Actual2 = DomainFun('Boolean/True', 'Boolean/False'),
                          Expected2 = 'Boolean/True',
                          ?assertEqual(none, domain:diff(Expected2, Actual2)),
 
-                         Boolean = {sum, #{'Boolean/True' => true, 'Boolean/False' => true}},
+                         Boolean = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
                          Actual3 = DomainFun(Boolean, Boolean),
                          Expected3 = Boolean,
                          ?assertEqual(none, domain:diff(Expected3, Actual3)),
@@ -171,7 +171,7 @@ pair_values_refinement_test() ->
                          ?assertEqual(none, domain:diff(Expected1, Actual1)),
 
                          Actual2 = DomainFun('any'),
-                         Constraint = {sum, #{'Boolean/True' => true, 'Boolean/False' => true}},
+                         Constraint = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
                          ?errorMatch({pair_not_subset, any, Constraint}, Actual2)
                  end,
     run(Code, RunAsserts).
@@ -184,13 +184,13 @@ pair_expressions_refinement_test() ->
     RunAsserts = fun(Env) ->
                          {f, f, DomainFun} = maps:get({f, 1}, Env),
                          Actual1 = DomainFun('Boolean'),
-                         Expected1 = {sum, #{'Boolean/True' => true, 'Boolean/False' => true}},
+                         Expected1 = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
                          ?assertEqual(none, domain:diff(Expected1, Actual1)),
 
                          Actual2 = DomainFun('any'),
-                         Constraint = {sum, #{'Boolean/True' => true,
-                                              'Boolean/False' => true,
-                                              'Option/None' => true}},
+                         Constraint = {sum, ordsets:from_list(['Boolean/True',
+                                                               'Boolean/False',
+                                                               'Option/None'])},
                          ?errorMatch({pair_not_subset, any, Constraint}, Actual2)
                  end,
     run(Code, RunAsserts).
@@ -207,12 +207,12 @@ lambda_clause_test() ->
                          ?assertEqual('Args/C', Actual1),
 
                          Actual2 = DomainFun('Args'),
-                         LambdaDomain = {sum, #{'Args/A' => true, 'Args/B' => true}},
-                         InputDomain = {sum, #{'Args/A' => true,'Args/B' => true,'Args/C' => true}}, 
+                         LambdaDomain = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
+                         InputDomain = {sum, ordsets:from_list(['Args/A','Args/B','Args/C'])}, 
                          ?errorMatch({arguments_not_subsets, [InputDomain], [LambdaDomain]}, Actual2),
 
                          Actual3 = DomainFun('Args/C'),
-                         LambdaDomain = {sum, #{'Args/A' => true, 'Args/B' => true}},
+                         LambdaDomain = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
                          ?errorMatch({no_intersection, 'Args/C', 'Args/B'}, 
                                      {no_intersection, 'Args/C', 'Args/A'},
                                      Actual3)
@@ -230,8 +230,8 @@ assignment_variable_test() ->
                          Actual1 = DomainFun('Args/A'),
                          ?assertEqual('Args/B', Actual1),
 
-                         Actual2 = DomainFun({sum, #{'Args/A' => true, 'Args/B' => true}}),
-                         Expected2 = {sum, #{'Args/B' => true, 'Args/C' => true}},
+                         Actual2 = DomainFun({sum, ordsets:from_list(['Args/A', 'Args/B'])}),
+                         Expected2 = {sum, ordsets:from_list(['Args/B', 'Args/C'])},
                          ?assertEqual(none, domain:diff(Expected2, Actual2))
                  end,
     run(Code, RunAsserts).
@@ -291,7 +291,7 @@ assignment_intersection_no_subset_test() ->
                          ?assertEqual('Args/A', Actual1),
 
                          Actual2 = DomainFun('Args'),
-                         Expected2 = {sum, #{'Args/A' => true, 'Args/B' => true}},
+                         Expected2 = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
                          ?assertEqual(none, domain:diff(Expected2, Actual2))
                  end,
     run(Code, RunAsserts).
@@ -312,7 +312,7 @@ assignment_narrowing_of_expression_domain_by_pattern_test() ->
     RunAsserts = fun(Env) ->
                          {f, test, DomainFun} = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Args'),
-                         Expected1 = {sum, #{'Args/A' => true, 'Args/B' => true, 'Args/C' => true}},
+                         Expected1 = {sum, ordsets:from_list(['Args/A', 'Args/B', 'Args/C'])},
                          ?assertEqual(none, domain:diff(Expected1, Actual1))
                  end,
     run(Code, RunAsserts).

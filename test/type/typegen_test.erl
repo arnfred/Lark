@@ -18,7 +18,7 @@ run(Code, RunAsserts) ->
 sum_type_boolean_test() ->
     Code = "type Boolean -> True | False",
     RunAsserts = fun(Mod) ->
-                         Expected = {sum, #{'Boolean/True' => true, 'Boolean/False' => true}},
+                         Expected = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
                          Actual = Mod:domain('Boolean'),
                          ?assertEqual(none, domain:diff(Expected, Actual)),
                          Actual2 = Mod:'Boolean'(),
@@ -91,10 +91,10 @@ sum_var_test() ->
     Code = "type Boolean -> True | False\n"
            "type Option a -> a | None",
     RunAsserts = fun(Mod) ->
-                         Expected = {sum, maps:from_list([{E, true} || E <- ['Boolean/True',
-                                                                             'Boolean/False',
-                                                                             'Option/None']])},
-                         Actual = Mod:'Option'({sum, #{'Boolean/True' => true, 'Boolean/False' => true}}),
+                         Expected = {sum, ordsets:from_list(['Boolean/True',
+                                                          'Boolean/False',
+                                                          'Option/None'])},
+                         Actual = Mod:'Option'({sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])}),
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
     run(Code, RunAsserts).
@@ -104,7 +104,7 @@ product_sum_test() ->
            "type Elems -> {elem: Args}",
     RunAsserts = fun(Mod) ->
                          Actual = Mod:domain('Elems'),
-                         Expected = {product, #{elem => {sum, #{'Args/A' => true, 'Args/B' => true, 'Args/C' => true}}}},
+                         Expected = {product, #{elem => {sum, ['Args/A', 'Args/B', 'Args/C']}}},
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
     run(Code, RunAsserts).
@@ -126,10 +126,10 @@ var_order_test() ->
            "type Args -> A | B | C",
     RunAsserts = fun(Mod) ->
                          Expected = {tagged, 'Order/T', 
-                                     {sum, maps:from_list([{E, true} ||
-                                                           E <- [{tagged, 'Order/C', 'Args/C'},
-                                                                 {tagged, 'Order/A', 'Args/A'},
-                                                                 {tagged, 'Order/B', 'Args/B'}]])}},
+                                     {sum, ordsets:from_list([
+                                                           {tagged, 'Order/C', 'Args/C'},
+                                                           {tagged, 'Order/A', 'Args/A'},
+                                                           {tagged, 'Order/B', 'Args/B'}])}},
                          {f, 'Order/T', DomainFun} = Mod:domain('Order/T'),
                          Actual = DomainFun('Args/A', 'Args/B', 'Args/C'),
                          ?assertEqual(none, domain:diff(Expected, Actual))
@@ -140,7 +140,7 @@ application_top_level_f_test() ->
     Code = "type Option a -> a | None\n"
            "type BlahOption -> Option(Blah)",
     RunAsserts = fun(Mod) ->
-                         Expected = {sum, #{'BlahOption/Blah' => true, 'Option/None' => true}},
+                         Expected = {sum, ordsets:from_list(['BlahOption/Blah', 'Option/None'])},
                          Actual = Mod:domain('BlahOption'),
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
@@ -166,7 +166,7 @@ application_first_order_type_test() ->
            "type Option a -> None | a\n"
            "type AnyOption f a -> f(a)",
     RunAsserts = fun(Mod) ->
-                         Expected = {sum, #{'Option/None' => true, 'Args/Arg1' => true}},
+                         Expected = {sum, ordsets:from_list(['Option/None', 'Args/Arg1'])},
                          {f, 'AnyOption', DomainFun} = Mod:domain('AnyOption'),
                          Actual = DomainFun('Option', 'Args/Arg1'),
                          ?assertEqual(none, domain:diff(Expected, Actual))
@@ -178,11 +178,12 @@ recursion_top_level_f_test() ->
     RunAsserts = fun(Mod) ->
                          {f, 'List', DomainFun} = Mod:domain('List'),
                          Actual = DomainFun('List/Nil'),
-                         Expected = fun F() -> {sum, #{'List/Nil' => true,
-                                                       {tagged, 'List/Cons',
-                                                        {product, #{head => 'List/Nil',
-                                                                    tail => {recur, F}}}} => true}} end,
-                         ?assertEqual(none, domain:diff(Expected(), Actual))
+                         ?assertMatch({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, Actual),
+                         {_, [_, {_, _, {recur, RecurFun}}]} = Actual,
+                         ?assertMatch({product, _}, RecurFun()),
+                         {product, ProductMap} = RecurFun(),
+                         ?assertEqual('List/Nil', maps:get(head, ProductMap)),
+                         ?assertMatch({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, maps:get(tail, ProductMap))
                  end,
     run(Code, RunAsserts).
 
@@ -191,11 +192,12 @@ recursion_top_level_non_function_test() ->
            "type List -> Nil | Cons: {elem: Args, tail: List}",
     RunAsserts = fun(Mod) ->
                          Actual = Mod:domain('List'),
-                         Expected = fun F() -> {sum, #{'List/Nil' => true,
-                                                       {tagged, 'List/Cons',
-                                                        {product, #{elem => Mod:domain('Args'),
-                                                                    tail => {recur, F}}}} => true}} end,
-                         ?assertEqual(none, domain:diff(Expected(), Actual))
+                         ?assertMatch({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, Actual),
+                         {_, [_, {_, _, {recur, RecurFun}}]} = Actual,
+                         ?assertMatch({product, _}, RecurFun()),
+                         {product, ProductMap} = RecurFun(),
+                         ?assertMatch({sum, ['Args/A', 'Args/B', 'Args/C']}, maps:get(elem, ProductMap)),
+                         ?assertMatch({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, maps:get(tail, ProductMap))
                  end,
     run(Code, RunAsserts).
 
@@ -242,7 +244,7 @@ pattern_dict_test() ->
                          {f, 'Test', DomainFun} = Mod:domain('Test'),
                          Input = {product, #{a => 'Args/A', b => 'Args/B'}},
                          Actual = DomainFun(Input),
-                         Expected = {sum, #{'Args/A' => true, 'Args/B' => true}},
+                         Expected = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
     run(Code, RunAsserts).
@@ -255,7 +257,7 @@ pattern_dict_unused_key_test() ->
                          {f, 'Test', DomainFun} = Mod:domain('Test'),
                          Input = {product, #{a => 'Args/A', b => 'Args/B', c => 'Args/C'}},
                          Actual = DomainFun(Input),
-                         Expected = {sum, #{'Args/A' => true, 'Args/B' => true}},
+                         Expected = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
     run(Code, RunAsserts).
@@ -268,7 +270,7 @@ pattern_dict_pair_test() ->
                          {f, 'Test', DomainFun} = Mod:domain('Test'),
                          Input = {product, #{a => 'Args/A', b => 'Args/B', c => 'Args/C'}},
                          Actual = DomainFun(Input),
-                         Expected = {sum, #{'Args/A' => true, 'Args/B' => true}},
+                         Expected = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
     run(Code, RunAsserts).
@@ -284,7 +286,7 @@ pattern_dict_dict_test() ->
                                               b => 'Args/B', 
                                               c => 'Args/C'}},
                          Actual1 = DomainFun(Input1),
-                         Expected1 = {sum, #{'Args/A' => true, 'Args/B' => true}},
+                         Expected1 = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
                          ?assertEqual(none, domain:diff(Expected1, Actual1)),
 
                          Input2 = {product, #{a => 'Args/A', 
@@ -300,7 +302,7 @@ pattern_tagged_test() ->
     RunAsserts = fun(Mod) ->
                          {f, 'Test', DomainFun} = Mod:domain('Test'),
                          Actual = DomainFun(Mod:domain('Args')),
-                         Expected = {sum, #{'Args/A' => true, 'Args/B' => true}},
+                         Expected = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
     run(Code, RunAsserts).

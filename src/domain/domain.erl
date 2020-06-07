@@ -29,25 +29,27 @@ unroll_(0, _) -> {error, [{{possibly_infinite_recursion}, {domain}}]};
 unroll_(N, {recur, D}) -> unroll_(N-1, D());
 unroll_(_, D) -> D.
 
-expand(N, D) -> expand_(N, unroll(D)).
-expand_(0, D) -> D;
-expand_(N, {sum, M}) -> maps:map(fun(K, true) -> expand_(N-1, K) end, M);
+expand(N, D) -> expand_(N, unroll(D));
+expand(0, D) -> D.
 expand_(N, {Type, D}) -> {Type, expand_(N-1, D)};
 expand_(N, {tagged, Tag, D}) -> {tagged, Tag, expand_(N-1, D)};
 expand_(N, Ds) when is_list(Ds) -> lists:map(fun(D) -> expand_(N-1, D) end, Ds);
-expand_(N, M) when is_map(M) -> maps:map(fun(_, D) -> expand_(N-1, D) end, M);
-expand_(_, S) -> S.
+expand_(N, M) when is_map(M) -> maps:map(fun(K, D) -> expand_(N-1, D) end, M);
+expand_(N, S) -> case ordsets:is_set(S) of
+                     true -> ordsets:map(fun(D) -> expand_(N-1, D) end, S);
+                     false -> S
+                 end.
 
 -ifdef(TEST).
 
 subset_sum_sum_test_() ->
-    D1 = {sum, maps:from_list([{E, true} || E <- [a, b, c]])},
-    D2 = {sum, maps:from_list([{E, true} || E <- [a, b, c, d]])},
+    D1 = {sum, ordsets:from_list([a, b, c])},
+    D2 = {sum, ordsets:from_list([a, b, c, d])},
     ?_assertEqual(true, subset(D1, D2)).
 
 subset_non_sum_sum_test_() ->
-    D1 = {sum, maps:from_list([{E, true} || E <- [a, b, c]])},
-    D2 = {sum, maps:from_list([{E, true} || E <- [b, c, d]])},
+    D1 = {sum, ordsets:from_list([a, b, c])},
+    D2 = {sum, ordsets:from_list([b, c, d])},
     ?_assertEqual(false, subset(D1, D2)).
     
 subset_product_product_test_() ->
@@ -62,18 +64,18 @@ subset_non_product_product_test_() ->
 
 subset_tagged_tagged_test_() ->
     D1 = {tagged, t, t},
-    D2 = {tagged, t, {sum, maps:from_list([{E, true} || E <- [s, t]])}},
+    D2 = {tagged, t, {sum, ordsets:from_list([s, t])}},
     ?_assertEqual(true, subset(D1, D2)).
 
 subset_non_tagged_tagged_test_() ->
     D1 = {tagged, t, t},
-    D2 = {tagged, s, {sum, maps:from_list([{E, true} || E <- [s, t]])}},
+    D2 = {tagged, s, {sum, ordsets:from_list([s, t])}},
     ?_assertEqual(false, subset(D1, D2)).
 
 subset_sum_product_test_() ->
     D1 = {product, #{a => 2, b => 3, c => 4}},
-    D2 = {sum, maps:from_list([{E, true} || E <- [{product, #{a => 1, b => 2}},
-                                                  {product, #{a => 2, b => 3}}]])},
+    D2 = {sum, ordsets:from_list([{product, #{a => 1, b => 2}},
+                               {product, #{a => 2, b => 3}}])},
     ?_assertEqual(true, subset(D1, D2)).
 
 lookup_product_test_() ->
@@ -91,7 +93,7 @@ lookup_recur_test_() ->
     ?_assertEqual(none, diff(Expected, Actual)).
 
 lookup_domain_intersection_test_() ->
-    D = {product, #{a => {sum, maps:from_list([{E, true} || E <- ['A', 'B']])}}},
+    D = {product, #{a => {sum, ordsets:from_list(['A', 'B'])}}},
     Elems = #{a => 'A'},
     Expected = {product, #{a => 'A'}},
     Actual = lookup(D, Elems),
