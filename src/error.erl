@@ -1,6 +1,6 @@
 -module(error).
 
--export([collect/1, map/2, map2/3, leftbias/2, format/2]).
+-export([collect/1, map/2, map2/3, flatmap/2, flatmap2/3, leftbias/2, format/2, format/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -9,20 +9,30 @@ format(Type) -> {error, [{Type, no_context}]}.
 
 map({ok, E}, F) -> {ok, F(E)};
 map({error, E}, _) -> {error, E};
-map(D, F) -> F(D).
+map(D, F) -> map({ok, D}, F).
+
+flatmap({ok, Elem}, F) -> error:collect(F(Elem));
+flatmap({error, Elem}, _) -> {error, Elem};
+flatmap(D, F) -> flatmap({ok, D}, F).
 
 map2({ok, E1}, {ok, E2}, F) -> {ok, F(E1, E2)};
 map2({error, E1}, {error, E2}, _) -> {error, E1 ++ E2};
 map2({error, E1}, _, _) -> {error, E1};
 map2(_, {error, E2}, _) -> {error, E2};
-map2(D1, D2, F) -> F(D1, D2).
+map2(D1, D2, F) -> map2({ok, D1}, {ok, D2}, F).
+
+flatmap2({ok, E1}, {ok, E2}, F) -> error:collect(F(E1, E2));
+flatmap2({error, E1}, {error, E2}, _) -> {error, E1 ++ E2};
+flatmap2({error, E1}, _, _) -> {error, E1};
+flatmap2(_, {error, E2}, _) -> {error, E2};
+flatmap2(D1, D2, F) -> flatmap2({ok, D1}, {ok, D2}, F).
 
 leftbias({error, _} = E, _) -> E;
 leftbias(_, E) -> E.
 
 collect(List) when is_list(List) -> collect_ok(List, []).
 
-collect_ok([], Ret) -> {ok, unique(lists:reverse(Ret))};
+collect_ok([], Ret) -> {ok, lists:reverse(Ret)};
 collect_ok([{ok, Head} | Tail], Ret) -> collect_ok(Tail, [Head | Ret]);
 collect_ok([{error, Err} | Tail], _) -> collect_error(Tail, [Err]);
 collect_ok([Head | Tail], Ret) -> collect_ok(Tail, [Head | Ret]).
@@ -70,7 +80,7 @@ map_error_elem_test() ->
 
 map_domain_test() ->
     F = fun(N) -> N+10 end,
-    ?assertEqual(11, map(1, F)).
+    ?assertEqual({ok, 11}, map(1, F)).
 
 map2_ok_test() ->
     F = fun(N, M) -> N + M end,
@@ -86,6 +96,6 @@ map2_error_both_test() ->
 
 map2_domain_test() ->
     F = fun(N, M) -> N+M end,
-    ?assertEqual(11, map2(1, 10, F)).
+    ?assertEqual({ok, 11}, map2(1, 10, F)).
 
 -endif.

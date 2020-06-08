@@ -3,6 +3,7 @@
 -import(symbol, [tag/1]).
 -export([gen/2]).
 
+-include_lib("eunit/include/eunit.hrl").
 
 gen(Module, AST) when is_list(AST) ->
     TypeDefs = maps:from_list([{Name, Args} || {type_def, _, Name, Args, _} <- AST]),
@@ -79,9 +80,10 @@ domain(Path, Args, {clauses, Clauses}) ->
     {Env, Args, Domain};
 
 domain(Path, Args, {clause, _, Patterns, Expr}) ->
-    {_, PatternDomains} = unzip([pattern_domain(Pattern) || Pattern <- Patterns]),
+    PatternDomains = [pattern_domain(Pattern) || Pattern <- Patterns],
     {Env, _, ExprDomain} = domain(Path, Args, Expr),
-    {Env, [], {clause, PatternDomains, ExprDomain}};
+    ErrContexts = [{typegen, P, Path} || P <- Patterns],
+    {Env, [], {clause, PatternDomains, ExprDomain, ErrContexts}};
 
 domain(Path, Args, {tuple, _, [Expr]}) -> domain(Path, Args, Expr);
 
@@ -121,25 +123,27 @@ domain(Path, _, {type, _, _} = Type) ->
     end.
 
 pattern_domain({dict, _, Elems}) ->
-    Domain = fun({pair, _, {variable, _, Name, _}, Val}) ->
-                  {ValVars, ValDomain} = pattern_domain(Val),
-                  {ValVars, {Name, ValDomain}};
-                 ({variable, _, Name, Tag}) -> {[Tag], {Name, {variable, Tag}}}
+    Domain = fun({pair, _, {variable, _, Name, _}, Val}) -> {Name, pattern_domain(Val)};
+                 ({variable, _, Name, Tag}) -> {Name, {variable, Tag}}
               end,
-    {Vars, Pairs} = unzip([Domain(E) || E <- Elems]),
-    {Vars, {product, maps:from_list(Pairs)}};
+    Pairs = [Domain(E) || E <- Elems],
+    {product, maps:from_list(Pairs)};
 
 pattern_domain({lookup, L, {type, _, _} = T, Elems}) ->
-    {Vars, Domain} = pattern_domain({dict, L, Elems}),
-    {Vars, {tagged, symbol:tag(T), Domain}};
+    Domain = pattern_domain({dict, L, Elems}),
+    {tagged, symbol:tag(T), Domain};
 
-pattern_domain({variable, _, _, Tag}) -> {[Tag], {variable, Tag}};
+pattern_domain({application, _, Expr, Args}) ->
+    ExprDomain = pattern_domain(Expr),
+    ArgDomains = [pattern_domain(A) || A <- Args],
+    {application, ExprDomain, ArgDomains};
 
-pattern_domain({type, _, _} = Type) -> {[], {type, tag(Type)}}.
+pattern_domain({variable, _, _, Tag}) -> {variable, Tag};
+
+pattern_domain({type, _, _} = Type) -> {type, tag(Type)}.
 
 abstract_form(Env, TypeDefs, {f, Tag, Vars, Domain}) ->
     FDomain = abstract_form(Env, TypeDefs, Domain),
-    io:format("Domain: ~p~nFDomain: ~p~n", [Domain, FDomain]),
     ArgsForm = [cerl:c_var(V) || V <- Vars],
     error:map(
       FDomain,
@@ -174,7 +178,7 @@ abstract_form(_, _, {variable, Tag}) -> {ok, cerl:c_var(Tag)};
 abstract_form(Env, TypeDefs, {type, Tag}) -> 
     case maps:get(Tag, Env) of
         {_, {type, Tag}} -> {ok, cerl:c_atom(Tag)};
-        {_, Domain} -> error:map(Domain, fun(D) -> abstract_form(Env, TypeDefs, D) end)
+        {_, Domain} -> abstract_form(Env, TypeDefs, Domain)
     end;
 
 abstract_form(_, _, {recur, Tag}) ->
@@ -192,71 +196,96 @@ abstract_form(Env, TypeDefs, {application, Expr, Args} = Current) ->
 
         % type function e.g.: type IntOption -> Option(Int) 
         {{type, Tag}, {ok, ArgForms}} ->
-            case {maps:get(Tag, Env), maps:is_key(Tag, TypeDefs)} of
+            case maps:get(Tag, Env, undefined) of
 
-                {_, false} -> error:format({nonexistent_type_def, Tag}, {typegen, Current});
+                undefined -> error:format({nonexistent_type, Tag}, {typegen, Current});
 
-                {{Vars, _}, _} when length(Vars) =:= length(Args) -> 
-                    {ok, cerl:c_apply(cerl:c_fname(Tag, length(Args)), ArgForms)};
+                {Vars, _} when length(Vars) =:= length(Args) -> 
+                    {ok, unsafe_call_form(cerl:c_atom(Tag), ArgForms)};
 
-                {{Vars, _}, _} ->                     
+                {Vars, _} ->                     
                     error:format({wrong_number_of_arguments, Tag, Args, Vars}, {typegen, Current})
             end;
 
         % type recursion e.g.: List a -> Nil | Cons: { head: a, tail: List(a) }
         {{recur, Tag}, {ok, ArgForms}} ->
-            case {maps:get(Tag, Env), maps:is_key(Tag, TypeDefs)} of
+            case maps:get(Tag, Env, undefined) of
 
-                {_, false} -> error:format({nonexistent_type_def, Tag}, {typegen, Current});
+                undefined -> error:format({nonexistent_type, Tag}, {typegen, Current});
 
-                {{Vars, _}, _} when length(Vars) =:= length(Args) -> 
+                {Vars, _} when length(Vars) =:= length(Args) -> 
                     BranchFun = cerl:c_fun([], unsafe_call_form(cerl:c_atom(Tag), ArgForms)),
                     {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
 
-                {{Vars, _}, _} ->                     
+                {Vars, _} ->                     
                     error:format({wrong_number_of_arguments, Tag, Args, Vars}, {typegen, Current})
             end
     end;
 
 abstract_form(Env, TypeDefs, {clauses, Args, ClauseDomains}) ->
-    CompiledClauses = error:collect([abstract_form(Env, TypeDefs, Clause) || Clause <- ClauseDomains]),
+    ClauseList = [abstract_form(Env, TypeDefs, Clause) || Clause <- ClauseDomains],
+    CompiledClauses = error:map(error:collect(ClauseList), fun lists:flatten/1),
     CompiledArgs = [cerl:c_var(A) || A <- Args],
     CatchAllError = catchall(Args),
     error:map(CompiledClauses,
-              fun(CClauses) -> 
-                      cerl:c_case(cerl:c_values(CompiledArgs), CClauses ++ [CatchAllError])
-               end);
+              fun(CClauses) -> cerl:c_case(cerl:c_values(CompiledArgs), CClauses ++ [CatchAllError]) end);
 
-abstract_form(Env, TypeDefs, {clause, PatternDomains, ExprDomain}) ->
-    CompiledPatterns = error:collect([abstract_pattern(Env, TypeDefs, P) || P <- PatternDomains]),
-    CompiledExpr = abstract_form(Env, TypeDefs, ExprDomain),
-    error:map2(CompiledPatterns,
-               CompiledExpr,
-               fun(CPs, CExpr) -> cerl:c_clause(CPs, CExpr) end).
+abstract_form(Env, TypeDefs, {clause, PatternDomains, ExprDomain, ErrContexts}) ->
+    Expr = abstract_form(Env, TypeDefs, ExprDomain),
+    PatternSets = error:collect([abstract_pattern(Env, TypeDefs, P, ErrContext) 
+                                 || {P, ErrContext} <- zip(PatternDomains, ErrContexts)]),
+    MakeClauses = fun(PSet, E) -> [cerl:c_clause(Ps, E) || Ps <- combinations(PSet)] end,
+    error:map2(PatternSets, Expr, MakeClauses).
 
-abstract_pattern(_, _, {variable, Tag}) -> {ok, cerl:c_var(Tag)};
+% Pattern of shape: a
+abstract_pattern(_, _, {variable, Tag}, _) -> {ok, [cerl:c_var(Tag)]};
 
-abstract_pattern(Env, TypeDefs, {type, Tag}) ->
-    case maps:get(Tag, Env) of
-        {_, {type, Tag}} -> {ok, cerl:c_atom(Tag)};
-        {_, Domain} -> error:map(Domain, fun(D) -> abstract_pattern(Env, TypeDefs, D) end)
+% Pattern of shape: T
+abstract_pattern(Env, TypeDefs, {type, Tag}, ErrContext) ->
+    case maps:get(Tag, Env, undefined) of
+        undefined -> [error:format({undefined_type, Tag}, ErrContext)];
+        {_, {type, TTag}} -> {ok, [cerl:c_atom(TTag)]};
+        {_, Domain} -> abstract_pattern(Env, TypeDefs, Domain, ErrContext)
     end;
 
-abstract_pattern(Env, TypeDefs, M) when is_map(M) ->
-    F = fun(Key, Val) -> error:map2(abstract_pattern(Env, TypeDefs, Key),
-                                    abstract_pattern(Env, TypeDefs, Val),
-                                    fun(K, V) -> cerl:c_map_pair_exact(K, V) end) end,
-    Elems = error:collect([F(Key, Val) || {Key, Val} <- maps:to_list(M)]),
-    error:map(Elems, fun(Es) -> cerl:c_map_pattern(Es) end);
+% Pattern of shape: T(a)
+abstract_pattern(_, _, {application, _, _} = App, ErrContext) ->
+    error:format({pattern_application, App}, ErrContext);
 
-abstract_pattern(_, _, A) when is_atom(A) -> {ok, cerl:c_atom(A)};
+% Pattern of shape: T (where T is a sum type)
+abstract_pattern(Env, TypeDefs, {sum, Ds}, ErrContext) ->
+    Parts = error:collect([abstract_pattern(Env, TypeDefs, D, ErrContext) || D <- Ds]),
+    error:map(Parts, fun lists:flatten/1);
 
-abstract_pattern(Env, TypeDefs, T) when is_tuple(T) -> 
-    Elems = error:collect([abstract_pattern(Env, TypeDefs, element(I, T)) || 
-                           I <- lists:seq(1, size(T))]),
-    error:map(Elems, fun(Es) -> cerl:c_tuple(Es) end).
+% Pattern of shape {a, b: Int}
+abstract_pattern(Env, TypeDefs, M, ErrContext) when is_map(M) ->
+    F = fun(Key, Val) -> 
+                KeyDomains = abstract_pattern(Env, TypeDefs, Key, ErrContext),
+                ValDomains = abstract_pattern(Env, TypeDefs, Val, ErrContext),
+                error:map2(KeyDomains,
+                           ValDomains,
+                           fun(Ks, Vs) -> [cerl:c_map_pair_exact(K, V) || K <- Ks, V <- Vs] end) end,
+    case error:collect([F(Key, Val) || {Key, Val} <- maps:to_list(M)]) of
+        {error, Errs} -> {error, Errs};
+        {ok, Elems} -> {ok, [cerl:c_map_pattern(Es) || Es <- combinations(Elems)]}
+    end;
+
+% Part of pattern tuple like 'sum' or 'product'
+abstract_pattern(_, _, A, _) when is_atom(A) -> {ok, [cerl:c_atom(A)]};
+
+% Pattern like '{product, M}'
+abstract_pattern(Env, TypeDefs, T, ErrContext) when is_tuple(T) -> 
+    ElemList = [abstract_pattern(Env, TypeDefs, element(I, T), ErrContext) || 
+                I <- lists:seq(1, size(T))],
+    case error:collect(ElemList) of
+        {error, Errs} -> {error, Errs};
+        {ok, Elems} -> {ok, [cerl:c_tuple(Es) || Es <- combinations(Elems)]}
+    end.
 
 
+combinations(L) -> 
+    Rs = lists:foldl(fun(Es, Accs) -> [[E | Acc] || E <- Es, Acc <- Accs] end, [[]], L),
+    [lists:reverse(R) || R <- Rs].
 
 order(Args, Vars) ->
     FlatVars = lists:flatten(Vars),
