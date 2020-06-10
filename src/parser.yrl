@@ -53,7 +53,6 @@ symbol -> var_symbol : make_symbol('$1').
 symbols -> symbol           : ['$1'].
 symbols -> symbol symbols   : ['$1' | '$2'].
 
-expression -> pair          : '$1'.
 expression -> noun          : '$1'.
 
 noun -> pattern_match       : '$1'.
@@ -64,6 +63,7 @@ pattern -> index            : '$1'.
 pattern -> lookup           : '$1'.
 pattern -> literal          : '$1'.
 pattern -> verb             : '$1'.
+pattern -> pair             : '$1'.
 
 verb -> symbol              : '$1'.
 verb -> qualified_type      : {qualified_type, line('$1'), unwrap_symbols('$1')}.

@@ -107,12 +107,13 @@ domain(Path, Args, {pair, _, Key, Expr}) ->
 
 domain(_, _, {variable, _, _, Tag}) -> {[], [Tag], {variable, Tag}};
 
-domain(Path, Args, {application, _, Expr, AppArgs}) ->
+domain(Path, Args, {application, _, Expr, AppArgs} = App) ->
     {ExprEnv, ExprVars, ExprDomain} = domain(Path, Args, Expr),
     {ArgsEnvs, ArgVars, ArgDomains} = unzip3([domain(Path, Args, A) || A <- AppArgs]),
     Env = lists:flatten(ArgsEnvs) ++ ExprEnv,
     Vars = ordsets:to_list(ordsets:from_list(ExprVars ++ ArgVars)),
-    Domain = {application, ExprDomain, ArgDomains},
+    ErrContext = {typegen, App, Path},
+    Domain = {application, ExprDomain, ArgDomains, ErrContext},
     {Env, order(Args, Vars), Domain};
 
 domain(Path, _, {type, _, _} = Type) -> 
@@ -133,12 +134,15 @@ pattern_domain({lookup, L, {type, _, _} = T, Elems}) ->
     Domain = pattern_domain({dict, L, Elems}),
     {tagged, symbol:tag(T), Domain};
 
-pattern_domain({application, _, Expr, Args}) ->
+pattern_domain({application, _, Expr, Args} = App) ->
     ExprDomain = pattern_domain(Expr),
     ArgDomains = [pattern_domain(A) || A <- Args],
-    {application, ExprDomain, ArgDomains};
+    ErrContext = {typegen, App},
+    {application, ExprDomain, ArgDomains, ErrContext};
 
 pattern_domain({variable, _, _, Tag}) -> {variable, Tag};
+
+pattern_domain({pair, _, Key, Val}) -> {pair, pattern_domain(Key), pattern_domain(Val)};
 
 pattern_domain({type, _, _} = Type) -> {type, tag(Type)}.
 
@@ -185,7 +189,7 @@ abstract_form(_, _, {recur, Tag}) ->
     BranchFun = cerl:c_fun([], cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)])),
     {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
 
-abstract_form(Env, TypeDefs, {application, Expr, Args} = Current) ->
+abstract_form(Env, TypeDefs, {application, Expr, Args, ErrContext}) ->
     CompiledArgs = error:collect([abstract_form(Env, TypeDefs, A) || A <- Args]),
     case {Expr, CompiledArgs} of
 
@@ -198,27 +202,27 @@ abstract_form(Env, TypeDefs, {application, Expr, Args} = Current) ->
         {{type, Tag}, {ok, ArgForms}} ->
             case maps:get(Tag, Env, undefined) of
 
-                undefined -> error:format({nonexistent_type, Tag}, {typegen, Current});
+                undefined -> error:format({nonexistent_type, Tag}, ErrContext);
 
                 {Vars, _} when length(Vars) =:= length(Args) -> 
                     {ok, unsafe_call_form(cerl:c_atom(Tag), ArgForms)};
 
                 {Vars, _} ->                     
-                    error:format({wrong_number_of_arguments, Tag, Args, Vars}, {typegen, Current})
+                    error:format({wrong_number_of_arguments, Tag, Args, Vars}, ErrContext)
             end;
 
         % type recursion e.g.: List a -> Nil | Cons: { head: a, tail: List(a) }
         {{recur, Tag}, {ok, ArgForms}} ->
             case maps:get(Tag, Env, undefined) of
 
-                undefined -> error:format({nonexistent_type, Tag}, {typegen, Current});
+                undefined -> error:format({nonexistent_type, Tag}, ErrContext);
 
                 {Vars, _} when length(Vars) =:= length(Args) -> 
                     BranchFun = cerl:c_fun([], unsafe_call_form(cerl:c_atom(Tag), ArgForms)),
                     {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
 
                 {Vars, _} ->                     
-                    error:format({wrong_number_of_arguments, Tag, Args, Vars}, {typegen, Current})
+                    error:format({wrong_number_of_arguments, Tag, Args, Vars}, ErrContext)
             end
     end;
 
@@ -249,8 +253,13 @@ abstract_pattern(Env, TypeDefs, {type, Tag}, ErrContext) ->
     end;
 
 % Pattern of shape: T(a)
-abstract_pattern(_, _, {application, _, _} = App, ErrContext) ->
+abstract_pattern(_, _, {application, _, _, ErrContext} = App, _) ->
     error:format({pattern_application, App}, ErrContext);
+
+abstract_pattern(Env, TypeDefs, {pair, KeyDomain, ValDomain}, ErrContext) ->
+    Keys = abstract_pattern(Env, TypeDefs, KeyDomain, ErrContext),
+    Vals = abstract_pattern(Env, TypeDefs, ValDomain, ErrContext),
+    error:map2(Keys, Vals, fun(Ks,Vs) -> [cerl:c_alias(K, V) || K <- Ks, V <- Vs] end);
 
 % Pattern of shape: T (where T is a sum type)
 abstract_pattern(Env, TypeDefs, {sum, Ds}, ErrContext) ->

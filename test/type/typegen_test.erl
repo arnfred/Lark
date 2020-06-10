@@ -315,7 +315,7 @@ pattern_tagged_test() ->
                  end,
     run(Code, RunAsserts).
 
-pattern_error_test() ->
+pattern_no_matching_test() ->
     Code = "type Test t\n"
            " | T -> T | S",
     RunAsserts = fun(Mod) ->
@@ -331,7 +331,7 @@ pattern_application_test() ->
            " | F(t) -> t",
     RunAsserts = fun(Error) ->
                          ?errorMatch({pattern_application,
-                                      {application, {type, 'F'}, [{variable, _}]}}, Error)
+                                      {application, {type, 'F'}, [{variable, _}], _}}, Error)
                  end,
     run(Code, RunAsserts).
 
@@ -366,3 +366,14 @@ pattern_product_sum_test() ->
                  end,
     run(Code, RunAsserts).
 
+pattern_tagged_pair_test() ->
+    Code = "type Args -> A | B | C\n"
+           "type Test t\n"
+           " | a: Args/A -> a\n"
+           " | a: Args/B -> Args/C",
+    RunAsserts = fun(Mod) ->
+                         {f, 'Test', DomainFun} = Mod:domain('Test'),
+                         ?assertEqual('Args/A', DomainFun('Args/A')),
+                         ?assertEqual('Args/C', DomainFun('Args/B'))
+                 end,
+    run(Code, RunAsserts).
