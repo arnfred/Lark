@@ -35,10 +35,6 @@ tag(Env, {def, Line, Name, Args, Body}, Path, IsPattern) ->
                             end,
     {BodyEnv, {def, Line, Name, TaggedArgs, TaggedBody}};
 
-tag(Env, {lambda, Line, Clauses}, Path, IsPattern) ->
-    {NewEnv, TaggedClauses} = map(Env, Clauses, Path, IsPattern),
-    {NewEnv, {lambda, Line, TaggedClauses}};
-
 tag(Env, {clauses, Line, Clauses}, Path, IsPattern) ->
     {NewEnv, TaggedClauses} = map(Env, Clauses, Path, IsPattern),
     {NewEnv, {clauses, Line, TaggedClauses}};
@@ -48,6 +44,10 @@ tag(Env, {clause, Line, Patterns, Expr}, Path, _) ->
     NewEnv = maps:merge(Env, PatternEnv),
     {BodyEnv, TaggedBody} = tag(NewEnv, Expr, Path, false),
     {BodyEnv, {clause, Line, TaggedPatterns, TaggedBody}};
+
+tag(Env, {lambda, Line, Clauses}, Path, IsPattern) ->
+    {NewEnv, TaggedClauses} = map(Env, Clauses, Path, IsPattern),
+    {NewEnv, {lambda, Line, TaggedClauses}};
 
 %% Notes on application:
 %% Without knowing the type of `Name`, we can't know what the symbol 
@@ -79,7 +79,7 @@ tag(Env, {val, Line, Pattern, Expr}, Path, IsPattern) ->
 
 tag(Env, {match, Line, Expr, Clauses}, Path, IsPattern) ->
     {ExprEnv, TaggedExpr} = tag(Env, Expr, Path, IsPattern),
-    {ClausesEnv, TaggedClauses} = map(ExprEnv, Clauses, Path, IsPattern),
+    {ClausesEnv, TaggedClauses} = map(ExprEnv, Clauses, Path, true),
     {ClausesEnv, {match, Line, TaggedExpr, TaggedClauses}};
 
 tag(Env, {tuple, Line, Expressions}, Path, IsPattern) ->

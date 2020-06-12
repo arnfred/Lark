@@ -17,6 +17,7 @@
                       end
               end)())
         end).
+-define(_errorMatch(Error, Expr), ?_test(?errorMatch(Error, Expr))).
 
 -define(errorMatch(Err1, Err2, Expr),
         begin
@@ -32,6 +33,7 @@
                       end
               end)())
         end).
+-define(_errorMatch(Err1, Err2, Expr), ?_test(?errorMatch(Err1, Err2, Expr))).
 
 -define(errorMatch(Err1, Err2, Err3, Expr),
         begin
@@ -47,3 +49,4 @@
                       end
               end)())
         end).
+-define(_errorMatch(Err1, Err2, Err3, Expr), ?_test(?errorMatch(Err1, Err2, Err3, Expr))).
