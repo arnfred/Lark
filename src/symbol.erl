@@ -8,22 +8,24 @@ id(Symbol) -> id([Symbol]).
 
 tag({type, _, Symbols}) -> 
     list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)]));
+tag({type, _, _, Symbols}) -> 
+    list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)]));
 tag({symbol, _, _, S}) -> S;
 tag({variable, _, _, Tag}) -> Tag;
 tag({key, _, K}) -> K.
 
 name({pair, _, K, _}) -> name(K);
-name({symbol, _, S}) -> S;
-name({type_symbol, _, S}) -> S;
+name({key, _, Key}) -> Key;
+name({symbol, _, _, S}) -> S;
 name({qualified_type, _, S}) -> S;
 name({qualified_variable, _, S}) -> S;
 name({qualified_symbol, _, S}) -> S;
-name({variable, _, Key, _}) -> Key.
+name({variable, _, Key, _}) -> Key;
+name({type, _, Key}) -> Key.
 
-is({symbol, _, _})              -> true;
-is({type_symbol, _, _})         -> true;
+is({symbol, _, _, _})           -> true;
 is({variable, _, _, _})         -> true;
-is({type, _, _})                -> true;
+is({type, _, _, _})             -> true;
 is({qualified_type, _, _})      -> true;
 is({qualified_variable, _, _})  -> true;
 is({qualified_symbol, _, _})    -> true;

@@ -11,7 +11,7 @@ map({ok, E}, F) -> {ok, F(E)};
 map({error, E}, _) -> {error, E};
 map(D, F) -> map({ok, D}, F).
 
-flatmap({ok, Elem}, F) -> error:collect(F(Elem));
+flatmap({ok, Elem}, F) -> F(Elem);
 flatmap({error, Elem}, _) -> {error, Elem};
 flatmap(D, F) -> flatmap({ok, D}, F).
 
@@ -21,7 +21,7 @@ map2({error, E1}, _, _) -> {error, E1};
 map2(_, {error, E2}, _) -> {error, E2};
 map2(D1, D2, F) -> map2({ok, D1}, {ok, D2}, F).
 
-flatmap2({ok, E1}, {ok, E2}, F) -> error:collect(F(E1, E2));
+flatmap2({ok, E1}, {ok, E2}, F) -> F(E1, E2);
 flatmap2({error, E1}, {error, E2}, _) -> {error, E1 ++ E2};
 flatmap2({error, E1}, _, _) -> {error, E1};
 flatmap2(_, {error, E2}, _) -> {error, E2};

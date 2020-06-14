@@ -124,8 +124,9 @@ domain(Path, _, {type, _, _} = Type) ->
     end.
 
 pattern_domain({dict, _, Elems}) ->
-    Domain = fun({pair, _, {variable, _, Name, _}, Val}) -> {Name, pattern_domain(Val)};
-                 ({variable, _, Name, Tag}) -> {Name, {variable, Tag}}
+    Domain = fun({pair, _, {variable, _, Name, _}, Val})    -> {Name, pattern_domain(Val)};
+                ({pair, _, {key, _, Key}, Val})             -> {Key, pattern_domain(Val)};
+                ({variable, _, Name, Tag})                  -> {Name, {variable, Tag}}
               end,
     Pairs = [Domain(E) || E <- Elems],
     {product, maps:from_list(Pairs)};

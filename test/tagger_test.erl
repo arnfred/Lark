@@ -53,13 +53,13 @@ dict_pair_test() ->
     Code = "def f -> {a: b}",
     {_, Tagged} = tag_AST(Code),
     [{def, _, _, [], {dict, _, [{pair, _, Key, _}]}}] = Tagged,
-    ?assertMatch({variable, 1, a, _}, Key).
+    ?assertMatch({variable, _, a, _}, Key).
 
 dict_value_test() ->
     Code = "def f -> {a}",
     {_, Tagged} = tag_AST(Code),
     [{def, _, _, [], {dict, _, [Key]}}] = Tagged,
-    ?assertMatch({variable, 1, a, _}, Key).
+    ?assertMatch({variable, _, a, _}, Key).
 
 
 simple_sum_type_test() ->
@@ -98,16 +98,16 @@ simple_product_type_test() ->
     Code =
         "type Monkey -> Monkey: { food: Banana, plant: Trees }",
     {Typed, _} = tag_AST(Code),
-    ?assertMatch([{type_def, 1, 'Monkey', [],
-                 {pair, 1,
-                  {type, 1, ['Monkey']},
-                  {dict, 1,
-                   [{pair,1,
-                     {variable,1,food,_},
-                     {type,1,['Monkey', 'Banana']}},
-                    {pair,1,
-                     {variable,1,plant,_},
-                     {type,1,['Monkey', 'Trees']}}]}}}], Typed).
+    ?assertMatch([{type_def, _, 'Monkey', [],
+                 {pair, _,
+                  {type, _, ['Monkey']},
+                  {dict, _,
+                   [{pair,_,
+                     {variable,_,food,_},
+                     {type,_,['Monkey', 'Banana']}},
+                    {pair,_,
+                     {variable,_,plant,_},
+                     {type,_,['Monkey', 'Trees']}}]}}}], Typed).
 
 complex_type_test() ->
     Code =
@@ -115,41 +115,41 @@ complex_type_test() ->
         "                             cons: BooleanList }\n"
         "                     Nil)",
     {Typed, _} = tag_AST(Code),
-    ?assertMatch([{type_def,1,'BooleanList',[],
-                   {tuple,1,
-                    [{pair,1,
-                      {type,1,['BooleanList','Cons']},
-                      {dict,1,
-                       [{pair,1,
-                         {variable,1,value,_},
-                         {tuple,1,
-                          [{type,1,['BooleanList','True']},
-                           {type,1,['BooleanList','False']}]}},
-                        {pair,2,
-                         {variable,2,cons,_},
-                         {type,1,['BooleanList']}}]}},
-                     {type,3,['BooleanList','Nil']}]}}], Typed).
+    ?assertMatch([{type_def,_,'BooleanList',[],
+                   {tuple,_,
+                    [{pair,_,
+                      {type,_,['BooleanList','Cons']},
+                      {dict,_,
+                       [{pair,_,
+                         {variable,_,value,_},
+                         {tuple,_,
+                          [{type,_,['BooleanList','True']},
+                           {type,_,['BooleanList','False']}]}},
+                        {pair,_,
+                         {variable,_,cons,_},
+                         {type,_,['BooleanList']}}]}},
+                     {type,_,['BooleanList','Nil']}]}}], Typed).
 
 product_key_not_propagated_test() ->
     Code =
         "type Blip -> { blup: blyp }\n"
         "def blap -> blup",
     {Typed, Tagged} = tag_AST(Code),
-    [{type_def, 1, 'Blip', [], {dict, _, [{pair, 1, {variable, 1, 'blup', BlupKey}, _}]}}] = Typed,
-    [{def, 2, 'blap', [], {variable, 2, 'blup', BlupTag}}] = Tagged,
+    [{type_def, _, 'Blip', [], {dict, _, [{pair, _, {variable, _, 'blup', BlupKey}, _}]}}] = Typed,
+    [{def, _, 'blap', [], {variable, _, 'blup', BlupTag}}] = Tagged,
     ?assertNotEqual(BlupKey, BlupTag).
 
 pattern_product_key_propagated_test() ->
     Code = "def test a\n"
            " | {b, c} -> b(c)",
     {_, Tagged} = tag_AST(Code),
-    ?assertMatch([{def,1,test,
-                   [{variable,1,a,_}],
-                   [{clause,2,
-                     [{dict,2,
-                       [{variable,2,b,B},
-                        {variable,2,c,C}]}],
-                     {application,2,
-                      {variable,2,b,B},
-                      [{variable,2,c,C}]}}]}],
+    ?assertMatch([{def,_,test,
+                   [{variable,_,a,_}],
+                   [{clause,_,
+                     [{dict,_,
+                       [{variable,_,b,B},
+                        {variable,_,c,C}]}],
+                     {application,_,
+                      {variable,_,b,B},
+                      [{variable,_,c,C}]}}]}],
                  Tagged).

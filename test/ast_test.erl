@@ -3,164 +3,122 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("src/error.hrl").
 
-pre_tagger(Term) -> 
-    TermType = element(1, Term),
-    Context = element(2, Term),
-    [TermType | maps:get(tagger, Context, [])].
+pre_tagger(_, Scope, {symbol, Ctx, T, S}) -> 
+    {ok, maps:get(S, Scope, {T, Ctx, S, symbol:id(S)})};
+pre_tagger(_, _, Term) -> {ok, Term}.
 
-post_tagger(_, _, TermF) ->
-    Tag = fun(TermType, Ctx, S, T) -> {#{S => T}, {TermType, Ctx, S, T}} end,
-    case TermF() of
-        {error, Errs}                       -> {error, Errs};
-        {ok, {Env, {type_symbol, C, S}}}    -> Tag(type, C, S, maps:get(S, Env, symbol:id(S)));
-        {ok, {Env, {symbol, C, S}}}         -> Tag(var, C, S, maps:get(S, Env, symbol:id(S)));
-        {ok, {Env, Term}}                   -> {Env, Term}
-    end.
+post_tagger(pattern, _Env, {variable, _, Name, _} = Term) -> 
+    {ok, Name, Term};
+post_tagger(pattern, _Env, {type, _, Name, _} = Term) -> {ok, Name, Term};
+post_tagger(_Type, _Env, _Term) -> skip.
+
 
 pair_test_() ->
-    InputEnv = #{test_symbol => symbsymb,
-                 'T' => typtyp},
+    Scope = #{test_symbol => {variable, #{}, test_symbol, symbsymb}},
     Input = {pair, #{},
-             {symbol, #{}, test_symbol},
-             {type_symbol, #{}, 'T'}},
-    Output = ast:traverse(tagger, fun pre_tagger/1, fun post_tagger/3, expr, InputEnv, Input),
+             {symbol, #{}, variable, test_symbol},
+             {symbol, #{}, type, 'T'}},
+    Output = ast:traverse(fun pre_tagger/3, fun post_tagger/3, Scope, Input),
     ?_assertMatch({ok,
                    {#{},
-                    {pair, #{}, {var, #{}, test_symbol, symbsymb}, {type, #{}, 'T', typtyp}}}}, Output).
-pair_undefined_symbol_error_test_() ->
-    InputEnv = #{},
-    Input = {pair, #{},
-             {symbol, #{}, test_symbol},
-             {type_symbol, #{}, 'T'}},
-    Output = ast:traverse(tagger, fun pre_tagger/1, fun post_tagger/3, expr, InputEnv, Input),
-    ?_errorMatch({undefined_symbol_in_expression, 'test_symbol'},
-                 {undefined_symbol_in_expression, 'T'},
-                 Output). 
+                    {pair, #{}, 
+                     {variable, #{}, test_symbol, symbsymb}, 
+                     {type, #{}, 'T', _}}}}, Output).
 
 val_application_test_() ->
-    InputEnv = #{'T' => typtyp,
-                 test_symbol => symbsymb},
+    Scope = #{'T' => {type, #{}, 'T', typtyp},
+              test_symbol => {variable, #{}, test_symbol, symbsymb}},
     Input = {val, #{}, 
-             {symbol, #{}, val_symbol}, 
+             {symbol, #{}, variable, val_symbol}, 
              {application, #{},
-              {symbol, #{}, test_symbol},
-              [{type_symbol, #{}, 'T'}]}},
-    Output = ast:traverse(tagger, fun pre_tagger/1, fun post_tagger/3, expr, InputEnv, Input),
+              {symbol, #{}, variable, test_symbol},
+              [{symbol, #{}, type, 'T'}]}},
+    Output = ast:traverse(fun pre_tagger/3, fun post_tagger/3, Scope, Input),
     ?_assertMatch({ok,
-                    {#{val_symbol := _V},
+                    {#{val_symbol := {variable, #{}, val_symbol, _V}},
                      {val, #{},
-                      {var, #{}, val_symbol, _V},
+                      {variable, #{}, val_symbol, _V},
                       {application, #{}, 
-                       {var, #{}, test_symbol, _TS},
+                       {variable, #{}, test_symbol, _TS},
                        [{type, #{}, 'T', _T}]}}}}, Output).
 
-symbol_already_defined_error_test_() ->
-    InputEnv = #{val_symbol => valval},
-    Input = {val, #{}, 
-             {symbol, #{}, val_symbol}, 
-             {symbol, #{}, val_symbol}},
-    Output = ast:traverse(tagger, fun pre_tagger/1, fun post_tagger/3, expr, InputEnv, Input),
-    ?_errorMatch({symbol_in_pattern_already_defined, val_symbol}, Output).
-
-tuple_assignment_lookup_test_() ->
-    InputEnv = #{type_symbol => typtyp},
-    Input = {tuple, #{},
-             [{val, #{}, 
-               {symbol, #{}, key_symbol},
-               {type_symbol, #{}, type_symbol}},
-              {val, #{},
-               {symbol, #{}, val_symbol},
-               {dict, #{}, [{pair, #{},
-                             {symbol, #{}, key_symbol},
-                             {type_symbol, #{}, type_symbol}}]}},
+let_assignment_lookup_test_() ->
+    Scope = #{},
+    Input = {'let', #{},
+             {symbol, #{}, variable, key_symbol},
+             {symbol, #{}, type, symbol},
+             {'let', #{},
+              {symbol, #{}, variable, val_symbol},
+              {dict, #{}, [{pair, #{},
+                             {symbol, #{}, variable, key_symbol},
+                             {symbol, #{}, type, symbol}}]},
               {lookup, #{},
-               {symbol, #{}, val_symbol},
-               [{symbol, #{}, key_symbol}]}]},
-    Output = ast:traverse(tagger, fun pre_tagger/1, fun post_tagger/3, expr, InputEnv, Input),
+               {symbol, #{}, variable, val_symbol},
+               [{symbol, #{}, variable, key_symbol}]}}},
+    Output = ast:traverse(fun pre_tagger/3, fun post_tagger/3, Scope, Input),
     ?_assertMatch({ok,
-                    {#{val_symbol := _S,
-                       type_symbol := _T,
-                       key_symbol := _K},
-                     {tuple, _, 
-                      [{val, _,
-                        {var, _, key_symbol, _K1},
-                        {type, _, type_symbol, _T1}},
-                       {val, _,
-                        {var, _, val_symbol, _S},
-                        {dict, _,
-                         [{pair, _,
-                           {var, _, key_symbol, _K2},
-                           {type, _, type_symbol, _T2}}]}},
-                       {lookup, _,
-                        {var, _, val_symbol, _S},
-                        [{var, _, key_symbol, _K3}]}]}}}, Output).
-
-type_def_test_() ->
-    InputEnv = #{'T' => typtyp,
-                 key => keykey},
-    Input = {type_def, #{}, test_type,
-             [{symbol, #{}, type_var}],
-             {pair, #{},
-              {type_symbol, #{}, 'T'},
-              {dict, #{},
-               [{pair, #{},
-                 {symbol, #{}, key},
-                 {symbol, #{}, type_var}}]}}},
-    Output = ast:traverse(tagger, fun pre_tagger/1, fun post_tagger/3, InputEnv, Input),
-    ?_assertMatch({ok,
-                   {#{type_var := V, 'T' := T}, % Key is not present because it's not part of env
-                    {type_def, _, test_type,
-                     [{var, _, type_var, V}],
-                     {pair, _,
-                      {type, _, 'T', T},
+                   {#{val_symbol := {variable, #{}, val_symbol, _S},
+                      key_symbol := {variable, #{}, key_symbol, _K}},
+                    {'let', _, 
+                     {variable, _, key_symbol, _K1},
+                     {type, _, symbol, _T1},
+                     {'let', _,
+                      {variable, _, val_symbol, _S},
                       {dict, _,
                        [{pair, _,
-                         {var, _, key, keykey},
-                         {var, _, type_var, V}}]}}}}}, Output).
+                         {variable, _, key_symbol, _K1},
+                         {type, _, symbol, _T2}}]},
+                      {lookup, _,
+                       {variable, _, val_symbol, _S},
+                       [{variable, _, key_symbol, _K3}]}}}}}, Output).
 
-unrecognized_term_error_test_() ->
-    Input = {blip_blop, #{}, blap},
-    Actual = ast:traverse(tagger, fun pre_tagger/1, fun post_tagger/3, expr, #{}, Input),
-    ?_errorMatch({unrecognized_term, blip_blop, expr}, Actual).
-
-illegal_dict_element_error_test_() ->
-    Input = {dict, #{},
-             [{val, #{},
-               {symbol, #{}, symb},
-               {dict, #{}, []}}]},
-    Actual = ast:traverse(tagger, fun pre_tagger/1, fun post_tagger/3, expr, #{}, Input),
-    ?_errorMatch({illegal_dict_element, val, expr}, Actual).
-
-illegal_dict_symbol_error_test_() ->
-    Input = {dict, #{},
-             [{symbol, #{}, symb}]},
-    Actual = ast:traverse(tagger, fun pre_tagger/1, fun post_tagger/3, expr, #{}, Input),
-    ?_errorMatch({illegal_dict_element, symb, expr}, Actual).
+type_def_test_() ->
+    Scope = #{'T' => {type, #{}, 'T', typtyp},
+              key => {variable, #{}, key, keykey}},
+    Input = {type_def, #{}, test_type,
+             [{symbol, #{}, variable, type_var}],
+             {pair, #{},
+              {symbol, #{}, type, 'T'},
+              {dict, #{},
+               [{pair, #{},
+                 {symbol, #{}, variable, key},
+                 {symbol, #{}, variable, type_var}}]}}},
+    Output = ast:traverse(fun pre_tagger/3, fun post_tagger/3, Scope, Input),
+    ?_assertMatch({ok,
+                   {#{type_var := {variable, #{}, type_var, _V}},
+                    {type_def, _, test_type,
+                     [{variable, _, type_var, _V}],
+                     {pair, _,
+                      {type, _, 'T', _T},
+                      {dict, _,
+                       [{pair, _,
+                         {variable, _, key, keykey},
+                         {variable, _, type_var, _V}}]}}}}}, Output).
 
 lambda_clause_test_() ->
     Input = {def, #{}, test_fun,
-             [{symbol, #{}, fun_var}],
+             [{symbol, #{}, variable, fun_var}],
              [{clause, #{},
-               [{dict, #{}, [{symbol, #{}, dict_elem}]}],
+               [{dict, #{}, [{symbol, #{}, variable, dict_elem}]}],
                {lambda, #{},
                 [{clause, #{},
-                  [{symbol, #{}, lambda_var}],
+                  [{symbol, #{}, variable, lambda_var}],
                   {application, #{},
-                   {symbol, #{}, lambda_var},
-                   [{symbol, #{}, dict_elem}]}}]}}]},
-    Actual = ast:traverse(tagger, fun pre_tagger/1, fun post_tagger/3, Input),
+                   {symbol, #{}, variable, lambda_var},
+                   [{symbol, #{}, variable, dict_elem}]}}]}}]},
+    Actual = ast:traverse(fun pre_tagger/3, fun post_tagger/3, Input),
     ?_assertMatch({ok,
-                   {#{fun_var := _F,
-                      dict_elem := _D,
-                      lambda_var := _L},
+                   {#{fun_var := {variable, #{}, fun_var, _F},
+                      dict_elem := {variable, #{}, dict_elem, _D},
+                      lambda_var := {variable, #{}, lambda_var, _L}},
                     {def, _, test_fun,
-                     [{var, _, fun_var, _F}],
+                     [{variable, _, fun_var, _F}],
                      [{clause, _,
-                       [{dict, _, [{var, _, dict_elem, _D}]}],
+                       [{dict, _, [{variable, _, dict_elem, _D}]}],
                        {lambda, _,
                         [{clause, _,
-                          [{var, _, lambda_var, _L}],
+                          [{variable, _, lambda_var, _L}],
                           {application, _,
-                           {var, _, lambda_var, _L},
-                           [{var, _, dict_elem, _D}]}}]}}]}}}, Actual).
+                           {variable, _, lambda_var, _L},
+                           [{variable, _, dict_elem, _D}]}}]}}]}}}, Actual).
     

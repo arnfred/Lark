@@ -12,8 +12,18 @@ compile({Module, Code}) ->
     code:load_binary(Mod, BeamName, Bin).
 
 get_AST(Code) ->
-    {ok, Tokens, _} = lexer:string(Code),
-    io:format("Tokens are ~p~n", [Tokens]),
-    {ok, AST} = parser:parse(Tokens),
-    io:format("AST is ~p~n", [AST]),
-    tagger:tag(AST).
+    case lexer:string(Code) of
+        {error, Error}          -> error:format({lexer_error, Error},{kind});
+        {error, Error1, Error2} -> error:format({lexer_error, Error1, Error2},{kind});
+        {ok, Tokens, _}         ->
+            case parser:parse(Tokens) of
+                {error, Error}  -> error:format({parser_error, Error}, {kind});
+                {ok, Parsed}    ->
+                    case preener:preen(Parsed) of
+                        {error, Errs}   -> {error, Errs};
+                        {ok, AST}       ->
+                            io:format("AST is ~p~n", [AST]),
+                            tagger:tag(AST)
+                    end
+            end
+    end.

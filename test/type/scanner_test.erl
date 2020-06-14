@@ -238,7 +238,7 @@ assignment_variable_test() ->
 
 assignment_pattern_test() ->
     Code = "type Dict -> {a: (Ah | Oh), b: Buh}\n"
-           "def test input -> (val {a: Ah} = input, a)",
+           "def test input -> (val {a: (out: Ah)} = input, out)",
     RunAsserts = fun(Env) ->
                          {f, test, DomainFun} = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Dict'),
@@ -258,8 +258,8 @@ assignment_nonexistent_key_test() ->
     RunAsserts = fun(Env) ->
                          {f, test, DomainFun} = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Sum'),
-                         ?errorMatch({nonexistent_key, b, {product, _}},
-                                     {nonexistent_key, a, {product, _}}, Actual1),
+                         ?errorMatch({nonexistent_key, a, {product, _}},
+                                     {nonexistent_key, b, {product, _}}, Actual1),
 
                          Actual2 = DomainFun({product, #{a => 'Sum/A'}}),
                          ?errorMatch({nonexistent_key, b, {product, _}}, Actual2),
@@ -271,7 +271,7 @@ assignment_nonexistent_key_test() ->
 
 assignment_tagged_product_test() ->
     Code = "type Tagged -> T: {a: A, b: B}\n"
-           "def test input -> (val T{a} = input, a)",
+           "def test input -> (val T{a: out} = input, out)",
     RunAsserts = fun(Env) ->
                          {f, test, DomainFun} = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Tagged'),
@@ -279,6 +279,19 @@ assignment_tagged_product_test() ->
 
                          Actual2 = DomainFun({tagged, 'S', {product, #{a => 'Tagged/A'}}}),
                          ?errorMatch({no_intersection, {tagged, 'S', _}, {tagged, 'Tagged/T', _}}, Actual2)
+                 end,
+    run(Code, RunAsserts).
+
+assignment_tagged_product2_test() ->
+    Code = "type Tagged -> T: {a: A, b: B}\n"
+           "def test input -> (val out = input{a}, out)",
+    RunAsserts = fun(Env) ->
+                         {f, test, DomainFun} = maps:get({test, 1}, Env),
+                         Actual1 = DomainFun('Tagged'),
+                         ?assertEqual({product, #{a => 'Tagged/A'}}, Actual1),
+
+                         Actual2 = DomainFun({tagged, 'S', {product, #{a => 'Tagged/A'}}}),
+                         ?assertEqual({product, #{a => 'Tagged/A'}}, Actual1)
                  end,
     run(Code, RunAsserts).
 

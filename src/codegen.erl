@@ -4,6 +4,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 gen({Module, AST}) ->
+    io:format("---> AST: ~p~n", [AST]),
     Compiled = [gen_expr(D) || D <- AST],
     CompiledExports = [cerl:c_fname(Name, length(Args)) || {def, _, Name, Args, _} <- AST],
     {ok, cerl:c_module(cerl:c_atom(Module), CompiledExports, [], Compiled)}.
@@ -38,10 +39,10 @@ gen_expr({match, _, Expr, Clauses}) -> gen_pattern_match([Expr], Clauses);
 gen_expr({Args, Clauses}) when is_list(Clauses) -> gen_pattern_match(Args, Clauses);
 gen_expr({_, Expr}) -> gen_expr(Expr);
 
-gen_expr({lambda, Line, Clauses}) ->
+gen_expr({lambda, Ctx, Clauses}) ->
     [{clause, _, Patterns, _} | _Rest] = Clauses,
     Symbols = [symbol:id(['']) || _ <- Patterns],
-    Args = [{variable, Line, S, S} || S <- Symbols],
+    Args = [{variable, Ctx, S, S} || S <- Symbols],
     CompiledBody = gen_pattern_match(Args, Clauses),
     CompiledArgs = [gen_expr(A) || A <- Args],
     cerl:c_fun(CompiledArgs, CompiledBody);

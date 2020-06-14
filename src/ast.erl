@@ -1,198 +1,199 @@
 -module(ast).
--export([traverse/4, traverse/5, traverse/6]).
+-export([traverse/3, traverse/4, term_type/1, context/1, tag/2, tag/3]).
 -import(maps, [merge/2]).
 -include_lib("eunit/include/eunit.hrl").
 
-traverse(Key, Pre, Post, Type, Env, Term) -> 
-    LiftedPre = tag(Key, Pre),
-    term({LiftedPre, Post}, Type, Env, Term).
-traverse(Key, Pre, Post, Env, AST) when is_list(AST) -> 
-    [def(Key, Pre, Post, Env, Term) || Term <- AST];
-traverse(Key, Pre, Post, Env, AST) -> 
-    def(Key, Pre, Post, Env, AST).
-traverse(Key, Pre, Post, AST) when is_list(AST) -> 
-    [def(Key, Pre, Post, #{}, Term) || Term <- AST];
-traverse(Key, Pre, Post, AST) -> 
-    def(Key, Pre, Post, #{}, AST).
+traverse(Pre, Post, Scope, AST) -> term({Pre, Post}, expr, Scope, AST).
+traverse(Pre, Post, AST)        -> term({Pre, Post}, expr, #{}, AST).
 
-def(Key, Pre, Post, Env, Term) -> 
-    LiftedPre = tag(Key, Pre),
-    term({LiftedPre, Post}, expr, Env, Term).
-
-term({LiftedPre, Post}, Type, Env, Term) ->
-    case LiftedPre(Term) of
-        {error, Errs}       -> {error, Errs};
-        {ok, TaggedTerm}    -> 
-            F = fun() -> iter({LiftedPre, Post}, Type, Env, TaggedTerm) end,
-            case Post(Type, term_type(Term), F) of
-                {error, Errs}           -> {error, Errs};
-                {ok, {NewEnv, NewTerm}} -> {ok, {NewEnv, NewTerm}};
-                {NewEnv, NewTerm}       -> {ok, {NewEnv, NewTerm}}
+term({Pre, Post}, Type, Scope, Term) ->
+    case Pre(Type, Scope, Term) of
+        {error, Errs}   -> {error, Errs};
+        skip            -> {ok, {Scope, Term}};
+        {ok, NewTerm}   -> 
+            case iter({Pre, Post}, Type, Scope, NewTerm) of
+                {error, Errs}               -> {error, Errs};
+                {ok, {Env, TraversedTerm}}  -> 
+                    case Post(Type, Env, TraversedTerm) of
+                        {error, Errs}       -> {error, Errs};
+                        skip                -> {ok, {Env, TraversedTerm}};
+                        {ok, PostTerm}      -> {ok, {maps:put(Term, PostTerm, Env), PostTerm}};
+                        {ok, Key, PostTerm} -> {ok, {maps:put(Key, PostTerm, Env), PostTerm}}
+                    end
             end
     end.
 
-iter(Meta, expr, Env, {type_def, Context, Name, Args, Expr}) when is_list(Args) ->
-    case iter(Meta, expr, Env, {def, Context, Name, Args, Expr}) of
-        {error, Errs} -> {error, Errs};
-        {ok, {DefEnv, {def, NewCtx, Name, TArgs, TExpr}}} ->
-            {ok, {DefEnv, {type_def, NewCtx, Name, TArgs, TExpr}}}
-    end;
-
-iter(Meta, expr, Env, {def, Context, Name, Args, Expr}) when is_list(Args) ->
-    case map(Meta, pattern, Env, Args) of
-        {error, Errs}           -> {error, Errs};
-        {ok, {ArgsEnv, TArgs}}  ->
+iter(Meta, expr, Scope, {def, Context, Name, Args, Expr}) when is_list(Args) ->
+    case map(Meta, pattern, Scope, Args) of
+        {error, Errs}            -> {error, Errs};
+        {ok, {ArgsEnvs, TArgs}}  ->
+            ExprScope = merge([Scope | ArgsEnvs]),
             RawExpr = case Expr of
-                          _ when is_list(Expr)  -> map(Meta, expr, merge(Env, ArgsEnv), Expr);
-                          _                     -> term(Meta, expr, merge(Env, ArgsEnv), Expr)
+                          _ when is_list(Expr)  -> map(Meta, expr, ExprScope, Expr);
+                          _                     -> term(Meta, expr, ExprScope, Expr)
                       end,
             case RawExpr of
-                {error, Errs}           -> {error, Errs};
-                {ok, {ExprEnv, TExpr}}  -> 
-                    {ok, {merge(ArgsEnv, ExprEnv), {def, Context, Name, TArgs, TExpr}}}
+                {error, Errs}                           -> {error, Errs};
+                {ok, {Envs, TExprs}} when is_list(Envs) -> 
+                    {ok, {merge(ArgsEnvs ++ Envs), {def, Context, Name, TArgs, TExprs}}};
+                {ok, {Env, TExpr}}                      -> 
+                    {ok, {merge([Env | ArgsEnvs]), {def, Context, Name, TArgs, TExpr}}}
             end
     end;
 
-iter(Meta, expr, Env, {clauses, Context, Clauses}) when is_list(Clauses) ->
-    case map(Meta, expr, Env, Clauses) of
-        {error, Errs}                   -> {error, Errs};
-        {ok, {ClausesEnv, TClauses}}    -> {ok, {ClausesEnv, {clauses, Context, TClauses}}}
+iter(Meta, expr, Scope, {type_def, Context, Name, Args, Expr}) when is_list(Args) ->
+    case iter(Meta, expr, Scope, {def, Context, Name, Args, Expr}) of
+        {error, Errs}       -> {error, Errs};
+        {ok, {Env, Term}}   -> {ok, {Env, setelement(1, Term, type_def)}}
     end;
 
-iter(Meta, expr, Env, {clause, Context, Patterns, Expr}) when is_list(Patterns) ->
-    case map(Meta, pattern, Env, Patterns) of
-        {error, Errs}                   -> {error, Errs};
-        {ok, {PatternEnv, TPatterns}}   -> 
-            case term(Meta, expr, merge(Env, PatternEnv), Expr) of
-                {error, Errs}           -> {error, Errs};
-                {ok, {ExprEnv, TExpr}}  -> 
-                    {ok, {merge(PatternEnv, ExprEnv), {clause, Context, TPatterns, TExpr}}}
+iter(Meta, expr, Scope, {clause, Context, Patterns, Expr}) when is_list(Patterns) ->
+    case map(Meta, pattern, Scope, Patterns) of
+        {error, Errs}                       -> {error, Errs};
+        {ok, {PatternEnvs, TPatterns}}   -> 
+            NewScope = merge([Scope | PatternEnvs]),
+            case term(Meta, expr, NewScope, Expr) of
+                {error, Errs}       -> {error, Errs};
+                {ok, {Env, TExpr}}  -> 
+                    {ok, {merge([Env | PatternEnvs]), {clause, Context, TPatterns, TExpr}}}
             end
     end;
 
-iter(Meta, expr, Env, {lambda, Context, Clauses}) when is_list(Clauses) ->
-    case map(Meta, expr, Env, Clauses) of
-        {error, Errs}                -> {error, Errs};
-        {ok, {ClausesEnv, TClauses}} -> {ok, {ClausesEnv, {lambda, Context, TClauses}}}
+iter(Meta, expr, Scope, {lambda, Context, Clauses}) when is_list(Clauses) ->
+    case map(Meta, expr, Scope, Clauses) of
+        {error, Errs}               -> {error, Errs};
+        {ok, {Envs, TClauses}}   -> {ok, {merge(Envs), {lambda, Context, TClauses}}}
     end;
 
-iter(Meta, expr, Env, {val, Context, Pattern, Expr}) ->
-    error:map2(term(Meta, pattern, Env, Pattern),
-               term(Meta, expr, Env, Expr),
-               fun({PatternEnv, TPattern}, {ExprEnv, TExpr}) ->
-                       {merge(PatternEnv, ExprEnv), {val, Context, TPattern, TExpr}} end);
+iter(Meta, expr, Scope, {val, Context, Pattern, Expr}) ->
+    error:map2(term(Meta, pattern, Scope, Pattern),
+               term(Meta, expr, Scope, Expr),
+               fun({PatternEnv, TPattern}, {Env, TExpr}) ->
+                       {merge(PatternEnv, Env), {val, Context, TPattern, TExpr}} end);
 
-iter(Meta, expr, Env, {match, Context, Expr, Clauses}) when is_list(Clauses) ->
-    error:map2(term(Meta, expr, Env, Expr),
-               map(Meta, expr, Env, Clauses),
-               fun({ExprEnv, TExpr}, {ClauseEnv, TClauses}) ->
-                       {merge(ExprEnv, ClauseEnv), {match, Context, TExpr, TClauses}} end);
+iter(Meta, expr, Scope, {match, Context, Expr, Clauses}) when is_list(Clauses) ->
+    error:map2(term(Meta, expr, Scope, Expr),
+               map(Meta, expr, Scope, Clauses),
+               fun({ExprEnv, TExpr}, {ClauseEnvs, TClauses}) ->
+                       {merge([ExprEnv | ClauseEnvs]), {match, Context, TExpr, TClauses}} end);
 
-iter(Meta, Type, Env, {application, Context, Expr, Args}) when is_list(Args) ->
-    error:map2(map(Meta, Type, Env, Args),
-               term(Meta, Type, Env, Expr),
-               fun({ArgsEnv, TArgs}, {ExprEnv, TExpr}) -> 
-                       {merge(ArgsEnv, ExprEnv), {application, Context, TExpr, TArgs}} end);
+iter(Meta, Type, Scope, {application, Context, Expr, Args}) when is_list(Args) ->
+    error:map2(map(Meta, Type, Scope, Args),
+               term(Meta, Type, Scope, Expr),
+               fun({ArgsEnvs, TArgs}, {ExprEnv, TExpr}) -> 
+                       {merge([ExprEnv | ArgsEnvs]), {application, Context, TExpr, TArgs}} end);
 
-iter(Meta, Type, Env, {lookup, Context, Expr, Elems}) when is_list(Elems) ->
-    error:map2(term(Meta, Type, Env, Expr),
-               iter(Meta, pattern, Env, {dict, Context, Elems}),
-               fun({ExprEnv, TExpr}, {ElemsEnv, TElems}) ->
-                       {dict, _, DictElems} = TElems,
-                       {merge(ExprEnv, ElemsEnv), {lookup, Context, TExpr, DictElems}} end);
+iter(Meta, Type, Scope, {lookup, Context, Expr, Elems}) when is_list(Elems) ->
+    error:map2(term(Meta, Type, Scope, Expr),
+               map(Meta, Type, Scope, Elems),
+               fun({ExprEnv, TExpr}, {ElemsEnvs, TElems}) ->
+                       {merge([ExprEnv | ElemsEnvs]), {lookup, Context, TExpr, TElems}} end);
 
-iter(Meta, Type, Env, {tuple, Context, Expressions}) when is_list(Expressions) ->
-    case fold(Meta, Type, Env, Expressions) of
+iter(Meta, Type, Scope, {tuple, Context, Expressions}) when is_list(Expressions) ->
+    case map(Meta, Type, Scope, Expressions) of
+        {error, Errs}          -> {error, Errs};
+        {ok, {Envs, TExprs}}   -> {ok, {merge(Envs), {tuple, Context, TExprs}}}
+    end;
+
+
+iter(Meta, expr, Scope, {'let', Context, Pattern, Expr, Term}) ->
+    error:flatmap2(term(Meta, pattern, Scope, Pattern),
+                   term(Meta, expr, Scope, Expr),
+                   fun({PatternEnv, TPattern}, {ExprEnv, TExpr}) ->
+                           NewScope = merge(Scope, PatternEnv),
+                           case term(Meta, expr, NewScope, Term) of
+                               {error, Errs}            -> {error, Errs};
+                               {ok, {Env, TTerm}}    -> 
+                                   {ok, {merge([PatternEnv, ExprEnv, Env]), 
+                                         {'let', Context, TPattern, TExpr, TTerm}}}
+                           end
+                   end);
+
+iter(Meta, expr, Scope, {seq, Context, First, Then}) ->
+    case term(Meta, expr, Scope, First) of
+        {error, Errs}               -> {error, Errs};
+        {ok, {FirstEnv, TFirst}} -> 
+            case term(Meta, expr, Scope, Then) of
+                {error, Errs}           -> {error, Errs};
+                {ok, {ThenEnv, TThen}}   -> 
+                    {ok, {merge(FirstEnv, ThenEnv), {seq, Context, TFirst, TThen}}}
+            end
+    end;
+
+
+iter(Meta, Type, Scope, {dict, Context, Expressions}) when is_list(Expressions) ->
+    case map(Meta, Type, Scope, Expressions) of
         {error, Errs}              -> {error, Errs};
-        {ok, {ExprsEnv, TExprs}}   -> {ok, {ExprsEnv, {tuple, Context, TExprs}}}
+        {ok, {ExprsEnvs, TExprs}}   -> 
+            {ok, {merge(ExprsEnvs), {dict, Context, TExprs}}}
     end;
 
-iter(Meta, Type, Env, {dict, Context, Expressions}) when is_list(Expressions) ->
-    case map(Meta, {dict, Type}, Env, Expressions) of
-        {error, Errs}              -> {error, Errs};
-        {ok, {ExprsEnv, TExprs}}   -> 
-            {ok, {ExprsEnv, {dict, Context, TExprs}}}
-    end;
+%% Element in dictionary
+%iter(Meta, {dict, Type}, Scope, Term) ->
+%    case {Type, term_type(Term), symbol:is(Term)} of
+%        {pattern, pair, _}    -> iter(Meta, pattern, Scope, Term);
+%        {expr, pair, _}       -> iter(Meta, {pair, expr}, Scope, Term);
+%        {_, _, false}         -> error:format({illegal_dict_element, term_type(Term), Type}, {ast, Term});
+%        {pattern, Symbol, _}  -> term(Meta, pattern, #{}, Symbol); % Also true for lookup expr
+%        {expr, _Symbol, _}    -> error:format({illegal_dict_element, symbol:name(Term), Type}, {ast, Term})
+%    end;
+%
+%iter(Meta, {pair, expr}, Scope, {pair, Ctx, Key, Val}) ->
+%    error:map2(term(Meta, expr, #{}, Key),
+%               term(Meta, expr, Scope, Val),
+%               fun({_, TKey}, {ValEnv, TVal}) -> 
+%                       {ValEnv, {pair, Ctx, TKey, TVal}} end);
 
-% Element in dictionary
-iter(Meta, {dict, Type}, Env, Term) ->
-    case {Type, term_type(Term), symbol:is(Term)} of
-        {pattern, pair, _}    -> iter_pair(Meta, pattern, Env, Term, fun maps:merge/2);
-        {expr, pair, _}       -> iter_pair(Meta, expr, Env, Term, fun(_, ValEnv) -> ValEnv end);
-        {_, _, false}         -> error:format({illegal_dict_element, term_type(Term), Type}, {ast, Term});
-        {pattern, _Symbol, _} -> {ok, {#{}, Term}}; % Also true for lookup expr
-        {expr, _Symbol, _}    -> error:format({illegal_dict_element, symbol:name(Term), Type}, {ast, Term})
-    end;
-
-iter(Meta, Type, Env, {pair, _, _, _} = Term) -> iter_pair(Meta, Type, Env, Term, fun maps:merge/2);
-
-iter(_, Type, Env, Term) ->
-    IsSymbol = symbol:is(Term),
-    InEnv    = IsSymbol andalso maps:is_key(symbol:name(Term), Env),
-    case {Type, IsSymbol, InEnv} of
-        {_, false, _}           ->
-            error:format({unrecognized_term, term_type(Term), Type}, {ast, Term});
-        {expr, true, false}     ->
-            error:format({undefined_symbol_in_expression, symbol:name(Term)}, {ast, Term});
-        {expr, true, true}      -> 
-            Name = symbol:name(Term),
-            {ok, {#{Name => maps:get(Name, Env)}, Term}};
-        {pattern, true, false}  -> {ok, {#{}, Term}};
-        {pattern, true, true}   ->
-            error:format({symbol_in_pattern_already_defined, symbol:name(Term)}, {ast, Term})
-    end.
-
-iter_pair(Meta, Type, Env, {pair, Context, Key, Val}, Merge) ->
-    error:map2(term(Meta, Type, Env, Key),
-               term(Meta, Type, Env, Val),
+iter(Meta, Type, Scope, {pair, Ctx, Key, Val}) ->
+    error:map2(term(Meta, Type, Scope, Key),
+               term(Meta, Type, Scope, Val),
                fun({KeyEnv, TKey}, {ValEnv, TVal}) -> 
-                       {Merge(KeyEnv, ValEnv), {pair, Context, TKey, TVal}} end).
+                       {merge(KeyEnv, ValEnv), {pair, Ctx, TKey, TVal}} end);
 
 
-map(Meta, Type, Env, Elements) ->
-    Mapped = [term(Meta, Type, Env, Elem) || Elem <- Elements],
+iter(_, _, _, {symbol, _, _, _} = Term)           -> {ok, {#{}, Term}};
+iter(_, _, _, {variable, _, _, _} = Term)         -> {ok, {#{}, Term}};
+iter(_, _, _, {type, _, _, _} = Term)             -> {ok, {#{}, Term}};
+iter(_, _, _, {qualified_type, _, _} = Term)      -> {ok, {#{}, Term}};
+iter(_, _, _, {qualified_variable, _, _} = Term)  -> {ok, {#{}, Term}};
+iter(_, _, _, {qualified_symbol, _, _} = Term)    -> {ok, {#{}, Term}};
+iter(_, _, _, {key, _, _} = Term)                 -> {ok, {#{}, Term}};
+
+iter(_, Type, _, Term) ->
+    error:format({unrecognized_term, term_type(Term), Type}, {ast, Term}).
+
+map(Meta, Type, Scope, Elements) ->
+    Mapped = [term(Meta, Type, Scope, Elem) || Elem <- Elements],
     case error:collect(Mapped) of
         {error, Errs} -> {error, Errs};
-        {ok, Zipped} ->
-            {EnvList, Ts} = lists:unzip(Zipped),
-            NewEnv = lists:foldl(fun maps:merge/2, #{}, EnvList),
-            {ok, {NewEnv, Ts}}
+        {ok, Zipped} -> {ok, lists:unzip(Zipped)}
     end.
 
-fold(Meta, Type, Env, Elements) ->
-    F = fun(Expr, {EnvAcc, ExprAcc}) -> 
-                case term(Meta, Type, EnvAcc, Expr) of
-                    {error, Errs}           -> {EnvAcc, [{error, Errs} | ExprAcc]};
-                    {ok, {NewEnv, NewExpr}} -> {maps:merge(EnvAcc, NewEnv), [NewExpr | ExprAcc]} 
-                end
-        end,
-    {NewEnv, NewElements} = lists:foldl(F, {Env, []}, Elements),
-    case error:collect(NewElements) of
-        {error, Errs}       -> {error, lists:reverse(Errs)};
-        {ok, Elems}         -> {ok, {NewEnv, lists:reverse(Elems)}}
-    end.
-
-tag(Key, Pre) ->
-    fun(Term) -> case Pre(Term) of
-                     {error, Errs}  -> {error, Errs};
-                     {ok, Tag}      -> {ok, with_tag(Key, Tag, Term)};
-                     Tag            -> {ok, with_tag(Key, Tag, Term)}
-                 end
-    end.
-
-with_tag(Key, T, {A, B, C}) ->
-    {A, add_tag(Key, T, B), add_tag(Key, T, C)};
-with_tag(Key, T, {A, B, C, D}) ->
-    {A, add_tag(Key, T, B), add_tag(Key, T, C), add_tag(Key, T, D)};
-with_tag(Key, T, {A, B, C, D, E}) ->
-    {A, add_tag(Key, T, B), add_tag(Key, T, C), add_tag(Key, T, D), add_tag(Key, T, E)}.
-
-add_tag(Key, T, Elements) when is_list(Elements) -> 
-    [add_tag(Key, T, Elem) || Elem <- Elements];
-add_tag(Key, T, Elem) when is_tuple(Elem) -> 
-    setelement(2, Elem, maps:put(Key, T, element(2, Elem)));
-add_tag(Key, T, M) when is_map(M) ->
-    maps:put(Key, T, M);
-add_tag(_, _, Other) -> Other.
+merge(Maps) when is_list(Maps) ->
+    lists:foldl(fun maps:merge/2, #{}, Maps).
 
 term_type(Elem) when is_tuple(Elem) -> element(1, Elem).
+context(Elem) when is_tuple(Elem) -> element(1, Elem).
+
+get_tag(Key, Term)  -> maps:get(Key, element(2, Term)).
+
+tag(Key, Term)      -> tag(Key, Term, fun(Tag) -> Tag end).
+tag(Key, Term, F)   ->
+    OldTag = get_tag(Key, Term),
+    NewTag = F(OldTag),
+    with_tag(Key, NewTag, Term).
+
+with_tag(Key, Tag, {A, B, C}) ->
+    {A, add_tag(Key, Tag, B), add_tag(Key, Tag, C)};
+with_tag(Key, Tag, {A, B, C, D}) ->
+    {A, add_tag(Key, Tag, B), add_tag(Key, Tag, C), add_tag(Key, Tag, D)};
+with_tag(Key, Tag, {A, B, C, D, E}) ->
+    {A, add_tag(Key, Tag, B), add_tag(Key, Tag, C), add_tag(Key, Tag, D), add_tag(Key, Tag, E)}.
+
+add_tag(Key, Tag, Elements) when is_list(Elements) ->
+    [add_tag(Key, Tag, Elem) || Elem <- Elements];
+add_tag(Key, Tag, Elem) when is_tuple(Elem) ->
+    setelement(2, Elem, maps:put(Key, Tag, element(2, Elem)));
+add_tag(Key, Tag, M) when is_map(M) ->
+    maps:put(Key, Tag, M);
+add_tag(_, _, Other) -> Other.

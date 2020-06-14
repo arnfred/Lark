@@ -69,8 +69,8 @@ scan(Env, Stack, TypeMod, {pair, _, Key, Value} = Pair) ->
         true       -> {NewEnv, Domain}
     end;
 
-scan(Env, _, TypeMod, {lambda, Line, [{clause, _, Ps, _} | _] = Cs} = Lambda) -> 
-    Name = symbol:id(['lambda', list_to_atom(integer_to_list(Line))]),
+scan(Env, _, TypeMod, {lambda, Ctx, [{clause, _, Ps, _} | _] = Cs} = Lambda) -> 
+    Name = symbol:id(['lambda', list_to_atom(integer_to_list(maps:get(line, Ctx)))]),
     F = fun(Stack, ArgDomains) -> 
                 NewStack = [{Name, ArgDomains} | Stack],
                 Tags = [symbol:id(Name) || _ <- ArgDomains],
@@ -94,6 +94,20 @@ scan(Env, Stack, TypeMod, {val, _, Pattern, Expr}) ->
     NewDomain = intersection(PatternDomain, ExprDomain),
     {NewEnv, NewDomain};
 
+scan(Env, Stack, TypeMod, {'let', _, Pattern, Expr, Term}) ->
+    {_, ExprDomain} = scan(Env, Stack, TypeMod, Expr),
+    {PatternEnv, _} = scan_pattern(ExprDomain, TypeMod, Stack, Pattern),
+    NewEnv = intersection(Env, PatternEnv),
+    {TermEnv, TermDomain} = scan(NewEnv, Stack, TypeMod, Term),
+    {intersection(NewEnv, TermEnv), TermDomain};
+
+
+scan(Env, Stack, TypeMod, {seq, _, Expr1, Expr2}) ->
+    {Expr1Env, _} = scan(Env, Stack, TypeMod, Expr1),
+    NewEnv = intersection(Env, Expr1Env),
+    {Expr2Env, Expr2Domain} = scan(NewEnv, Stack, TypeMod, Expr2),
+    {intersection(Expr1Env, Expr2Env), Expr2Domain};
+
 scan(Env, Stack, TypeMod, {tuple, _, Elems}) -> fold(Env, Stack, TypeMod, Elems);
 
 scan(Env, Stack, TypeMod, {match, _, Arg, Clauses}) ->
@@ -105,6 +119,8 @@ scan(Env, _, _, {variable, _, _, Tag}) ->
     io:format("variable Env for ~p: ~p~n", [Tag, Env]),
     D = maps:get(Tag, Env, any),
     {intersection(Env, #{Tag => D}), D};
+
+scan(Env, _, _, {key, _, _}) -> {Env, any};
 
 scan(Env, _, TypeMod, {type, _, _} = T) -> 
     Domain = case TypeMod:domain(symbol:tag(T)) of
@@ -168,18 +184,21 @@ scan_pattern(Domain, TypeMod, Stack, {application, _, {type, _, T}, Args}) ->
 
 % Pattern of: `T { k: v, ... }`
 % The dictionary either contains pairs or variables named after product keywords
-scan_pattern(Domain, TypeMod, Stack, {lookup, Line, Var, Elems}) ->
+scan_pattern(Domain, TypeMod, Stack, {lookup, Ctx, Var, Elems}) ->
     {VarEnv, VarDomain} = scan_pattern(Domain, TypeMod, Stack, Var),
-    {ElemsEnv, ElemsDomain} = scan_pattern(VarDomain, TypeMod, Stack, {dict, Line, Elems}),
+    {ElemsEnv, ElemsDomain} = scan_pattern(VarDomain, TypeMod, Stack, {dict, Ctx, Elems}),
 
+    io:format("-> VarDomain: ~p~n", [VarDomain]),
+    io:format("-> ElemsEnv: ~p~n", [ElemsEnv]),
     % `ElemsDomain` as a domain of a Dict will always be a product, but
     % `VarDomain` can legitimately (and will often) be a tagged product. To
-    % make sure the intersection isn't none, we make sure intersect the two
+    % make sure the intersection isn't none, we make sure to intersect the two
     % products.
     NewDomain = case VarDomain of
                     {tagged, Tag, D} -> {tagged, Tag, intersection(ElemsDomain, D)};
                     D -> intersection(ElemsDomain, D)
                 end,
+    io:format("-> NewDomain: ~p~n", [NewDomain]),
     % TODO: The error coming out of the tag not being unwrapped was hella
     % confusing. Might make sense to see that it gets carried through ok
     {intersection(ElemsEnv, VarEnv), NewDomain};
@@ -189,8 +208,15 @@ scan_pattern(Domain, TypeMod, Stack, {dict, _, Keys} = Dict) ->
 
     ErrContext = {scanner, Dict, Stack},
     case get_domain_map(Domain, Keys, ErrContext) of
-        none                 -> {#{}, error:format({non_dict_lookup, Domain}, ErrContext)};
-        {error, Errs}        -> {#{}, {error, Errs}};
+        none                 -> 
+            Err = error:format({non_dict_lookup, Domain}, ErrContext),
+            {KeyEnvs, KeyDomains} = unzip([scan_pattern(Err, TypeMod, Stack, K) || K <- Keys]),
+            {intersection(KeyEnvs), intersection(KeyDomains)};
+
+        {error, Errs}        -> 
+            {KeyEnvs, KeyDomains} = unzip([scan_pattern({error, Errs}, TypeMod, Stack, K) || K <- Keys]),
+            {intersection(KeyEnvs), intersection(KeyDomains)};
+
         Map when is_map(Map) ->
             Scan = fun(Key) -> case maps:get(symbol:name(Key), Map) of
                                    KeyDomain -> scan_pattern(KeyDomain, TypeMod, Stack, Key)
