@@ -4,9 +4,9 @@
 -include("src/error.hrl").
 
 run(Code, RunAsserts) ->
-    {ok, _, {TypeAST, _}} = kind:get_AST(Code),
-    io:format("TypeAST: ~p~n", [TypeAST]),
-    case typer:load("test", TypeAST) of
+    {ok, {_, AST}} = kind:get_AST(Code),
+    io:format("AST: ~p~n", [AST]),
+    case typer:load("test", AST) of
         {error, Errs} -> 
             RunAsserts({error, Errs});
         {ok, TypeMod} ->
@@ -148,7 +148,7 @@ application_top_level_f_test() ->
 
 application_wrong_number_of_args_test() ->
     Code = "type Option a -> a | None\n"
-           "type BlahOption -> Option(blip, blup)",
+           "type BlahOption -> Option(Option/None, Option/None)",
     RunAsserts = fun(Error) ->
                          ?errorMatch({wrong_number_of_arguments, 'Option', _, _}, Error)
                  end,
@@ -328,7 +328,7 @@ pattern_no_matching_test() ->
 pattern_application_test() ->
     Code = "type F a -> a\n"
            "type Test t\n"
-           " | F(t) -> t",
+           " | F(q) -> q",
     RunAsserts = fun(Error) ->
                          ?errorMatch({pattern_application,
                                       {application, {type, 'F'}, [{variable, _}], _}}, Error)

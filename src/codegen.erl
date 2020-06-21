@@ -18,16 +18,17 @@ gen_expr({def, _, Name, Args, Expr}) ->
 gen_expr({type_def, _, Name, _, Body}) ->
     io:format("~nCompiling type ~s with body ~p ~n", [Name, Body]),
     FName = cerl:c_fname(Name, 0),
-    CompiledBody = gen_type_fun(Body),
+    CompiledBody = cerl:c_atom(Name),
     {FName, cerl:c_fun([], CompiledBody)};
 
 gen_expr({variable, _, _, Tag}) -> cerl:c_var(Tag);
-gen_expr({type, _, Symbols}) -> 
+gen_expr({type, _, _, Symbols}) -> 
     Tag = list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)])),
     cerl:c_atom(Tag);
 
-gen_expr({qualified_symbol, _, Symbols}) -> 
-    Tag = list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)])),
+gen_expr({qualified_variable, _, Parts, S}) -> 
+    Symbols = [S || {_, S} <- lists:reverse([S | lists:reverse(Parts)])],
+    Tag = list_to_atom(lists:flatten([atom_to_list(A) || {_, A} <- lists:join('/', Symbols)])),
     cerl:c_atom(Tag);
 
 gen_expr({application, _, Symbol, Args}) ->
@@ -55,10 +56,11 @@ gen_expr({tuple, _, []}) -> cerl:c_atom('()');
 % TODO: Don't just discard everything but the last element. That's a silly thing to do.
 gen_expr({tuple, _, Expressions}) -> lists:last([gen_expr(Expr) || Expr <- Expressions]).
 
-gen_apply({qualified_symbol, _, Symbols}, CompiledArgs) ->
+gen_apply({qualified_variable, _, Parts, [{_, S}]}, CompiledArgs) ->
+    Symbols = [S || {_, S} <- Parts],
     case Symbols of
-        ['erlang', Module, Name] -> cerl:c_call(cerl:c_atom(Module), cerl:c_atom(Name), CompiledArgs);
-        ['erlang', Name]         -> cerl:c_call(cerl:c_atom('erlang'), cerl:c_atom(Name), CompiledArgs)
+        ['erlang', Module] -> cerl:c_call(cerl:c_atom(Module), cerl:c_atom(S), CompiledArgs);
+        ['erlang']         -> cerl:c_call(cerl:c_atom('erlang'), cerl:c_atom(S), CompiledArgs)
     end;
 
 gen_apply({variable, _, _, Tag}, CompiledArgs) ->
@@ -119,7 +121,7 @@ function_call_multiple_args_test() ->
 always_true_test() ->
     Code = 
         "type Boolean -> True | False\n"
-        "def alwaysTrue a -> True",
+        "def alwaysTrue a -> Boolean/True",
     RunAsserts = fun(Mod) -> ?assertEqual('Boolean/True', Mod:alwaysTrue(2)) end,
     run(Code, RunAsserts).
 
@@ -127,8 +129,8 @@ pattern_match_test() ->
     Code = 
         "type Boolean -> True | False\n"
         "def rexor a\n"
-        " | True -> False\n"
-        " | False -> True",
+        " | Boolean/True -> Boolean/False\n"
+        " | Boolean/False -> Boolean/True",
     RunAsserts = fun(Mod) -> 
                          ?assertEqual('Boolean/True', Mod:rexor('Boolean/False')),
                          ?assertEqual('Boolean/False', Mod:rexor('Boolean/True'))
@@ -139,9 +141,9 @@ pattern_match_multivariate_test() ->
     Code = 
         "type Boolean -> True | False\n"
         "def rexor a b\n"
-        " | True, False -> True\n"
-        " | False, True -> True\n"
-        " | _, _ -> False",
+        " | Boolean/True, Boolean/False -> Boolean/True\n"
+        " | Boolean/False, Boolean/True -> Boolean/True\n"
+        " | _, _ -> Boolean/False",
     RunAsserts = fun(Mod) -> 
                          ?assertEqual('Boolean/True', Mod:rexor('Boolean/True', 'Boolean/False')),
                          ?assertEqual('Boolean/False', Mod:rexor('Boolean/True', 'Boolean/True'))
@@ -151,7 +153,7 @@ pattern_match_multivariate_test() ->
 pattern_match_expr_syntax1_test() ->
     Code = 
         "type Boolean -> True | False\n"
-        "def test2 a -> a.match(False -> True | True -> False)",
+        "def test2 a -> a.match(Boolean/False -> Boolean/True | Boolean/True -> Boolean/False)",
     RunAsserts = fun(Mod) -> 
                          ?assertEqual('Boolean/True', Mod:test2('Boolean/False'))
                  end,
@@ -160,8 +162,8 @@ pattern_match_expr_syntax1_test() ->
 pattern_match_expr_syntax2_test() ->
     Code = 
         "type Boolean -> True | False\n"
-        "def test3 a -> a.match(False -> True\n"
-        "                       True -> False)",
+        "def test3 a -> a.match(Boolean/False -> Boolean/True\n"
+        "                       Boolean/True -> Boolean/False)",
     RunAsserts = fun(Mod) -> 
                          ?assertEqual('Boolean/True', Mod:test3('Boolean/False'))
                  end,
@@ -171,7 +173,7 @@ pattern_match_expr_syntax2_test() ->
 pattern_match3_test() ->
     Code = 
         "def blah a\n"
-        " | a -> a",
+        " | b -> b",
     RunAsserts = fun(Mod) -> 
                          ?assertEqual('Boolean/True', Mod:blah('Boolean/True'))
                  end,
@@ -187,7 +189,7 @@ anonymous_function1_test() ->
     TestFunction = fun('Boolean/True') -> 'Boolean/False' end,
     Code = 
         "type Boolean -> True | False\n"
-        "def blip f -> f(True)",
+        "def blip f -> f(Boolean/True)",
     RunAsserts = fun(Mod) -> ?assertEqual('Boolean/False', Mod:blip(TestFunction)) end,
     run(Code, RunAsserts).
 
@@ -195,8 +197,8 @@ anonymous_function2_test() ->
     Code = 
         "type Boolean -> True | False\n"
         "def blip a f -> f(a)\n"
-        "def blap a -> a.blip(False -> True\n"
-        "                     True -> False)",
+        "def blap a -> a.blip(Boolean/False -> Boolean/True\n"
+        "                     Boolean/True -> Boolean/False)",
     RunAsserts = fun(Mod) -> ?assertEqual('Boolean/False', Mod:blap('Boolean/True')) end,
     run(Code, RunAsserts).
 
@@ -211,8 +213,8 @@ anonymous_function4_test() ->
     Code = 
         "type Boolean -> True | False\n"
         "def blip a f -> f(a, a)\n"
-        "def blap a -> a.blip((arg1, False) -> False\n"
-        "                     (arg1, True)  -> arg1)",
+        "def blap a -> a.blip((arg1, Boolean/False) -> Boolean/False\n"
+        "                     (arg1, Boolean/True)  -> arg1)",
     RunAsserts = fun(Mod) -> ?assertEqual('Boolean/True', Mod:blap('Boolean/True')) end,
     run(Code, RunAsserts).
 
@@ -220,9 +222,9 @@ multiple_anonymous_functions1_test() ->
     Code = 
         "type Boolean -> True | False\n"
         "def blip a f g -> f(g(a))\n"
-        "def blap a -> a.blip(_ -> False,\n"
-        "                     False -> True\n"
-        "                     True -> False)",
+        "def blap a -> a.blip(_ -> Boolean/False,\n"
+        "                     Boolean/False -> Boolean/True\n"
+        "                     Boolean/True -> Boolean/False)",
     RunAsserts = fun(Mod) -> ?assertEqual('Boolean/False', Mod:blap('Boolean/True')) end,
     run(Code, RunAsserts).
 
@@ -230,9 +232,9 @@ multiple_anonymous_functions2_test() ->
     Code = 
         "type Boolean -> True | False\n"
         "def blip a f g -> f(g(a))\n"
-        "def blap a -> a.blip(True -> False\n"
-        "                     False -> True,\n"
-        "                     _ -> False)",
+        "def blap a -> a.blip(Boolean/True -> Boolean/False\n"
+        "                     Boolean/False -> Boolean/True,\n"
+        "                     _ -> Boolean/False)",
     RunAsserts = fun(Mod) -> ?assertEqual('Boolean/True', Mod:blap('whatevs')) end,
     run(Code, RunAsserts).
 
@@ -254,7 +256,7 @@ erlang_module_call_no_dot_notation_test() ->
 shadow_variable_test() ->
     Code = 
         "def test a\n"
-        " | a -> a",
+        " | b -> b",
     RunAsserts = fun(Mod) -> ?assertEqual(test, Mod:test(test)) end,
     run(Code, RunAsserts).
 

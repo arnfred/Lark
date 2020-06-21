@@ -1,8 +1,8 @@
 -module(typer).
--export([type/3, load/2]).
+-export([type/2, load/2]).
 
-type(Module, TypeDefs, Defs) -> 
-    case load(Module, TypeDefs) of
+type(Module, Defs) -> 
+    case load(Module, Defs) of
         {error, Errs} -> {error, Errs};
         {ok, TypeMod} ->
             Envs = scanner:scan(TypeMod, Defs),
@@ -10,9 +10,9 @@ type(Module, TypeDefs, Defs) ->
             {ok, ok}
     end.
 
-load(Module, TypeDefs) ->
+load(Module, Defs) ->
     TypeMod = lists:flatten([Module, "_types"]),
-    case typegen:gen(TypeMod, TypeDefs) of
+    case typegen:gen(TypeMod, Defs) of
         {error, Errs} -> 
             io:format("Errs: ~p~n", [Errs]),
             {error, Errs};

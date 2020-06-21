@@ -7,7 +7,7 @@
 
 gen(Module, AST) when is_list(AST) ->
     TypeDefs = maps:from_list([{Name, Args} || {type_def, _, Name, Args, _} <- AST]),
-    {Mappings, _, _} = unzip3([domain([], [], TypeDef) || TypeDef <- AST]),
+    {Mappings, _, _} = unzip3([domain([], [], TypeDef) || {type_def, _, _, _, _} = TypeDef <- AST]),
     Env = gen_env(Mappings),
     io:format("Type Env: ~p~n", [Env]),
 
@@ -116,7 +116,7 @@ domain(Path, Args, {application, _, Expr, AppArgs} = App) ->
     Domain = {application, ExprDomain, ArgDomains, ErrContext},
     {Env, order(Args, Vars), Domain};
 
-domain(Path, _, {type, _, _} = Type) -> 
+domain(Path, _, {type, _, _, _} = Type) -> 
     Tag = tag(Type),
     case lists:member(Tag, Path) of
         true -> {[], [], {recur, Tag}};
@@ -131,7 +131,7 @@ pattern_domain({dict, _, Elems}) ->
     Pairs = [Domain(E) || E <- Elems],
     {product, maps:from_list(Pairs)};
 
-pattern_domain({lookup, L, {type, _, _} = T, Elems}) ->
+pattern_domain({lookup, L, {type, _, _, _} = T, Elems}) ->
     Domain = pattern_domain({dict, L, Elems}),
     {tagged, symbol:tag(T), Domain};
 
@@ -145,7 +145,7 @@ pattern_domain({variable, _, _, Tag}) -> {variable, Tag};
 
 pattern_domain({pair, _, Key, Val}) -> {pair, pattern_domain(Key), pattern_domain(Val)};
 
-pattern_domain({type, _, _} = Type) -> {type, tag(Type)}.
+pattern_domain({type, _, _, _} = Type) -> {type, tag(Type)}.
 
 abstract_form(Env, TypeDefs, {f, Tag, Vars, Domain}) ->
     FDomain = abstract_form(Env, TypeDefs, Domain),

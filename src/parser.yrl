@@ -148,6 +148,7 @@ secondary_separator -> pipe     : '$1'.
 element -> expression           : '$1'.
 element -> assignment           : '$1'.
 element -> newtype              : '$1'.
+element -> function             : '$1'.
 element -> clauses              : {lambda, ctx('$1'), '$1'}.
 
 pair -> noun colon noun : {pair, ctx('$1'), '$1', '$3'}.

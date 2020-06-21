@@ -4,10 +4,9 @@
 -include("src/error.hrl").
 
 run(Code, RunAsserts) ->
-    {ok, _, {TypeAST, AST}} = kind:get_AST(Code),
+    {ok, {_, AST}} = kind:get_AST(Code),
     io:format("DefAST: ~p~n", [AST]),
-    io:format("TypeAST: ~p~n", [TypeAST]),
-    {ok, TypeMod} = typer:load("test", TypeAST),
+    {ok, TypeMod} = typer:load("test", AST),
     Env = scanner:scan(TypeMod, AST),
     RunAsserts(Env),
     true = code:soft_purge(TypeMod),
@@ -27,9 +26,9 @@ env_gen_test() ->
 run_xor_test() ->
     Code = "type Boolean -> True | False\n"
            "def xor a b\n"
-           " | True, False -> True\n"
-           " | False, True -> b\n"
-           " | _, _ -> False",
+           " | Boolean/True, Boolean/False -> Boolean/True\n"
+           " | Boolean/False, Boolean/True -> b\n"
+           " | _, _ -> Boolean/False",
     RunAsserts = fun(Env) ->
                          {f, 'xor', DomainFun} = maps:get({'xor', 2}, Env),
 
@@ -55,9 +54,9 @@ run_xor_test() ->
 direct_recursion_test() ->
     Code = "type State -> Start | Continue | Stop\n"
            "def g state\n"
-           " | Start -> g(Continue)\n"
-           " | Continue -> g(Stop)\n"
-           " | Stop -> state",
+           " | State/Start -> g(State/Continue)\n"
+           " | State/Continue -> g(State/Stop)\n"
+           " | State/Stop -> state",
 
     RunAsserts = fun(Env) ->
                          {f, g, DomainFun} = maps:get({g, 1}, Env),
@@ -198,8 +197,8 @@ pair_expressions_refinement_test() ->
 lambda_clause_test() ->
     Code = "type Args -> A | B | C\n"
            "def ap f a -> f(a)\n"
-           "def test a -> ap(A -> C\n"
-           "                 B -> C,\n"
+           "def test a -> ap(Args/A -> Args/C\n"
+           "                 Args/B -> Args/C,\n"
            "                 a)",
     RunAsserts = fun(Env) ->
                          {f, test, DomainFun} = maps:get({test, 1}, Env),
@@ -222,8 +221,8 @@ lambda_clause_test() ->
 
 assignment_variable_test() ->
     Code = "type Args -> A | B | C\n"
-           "def test a -> (val f = (A -> B\n"
-           "                        B -> C)\n"
+           "def test a -> (val f = (Args/A -> Args/B\n"
+           "                        Args/B -> Args/C)\n"
            "               f(a))",
     RunAsserts = fun(Env) ->
                          {f, test, DomainFun} = maps:get({test, 1}, Env),
@@ -238,7 +237,7 @@ assignment_variable_test() ->
 
 assignment_pattern_test() ->
     Code = "type Dict -> {a: (Ah | Oh), b: Buh}\n"
-           "def test input -> (val {a: (out: Ah)} = input, out)",
+           "def test input -> (val {a: (out: Dict/Ah)} = input, out)",
     RunAsserts = fun(Env) ->
                          {f, test, DomainFun} = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Dict'),
@@ -271,7 +270,7 @@ assignment_nonexistent_key_test() ->
 
 assignment_tagged_product_test() ->
     Code = "type Tagged -> T: {a: A, b: B}\n"
-           "def test input -> (val T{a: out} = input, out)",
+           "def test input -> (val Tagged/T{a: out} = input, out)",
     RunAsserts = fun(Env) ->
                          {f, test, DomainFun} = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Tagged'),
@@ -291,13 +290,13 @@ assignment_tagged_product2_test() ->
                          ?assertEqual({product, #{a => 'Tagged/A'}}, Actual1),
 
                          Actual2 = DomainFun({tagged, 'S', {product, #{a => 'Tagged/A'}}}),
-                         ?assertEqual({product, #{a => 'Tagged/A'}}, Actual1)
+                         ?assertEqual({product, #{a => 'Tagged/A'}}, Actual2)
                  end,
     run(Code, RunAsserts).
 
 assignment_intersection_no_subset_test() ->
     Code = "type Args -> A | B | C\n"
-           "def test input -> (val a: (A | B) = input, a)",
+           "def test input -> (val a: (Args/A | Args/B) = input, a)",
     RunAsserts = fun(Env) ->
                          {f, test, DomainFun} = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Args/A'),
@@ -321,7 +320,7 @@ assignment_intersection_no_subset_test() ->
 % I'll let `input` keep it's original domain.
 assignment_narrowing_of_expression_domain_by_pattern_test() ->
     Code = "type Args -> A | B | C\n"
-           "def test input -> (val a: A = input, input)",
+           "def test input -> (val a: Args/A = input, input)",
     RunAsserts = fun(Env) ->
                          {f, test, DomainFun} = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Args'),
@@ -332,8 +331,8 @@ assignment_narrowing_of_expression_domain_by_pattern_test() ->
 
 match_single_arg_test() ->
     Code = "type Args -> A | B | C\n"
-           "def test input -> input.match(A -> B\n"
-           "                              B -> C)",
+           "def test input -> input.match(Args/A -> Args/B\n"
+           "                              Args/B -> Args/C)",
     RunAsserts = fun(Env) ->
                          {f, test, DomainFun} = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Args/A'),
@@ -353,8 +352,8 @@ pattern_recursive_lookup_test() ->
     Code = "type Args -> A | B | C\n"
            "type List -> Nil | Cons: {elem: Args, tail: List}\n"
            "def last input\n"
-           " | Cons {elem, tail: Nil} -> elem\n"
-           " | Cons {tail} -> tail.last()",
+           " | List/Cons {elem, tail: List/Nil} -> elem\n"
+           " | List/Cons {tail} -> tail.last()",
     RunAsserts = fun(Env) ->
                          {f, last, DomainFun} = maps:get({last, 1}, Env),
                          ListDomain = {tagged, 'List/Cons',

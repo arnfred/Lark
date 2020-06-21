@@ -1,171 +1,122 @@
 -module(tagger).
 -export([tag/1]).
 
-tag(AST) -> 
-    {TypeEnv, TaggedTypes} = tag_types(AST),
-    {DefEnv, TaggedDefs} = tag_defs(TypeEnv, AST),
-    {ok, {TypeEnv, DefEnv}, {TaggedTypes, TaggedDefs}}.
+tag(AST) ->
+    case ast:traverse(fun tag_defs_pre/3, fun tag_defs_post/3, AST) of
+        {error, Errs}   -> {error, Errs};
+        {ok, {Defs, _}} ->
+            io:format("Defs: ~p~n", [Defs]),
+            case ast:traverse(fun add_type_path/3, fun tag_types/3, Defs, AST) of
+                {error, Errs}       -> {error, Errs};
+                {ok, {Types, _}}    ->
+                    Scope = maps:merge(Types, Defs),
+                    io:format("Types+Defs: ~p~n", [Scope]),
+                    ast:traverse(fun add_path/3, fun tag_symbols/3, Scope, AST)
+            end
+    end.
 
-tag_symbol(Path, {symbol, Ctx, variable, S}) ->
-    VarPath = lists:reverse([S | Path]),
-    {variable, Ctx, S, symbol:id(VarPath)};
-tag_symbol(Path, {symbol, Ctx, type, T}) ->
-    {type, Ctx, lists:reverse([T | Path])}.
 
-tag_types(AST) ->
-    Types = lists:filter(fun(A) -> element(1,A) =:= type_def end, AST),
-    InitEnv = maps:from_list([{Name, tag_symbol([], {symbol, Ctx, type, Name})} || 
-                              {type_def, Ctx, Name, _, _} <- Types]),
-    map(InitEnv, Types, [], false).
+% Step 1: Scan all top-level module definitions
+tag_defs_pre(top_level, _, {def, _, _, _, _})       -> ok;
+tag_defs_pre(top_level, _, {type_def, _, _, _, _})  -> ok;
+tag_defs_pre(_, _, _)                               -> skip.
 
-tag_defs(TypeEnv, AST) ->
-    Defs = lists:filter(fun(A) -> element(1,A) =:= def end, AST),
-    TagDef = fun({def, Ctx, Name, Args, _}) -> {variable, Ctx, Name, {Name, length(Args)}} end,
-    DefEnv = maps:from_list([{element(3, D), TagDef(D)} || D  <- Defs]),
-    Env = maps:merge(TypeEnv, DefEnv),
-    io:format("Env: ~p~n", [Env]),
-    map(Env, Defs, [], false).
+tag_defs_post(top_level, _, {def, _, Name, Args, _}) ->
+    {ok, Name, {variable, #{}, Name, {Name, length(Args)}}};
+tag_defs_post(top_level, _, {type_def, _, Name, _, _}) ->
+    {ok, [Name], {type, #{}, Name, [Name]}};
+tag_defs_post(_, _, _) -> skip.
 
-tag(Env, {def, Ctx, Name, Args, Body}, Path, IsPattern) ->
-    NewPath = [Name | Path],
-    {ArgsEnv, TaggedArgs} = map(Env, Args, NewPath, IsPattern),
-    {BodyEnv, TaggedBody} = case Body of
-                                _ when is_list(Body) -> map(maps:merge(Env, ArgsEnv), Body, NewPath, IsPattern);
-                                _ -> tag(maps:merge(Env, ArgsEnv), Body, NewPath, IsPattern)
-                            end,
-    {BodyEnv, {def, Ctx, Name, TaggedArgs, TaggedBody}};
 
-tag(Env, {clauses, Ctx, Clauses}, Path, IsPattern) ->
-    {NewEnv, TaggedClauses} = map(Env, Clauses, Path, IsPattern),
-    {NewEnv, {clauses, Ctx, TaggedClauses}};
+% Step 2: Scan types (but skip types local to a definition)
+add_type_path(top_level, _, {def, _, _, _, _})  -> skip;
+add_type_path(top_level, _, {type_def, _, Name, _, _} = Term) -> ast:tag(path, Term, [Name]);
+add_type_path(Type, Scope, Term)        -> add_path(Type, Scope, Term).
 
-tag(Env, {clause, Ctx, Patterns, Expr}, Path, _) ->
-    {PatternEnv, TaggedPatterns} = map(Env, Patterns, Path, true),
-    NewEnv = maps:merge(Env, PatternEnv),
-    {BodyEnv, TaggedBody} = tag(NewEnv, Expr, Path, false),
-    {BodyEnv, {clause, Ctx, TaggedPatterns, TaggedBody}};
-
-tag(Env, {lambda, Ctx, Clauses}, Path, IsPattern) ->
-    {NewEnv, TaggedClauses} = map(Env, Clauses, Path, IsPattern),
-    {NewEnv, {lambda, Ctx, TaggedClauses}};
-
-%% Notes on application:
-%% Without knowing the type of `Name`, we can't know what the symbol 
-%% resolves to. It might resolve to one of following:
-%%  1. A function defined for a constraint. We can only know by finding the
-%%     type of the noun. Example: `map` on list
-%%  2. An accessor function for a type product (which strictly speaking 
-%%     can be seen as a case of the above)
-%%  3. A global or local non-type definition
-%%
-%%  In order to correctly assign the symbol we need to either:
-%%   1. Be able to narrow down the domain to one possible option
-%%   2. Generate a pattern match which would choose between options
-tag(Env, {application, Ctx, Name, Args}, Path, IsPattern) ->
-    {NameEnv, TaggedName} = tag(Env, Name, Path, IsPattern),
-    {NewEnv, TaggedArgs} = map(NameEnv, Args, Path, IsPattern),
-    {NewEnv, {application, Ctx, TaggedName, TaggedArgs}};
-
-tag(Env, {lookup, Ctx, Var, Elems}, Path, IsPattern) ->
-    {VarEnv, TaggedVar} = tag(Env, Var, Path, IsPattern),
-    {NewEnv, TaggedElems} = map(VarEnv, Elems, Path, IsPattern),
-    {NewEnv, {lookup, Ctx, TaggedVar, TaggedElems}};
-
-tag(Env, {val, Ctx, Pattern, Expr}, Path, IsPattern) ->
-    {PatternEnv, TaggedPattern} = tag(Env, Pattern, Path, true),
-    {_, TaggedExpr} = tag(Env, Expr, Path, IsPattern),
-    NewEnv = maps:merge(Env, PatternEnv),
-    {NewEnv, {val, Ctx, TaggedPattern, TaggedExpr}};
-
-tag(Env, {match, Ctx, Expr, Clauses}, Path, IsPattern) ->
-    {ExprEnv, TaggedExpr} = tag(Env, Expr, Path, IsPattern),
-    {ClausesEnv, TaggedClauses} = map(ExprEnv, Clauses, Path, true),
-    {ClausesEnv, {match, Ctx, TaggedExpr, TaggedClauses}};
-
-tag(Env, {tuple, Ctx, Expressions}, Path, IsPattern) ->
-    {EnvExpr, TaggedExpressions} = fold(Env, Expressions, Path, IsPattern),
-    {EnvExpr, {tuple, Ctx, TaggedExpressions}};
-
-tag(Env, {'let', Ctx, Pattern, Expr, Term}, Path, IsPattern) ->
-    {PatternEnv, TaggedPattern} = tag(Env, Pattern, Path, true),
-    {_, TaggedExpr} = tag(Env, Expr, Path, IsPattern),
-    NewEnv = maps:merge(Env, PatternEnv),
-    {TermEnv, TaggedTerm} = tag(NewEnv, Term, Path, IsPattern),
-    {TermEnv, {'let', Ctx, TaggedPattern, TaggedExpr, TaggedTerm}};
-
-tag(Env, {seq, Ctx, Expr1, Expr2}, Path, IsPattern) ->
-    {Expr1Env, TaggedExpr1} = tag(Env, Expr1, Path, IsPattern),
-    NewEnv = maps:merge(Env, Expr1Env),
-    {Expr2Env, TaggedExpr2} = tag(NewEnv, Expr2, Path, IsPattern),
-    {Expr2Env, {seq, Ctx, TaggedExpr1, TaggedExpr2}};
-
-tag(Env, {dict, Ctx, Expressions}, Path, IsPattern) ->
-    Tag = fun({pair, L, Key, Val}) ->
-                  {KeyEnv, TaggedKey} = tag(Env, Key, Path, true),
-                  {ValEnv, TaggedVal} = tag(Env, Val, Path, true),
-                  {KeyEnv, ValEnv, {pair, L, TaggedKey, TaggedVal}};
-             ({symbol, _, _, _} = S) -> 
-                  {KeyEnv, TaggedSymbol} = tag(Env, S, Path, true),
-                  {KeyEnv, #{}, TaggedSymbol}
-          end,
-    {KeyEnvList, ValEnvList, Tagged} = lists:unzip3([Tag(E) || E <- Expressions]),
-    KeyEnv = lists:foldl(fun(M1, M2) -> maps:merge(M1, M2) end, #{}, KeyEnvList),
-    ValEnv = lists:foldl(fun(M1, M2) -> maps:merge(M1, M2) end, #{}, ValEnvList),
-
-    % For patterns we include the environment of the keys, for non-patterns we
-    % don't. 
-    %
-    % This is because in a pattern a key in a dictionary is a variable that may
-    % be used in the body of code following the expression.  For non-patterns,
-    % a key is not a variable and it shouldn't clutter the name space.
-    case IsPattern of
-        true -> {maps:merge(KeyEnv, ValEnv), {dict, Ctx, Tagged}};
-        false -> {ValEnv, {dict, Ctx, Tagged}}
+tag_types(_, Scope, {symbol, Ctx, type, S} = Term) -> 
+    case type_defined(Scope, Term) of
+        true    -> {ok, replace(Scope, Term)};
+        false   -> {ok, path(Term), {type, Ctx, S, path(Term)}}
     end;
+tag_types(top_level, _, {type_def, Ctx, Name, _, _} = Term) -> 
+    {ok, [Name], {type, Ctx, Name, [Name]}, Term};
+tag_types(expr, Scope, {type_def, Ctx, Name, _, _} = Term) -> 
+    case maps:is_key([Name], Scope) of
+        true   -> error:format({type_already_defined, Name}, {tagger, expr, Term});
+        false  -> {ok, [Name], {type, Ctx, Name, [Name]}, Term}
+    end;
+tag_types(_Type, _Scope, {symbol, _Ctx, variable, _S} = _Term) -> ok;
+tag_types(_, _, _) -> ok.
 
-tag(Env, {type_def, Ctx, Name, Args, Body}, Path, IsPattern) ->
-    NewPath = [Name | Path],
-    MakeVar = fun(L, S) -> {variable, L, S, symbol:id(lists:reverse([S | NewPath]))} end,
-    TaggedArgs = [MakeVar(L, S) || {symbol, L, _, S} <- Args],
-    ArgsEnv = maps:from_list([{S, Arg} || {_, _, S, _} = Arg <- TaggedArgs]),
-    {BodyEnv, TaggedBody} = case Body of
-                                _ when is_list(Body) -> map(maps:merge(Env, ArgsEnv), Body, NewPath, IsPattern);
-                                _ -> tag(maps:merge(Env, ArgsEnv), Body, NewPath, IsPattern)
-                            end,
-    {BodyEnv, {type_def, Ctx, Name, TaggedArgs, TaggedBody}};
 
-tag(Env, {pair, Ctx, Key, Value}, Path, IsPattern) ->
-    {KeyEnv, TaggedKey} = tag(Env, Key, Path, IsPattern),
-    {ValueEnv, TaggedValue} = tag(KeyEnv, Value, Path, IsPattern),
-    {ValueEnv, {pair, Ctx, TaggedKey, TaggedValue}};
+% Step 3: Scan and tag all types and defs in the module
+add_path(_, _, {def, _, Name, _, _} = Term) ->
+    ast:tag(path, Term, fun(Tag) -> [Name | Tag] end, []);
+add_path(_, _, {type_def, _, Name, _, _} = Term) ->
+    case ast:tag(path, Term, [Name]) of
+        {error, Errs}   -> {error, Errs};
+        {ok, Tagged}    -> {change, fun tag_symbols_and_types/3, Tagged}
+    end;
+add_path(_, _, Term) ->
+    ast:tag(path, Term).
 
-tag(Env, {qualified_type, Ctx, Symbols} = QT, _, _) ->
-    {Module, Types} = lists:splitwith(fun({T, _}) -> T == variable end, Symbols),
+
+tag_symbols(Type, Scope, {symbol, _, type, T} = Term) ->
+    case maps:is_key([T], Scope) of
+        false   -> error:format({undefined_type, T}, {tagger, Type, Term});
+        true    -> {ok, replace(Scope, Term)}
+    end;
+tag_symbols(Type, Scope, {symbol, Ctx, variable, S} = Term) ->
+    case {Type, maps:is_key(S, Scope)} of
+        {pattern, true}  -> error:format({symbol_in_pattern_already_defined, S}, {tagger, Type, Term});
+        {pattern, false} -> {ok, S, {variable, Ctx, S, symbol:id(path(Term))}};
+        {expr, false}    -> error:format({undefined_variable, S}, {tagger, Type, Term});
+        {expr, true}     -> {ok, replace(Scope, Term)}
+    end;
+tag_symbols(Type, Scope, {qualified_type, Ctx, Symbols} = Term) ->
+    {Module, Rest} = lists:splitwith(fun({T, _}) -> T == variable end, Symbols),
+    Types = [S || {_, S} <- Rest],
     case Module of
-        [] -> {Env, {type, Ctx, [T || {type, T} <- Types]}};
-        _ -> {Env, QT}
+        [{variable, M}]                     -> {ok, {qualified_type, Ctx, [M], Types}};
+        [{variable, erlang}, {variable, M}] -> {ok, {qualified_type, Ctx, [erlang, M], Types}};
+        [] -> io:format("Qualified type: ~p~nScope: ~p~n", [Types, Scope]),
+            case maps:is_key(Types, Scope) of
+                  true  -> {ok, replace(Scope, {qualified_type, Ctx, Types})};
+                  false -> 
+                      Tag = symbol:tag({type, #{}, Types, Types}),
+                      error:format({undefined_type, Tag}, {tagger, Type, Term})
+              end;
+        _  -> 
+            Tag = symbol:tag({type, #{}, Module, Module}),
+            error:format({unrecognized_module, Tag},{tagger, Type, Term})
     end;
+tag_symbols(_, _, {qualified_variable, Ctx, Symbols}) ->
+    {Module, Def} = lists:split(length(Symbols) - 1, Symbols),
+    {ok, {qualified_variable, Ctx, Module, Def}};
+tag_symbols(_, _, _) -> ok.
 
-tag(Env, {qualified_variable, Ctx, Symbols}, _, _) -> 
-    {Env, {qualified_symbol, Ctx, [S || {variable, S} <- Symbols]}};
-
-tag(Env, {key, _, _} = Key, _, _) -> {Env, Key};
-
-tag(Env, {symbol, _, _, S} = Symbol, Path, _) ->
-    NewSymbol = maps:get(S, Env, tag_symbol(Path, Symbol)),
-    NewEnv = maps:put(S, NewSymbol, Env),
-    {NewEnv, NewSymbol}.
+tag_symbols_and_types(Type, Scope, {symbol, _, variable, _} = Term) -> tag_symbols(Type, Scope, Term);
+tag_symbols_and_types(Type, Scope, {qualified_type, _, _} = Term) -> tag_symbols(Type, Scope, Term);
+tag_symbols_and_types(Type, Scope, Term) -> tag_types(Type, Scope, Term).
 
 
-map(Env, Elements, Path, IsPattern) when is_list(Elements) ->
-    {EnvList, Tagged} = lists:unzip([tag(Env, E, Path, IsPattern) || E <- Elements]),
-    NewEnv = lists:foldl(fun(M1, M2) -> maps:merge(M1, M2) end, #{}, EnvList),
-    {NewEnv, Tagged}.
+path({symbol, _, _, S} = Term) -> lists:reverse([S | ast:get_tag(path, Term)]).
 
-fold(Env, Elements, Path, IsPattern) when is_list(Elements) ->
-    F = fun(Expr, {EnvAcc, ExprAcc}) -> 
-                {NewEnv, TaggedExpr} = tag(EnvAcc, Expr, Path, IsPattern),
-                {maps:merge(EnvAcc, NewEnv), [TaggedExpr | ExprAcc]} 
-        end,
-    {NewEnv, TaggedElements} = lists:foldl(F, {Env, []}, Elements),
-    {NewEnv, lists:reverse(TaggedElements)}.
+
+type_defined(Scope, {symbol, _, _, S} = Term) when is_map(Scope) ->
+    maps:is_key([S], Scope) orelse maps:is_key(path(Term), Scope).
+
+
+
+replace(Scope, {symbol, Ctx, type, S} = Term) when is_map(Scope) ->
+    case maps:is_key(path(Term), Scope) of
+        true    -> setelement(2, maps:get(path(Term), Scope), Ctx);
+        false   -> setelement(2, maps:get([S], Scope), Ctx)
+    end;
+replace(Scope, {symbol, Ctx, variable, S}) when is_map(Scope) ->
+    setelement(2, maps:get(S, Scope), Ctx);
+replace(Scope, {qualified_type, Ctx, Types}) when is_map(Scope) ->
+    setelement(2, maps:get(Types, Scope), Ctx).
+
+    
+

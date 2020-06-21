@@ -10,7 +10,7 @@ pre_tagger(_, _, Term) -> {ok, Term}.
 post_tagger(pattern, _Env, {variable, _, Name, _} = Term) -> 
     {ok, Name, Term};
 post_tagger(pattern, _Env, {type, _, Name, _} = Term) -> {ok, Name, Term};
-post_tagger(_Type, _Env, _Term) -> skip.
+post_tagger(_Type, _Env, _Term) -> ok.
 
 
 pair_test_() ->
@@ -18,7 +18,7 @@ pair_test_() ->
     Input = {pair, #{},
              {symbol, #{}, variable, test_symbol},
              {symbol, #{}, type, 'T'}},
-    Output = ast:traverse(fun pre_tagger/3, fun post_tagger/3, Scope, Input),
+    Output = ast:traverse(expr, fun pre_tagger/3, fun post_tagger/3, Scope, Input),
     ?_assertMatch({ok,
                    {#{},
                     {pair, #{}, 
@@ -33,7 +33,7 @@ val_application_test_() ->
              {application, #{},
               {symbol, #{}, variable, test_symbol},
               [{symbol, #{}, type, 'T'}]}},
-    Output = ast:traverse(fun pre_tagger/3, fun post_tagger/3, Scope, Input),
+    Output = ast:traverse(expr, fun pre_tagger/3, fun post_tagger/3, Scope, Input),
     ?_assertMatch({ok,
                     {#{val_symbol := {variable, #{}, val_symbol, _V}},
                      {val, #{},
@@ -55,7 +55,7 @@ let_assignment_lookup_test_() ->
               {lookup, #{},
                {symbol, #{}, variable, val_symbol},
                [{symbol, #{}, variable, key_symbol}]}}},
-    Output = ast:traverse(fun pre_tagger/3, fun post_tagger/3, Scope, Input),
+    Output = ast:traverse(expr, fun pre_tagger/3, fun post_tagger/3, Scope, Input),
     ?_assertMatch({ok,
                    {#{val_symbol := {variable, #{}, val_symbol, _S},
                       key_symbol := {variable, #{}, key_symbol, _K}},

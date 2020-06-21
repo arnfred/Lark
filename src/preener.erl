@@ -20,11 +20,14 @@ tuple_pre(_, _, {type_def, _, _, _, _})   -> skip;
 tuple_pre(_, _, Term)                     -> {ok, Term}.
 
 tuple_post(expr, _, {tuple, _, Elems}) -> clean_tuple_elements(Elems);
-tuple_post(_, _, _)                 -> skip.
+tuple_post(_, _, _)                 -> ok.
 
 clean_tuple_elements(Expressions) ->
-    F = fun({val, Ctx, Pattern, Expr}, Acc) -> {'let', Ctx, Pattern, Expr, Acc};
-           (T, Acc)                         -> {seq, ast:context(T), T, Acc} end,
+    F = fun({val, Ctx, Pattern, Expr}, Acc)         -> {'let', Ctx, Pattern, Expr, Acc};
+           ({def, Ctx, Name, _, _} = Expr, Acc)     -> Pattern = {symbol, Ctx, variable, Name},
+                                                       {'let', Ctx, Pattern, Expr, Acc};
+           ({type_def, Ctx, _, _, _} = Expr, Acc)   -> {let_type, Ctx, Expr, Acc};
+           (T, Acc)                                 -> {seq, ast:context(T), T, Acc} end,
     case lists:reverse(Expressions) of
         [{val, _, _, _} = T | _]    -> error:format({illegal_end_of_tuple, val}, {preener, T});
         [E | Elems]                 -> {ok, lists:foldr(F, E, lists:reverse(Elems))}
@@ -43,7 +46,7 @@ dict_pre(Type, Scope, {lookup, Ctx, Expr, Elems}) ->
         {ok, TElems} -> {ok, {lookup, Ctx, Expr, TElems}}
     end;
 dict_pre(_Type, _Scope, Term) -> {ok, Term}.
-dict_post(_, _, _) -> skip.
+dict_post(_, _, _) -> ok.
 
 
 dict_elem(expr, _Scope, {symbol, Ctx, variable, Name}) -> {ok, {key, Ctx, Name}};
@@ -89,6 +92,33 @@ translate_vals_to_let_statements_test_() ->
                           {seq, _, {symbol, _, _, b},
                            {'let', _, {symbol, _, _, c}, {symbol, _, _, a},
                             {symbol, _, _, c}}}}}]}, do_preen(Code)).
+
+translate_defs_to_let_statements_test_() ->
+    Code = "def test a -> (def f b -> a, f(a))",
+    ?_assertMatch({ok, [{def, _, _, _,
+                         {'let', _,
+                          {symbol, _, _, f},
+                          {def, _, f, [{symbol, _, _, b}],
+                           {symbol, _, _, a}},
+                          {application, _,
+                           {symbol, _, _, f},
+                           [{symbol, _, _, a}]}}}]}, do_preen(Code)).
+
+translate_typedefs_to_let_type_statements_test_() ->
+    Code = "def test a -> (type T b -> A | b\n"
+           "               a: T(a))",
+    ?_assertMatch({ok, [{def, _, _, _,
+                         {let_type, _,
+                          {type_def, _, 'T',
+                           [{symbol, _, _, b}],
+                           {tuple, _,
+                            [{symbol, _, _, 'A'},
+                             {symbol, _, _, b}]}},
+                          {pair, _,
+                           {symbol, _, _, a},
+                           {application, _,
+                            {symbol, _, _, 'T'},
+                            [{symbol, _, _, a}]}}}}]}, do_preen(Code)).
 
 dict_expr_test_() ->
     Code = "def test a -> {a: a, b: a}",

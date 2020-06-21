@@ -2,14 +2,26 @@
 -export([compile/1, get_AST/1]).
 
 compile({Module, Code}) ->
-    {ok, _, {TypeAST, DefAST}} = get_AST(Code),
-    io:format("Tagged AST is ~p~n", [DefAST]),
-    {ok, _} = typer:type(Module, TypeAST, DefAST),
-    {ok, Forms} = codegen:gen({Module, DefAST}),
-    io:format("Erlang Core Forms are ~p~n", [Forms]),
-    {ok, Mod, Bin} = compile:forms(Forms, [report, verbose, from_core]),
-    BeamName = lists:flatten(io_lib:format("~w.beam", [Module])),
-    code:load_binary(Mod, BeamName, Bin).
+    case get_AST(Code) of
+        {error, Errs} -> {error, Errs};
+        {ok, {_Env, AST}} ->
+            io:format("Tagged AST is ~p~n", [AST]),
+            case typer:type(Module, AST) of
+                {error, Errs} -> {error, Errs};
+                {ok, _} ->
+                    case codegen:gen({Module, AST}) of
+                        {error, Errs} -> {error, Errs};
+                        {ok, Forms} ->
+                            io:format("Erlang Core Forms are ~p~n", [Forms]),
+                            case compile:forms(Forms, [report, verbose, from_core]) of
+                                {ok, Mod, Bin} ->
+                                    BeamName = lists:flatten(io_lib:format("~w.beam", [Module])),
+                                    code:load_binary(Mod, BeamName, Bin);
+                                Error -> Error
+                            end
+                    end
+            end
+    end.
 
 get_AST(Code) ->
     case lexer:string(Code) of

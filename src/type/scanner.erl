@@ -4,7 +4,7 @@
 -export([scan/2]).
 
 scan(TypeMod, AST) when is_list(AST) ->
-    Scanned = [scan_top_level(TypeMod, Def) || Def <- AST],
+    Scanned = [scan_top_level(TypeMod, Def) || {def, _, _, _, _} = Def <- AST],
     {_, Names, Domains} = unzip3([EnvFun(Scanned) || EnvFun <- Scanned]),
     maps:from_list(zip(Names, Domains)).
 
@@ -122,7 +122,7 @@ scan(Env, _, _, {variable, _, _, Tag}) ->
 
 scan(Env, _, _, {key, _, _}) -> {Env, any};
 
-scan(Env, _, TypeMod, {type, _, _} = T) -> 
+scan(Env, _, TypeMod, {type, _, _, _} = T) -> 
     Domain = case TypeMod:domain(symbol:tag(T)) of
                  {f, Name, F}   -> two_step_ignore_stack(F, Name);
                  D              -> D end,
@@ -177,7 +177,7 @@ scan_clause(Env, Stack, TypeMod, Args, {clause, _, Patterns, Expr}) ->
     end.
 
 % Pattern of: `T(a, b)`
-scan_pattern(Domain, TypeMod, Stack, {application, _, {type, _, T}, Args}) ->
+scan_pattern(Domain, TypeMod, Stack, {application, _, {type, _, _, T}, Args}) ->
     {ArgEnvs, ArgDomains} = unzip([scan_pattern(any, TypeMod, Stack, A) || A <- Args]),
     {f, _, TDomainFun} = TypeMod:domain(T), 
     {intersection(ArgEnvs), intersection(Domain, TDomainFun(ArgDomains))};
@@ -244,7 +244,7 @@ scan_pattern(Domain, TypeMod, Stack, {tuple, _, Elements}) ->
     {union(TupleEnvs), union(TupleDomains)};
 
 % Pattern of: `T` for some defined type `T`
-scan_pattern(Domain, TypeMod, Stack, {type, _, _} = T) -> 
+scan_pattern(Domain, TypeMod, Stack, {type, _, _, _} = T) -> 
     TDomain = TypeMod:domain(symbol:tag(T)),
 
     % Why checking for intersection and not if `T` is a subset of `Domain`?
@@ -333,7 +333,7 @@ get_domain(TypeMod, Atom) when is_atom(Atom)    -> element(2, scan([], [], TypeM
 get_domain(_, Tuple) when is_tuple(Tuple)       -> Tuple;
 get_domain(_, D)                                -> D.
 
-get_type(Atom) when is_atom(Atom) -> {type, 0, get_type(atom_to_list(Atom))};
+get_type(Atom) when is_atom(Atom) -> {type, 0, '_', get_type(atom_to_list(Atom))};
 get_type([]) -> [];
 get_type([$/ | Tail]) -> get_type(Tail);
 get_type(List) when is_list(List) ->

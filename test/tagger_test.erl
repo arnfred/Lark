@@ -1,80 +1,94 @@
 -module(tagger_test).
 
 -include_lib("eunit/include/eunit.hrl").
-
-tag_AST(Code) ->
-    {ok, Tokens, _} = lexer:string(Code),
-    io:format("Tokens are ~p~n", [Tokens]),
-    {ok, AST} = parser:parse(Tokens),
-    io:format("AST is ~p~n", [AST]),
-    {ok, _, Tagged} = tagger:tag(AST),
-    Tagged.
+-include("src/error.hrl").
 
 identity_function_test() ->
-    {_, [{def, _, _, Args, Body}]} = tag_AST("def id a -> a"),
-    {variable, _, a, TaggedArg} = Body,
-    [{variable, _, a, TaggedBody}] = Args,
-    ?assertEqual(TaggedArg, TaggedBody).
+    Code = "def id a -> a",
+    ?assertMatch({ok, {_,
+                       [{def, _, id, [{variable, _, a, A}],
+                         {variable, _, a, A}}]}},
+                 kind:get_AST(Code)).
 
 pattern_match1_test() ->
     Code = 
         "def not a\n"
         " | b -> b",
-    {_, [{def, _, _, _, [Clause]}]} = tag_AST(Code),
-    {clause, _, [{variable, _, b, TaggedArg}], {variable, _, b, TaggedArg}} = Clause.
+    ?assertMatch({ok, {_,
+                       [{def, _, 'not', [{variable, _, a, _A}],
+                         [{clause, _, [{variable, _, b, B}], {variable, _, b, B}}]}]}},
+                 kind:get_AST(Code)).
 
 pattern_match2_test() ->
     Code = 
         "def not a\n"
         " | b -> a",
-    {_, [{def, _, _, Args, [Clause]}]} = tag_AST(Code),
-    [{variable, _, a, TaggedArg}] = Args,
-    {clause, _, _, {variable, _, a, TaggedArg}} = Clause.
+    ?assertMatch({ok, {_,
+                       [{def, _, 'not', [{variable, _, a, A}],
+                         [{clause, _, [{variable, _, b, _B}], {variable, _, a, A}}]}]}},
+                 kind:get_AST(Code)).
 
 tuple_test() ->
     Code = "def not a -> (a, a)",
-    {_, [{def, _, _, Args, {tuple, _, [L1, L2]}}]} = tag_AST(Code),
-    [{variable, _, a, TaggedArg}] = Args,
-    {variable, _, a, TaggedArg} = L1,
-    {variable, _, a, TaggedArg} = L2.
+    ?assertMatch({ok, {_,
+                       [{def, _, 'not', [{variable, _, a, A}],
+                         {seq, _, {variable, _, a, A}, {variable, _, a, A}}}]}},
+                 kind:get_AST(Code)).
     
 anonymous_function_test() ->
     Code = 
+        "def blip a -> a\n"
         "def blap a -> a.blip(b -> b\n"
         "                     _ -> a)",
-    {_, Tagged} = tag_AST(Code),
-    [{def, _, _, DefArgs, {application, _, _, Args}}] = Tagged,
-    [_, {lambda, _, [Clause1, Clause2]}] = Args,
-    [{variable, _, a, TaggedA}] = DefArgs,
-    {clause, _, [{variable, _, b, TaggedB}], {variable, _, b, TaggedB}} = Clause1,
-    {clause, _, _, {variable, _, a, TaggedA}} = Clause2.
+    ?assertMatch({ok, {_,
+                       [{def, _, blip,
+                         [{variable, _, a, A1}],
+                         {variable, _, a, A1}},
+                        {def, _, blap,
+                         [{variable, _, a, A2}],
+                         {application, _,
+                          {variable, _, blip, {blip, 1}},
+                          [{variable, _, a, A2},
+                           {lambda, _,
+                            [{clause, _, [{variable, _, b, B}], {variable, _, b, B}},
+                             {clause, _, [{variable, _, '_', _}], {variable, _, a, A2}}]}]}}]}},
+                 kind:get_AST(Code)).
 
 dict_pair_test() ->
-    Code = "def f -> {a: b}",
-    {_, Tagged} = tag_AST(Code),
-    [{def, _, _, [], {dict, _, [{pair, _, Key, _}]}}] = Tagged,
-    ?assertMatch({variable, _, a, _}, Key).
+    Code = "def f b -> {a: b}",
+    ?assertMatch({ok, {_,
+                       [{def, _, _, [{variable, _, b, B}],
+                         {dict, _,
+                          [{pair, _,
+                            {key, _, a},
+                            {variable, _, b, B}}]}}]}}, kind:get_AST(Code)).
+
 
 dict_value_test() ->
-    Code = "def f -> {a}",
-    {_, Tagged} = tag_AST(Code),
-    [{def, _, _, [], {dict, _, [Key]}}] = Tagged,
-    ?assertMatch({variable, _, a, _}, Key).
+    Code = "def f d a -> d{a}",
+    ?assertMatch({ok, {_,
+                       [{def, _, _,
+                         [{variable, _, d, D},
+                          {variable, _, a, _A}],
+                         {lookup,_,
+                          {variable, _, d, D},
+                          [{key, _, a}]}}]}}, kind:get_AST(Code)).
 
 
 simple_sum_type_test() ->
     Code =
         "type Boolean -> True | False\n"
         "def blah a\n"
-        " | True -> False",
-    {Typed, Tagged} = tag_AST(Code),
-    [{type_def, _, _, _, {tuple, _, [{_, _, True}, {_, _, False}]}}] = Typed,
-    ?assertEqual(True, ['Boolean','True']),
-    ?assertEqual(False, ['Boolean', 'False']),
-    [{def, _, _, _, [Clause]}] = Tagged,
-    {clause, _, [{_, _, TrueClause}], {_, _, FalseExpr}} = Clause,
-    ?assertEqual(TrueClause, ['Boolean', 'True']),
-    ?assertEqual(FalseExpr, ['Boolean', 'False']).
+        " | Boolean/True -> Boolean/False",
+    ?assertMatch({ok, {_, [{type_def, _, 'Boolean', [],
+                            {tuple, _,
+                             [{type, _, 'True', ['Boolean', 'True']},
+                              {type, _, 'False', ['Boolean', 'False']}]}},
+                           {def, _, blah, [{variable, _, a, _}],
+                            [{clause, _,
+                              [{type, _, 'True', ['Boolean', 'True']}],
+                              {type, _, 'False', ['Boolean', 'False']}}]}]}},
+                 kind:get_AST(Code)).
 
 complex_sum_syntax_test() ->
     Code =
@@ -82,74 +96,125 @@ complex_sum_syntax_test() ->
         "type Animal -> (Cat | Dog\n"
         "                Parrot | Seagull\n"
         "                Brontosaurus)",
-    {Typed, _} = tag_AST(Code),
-    [{type_def, _, _, _, {tuple, _, [{_, _, Cat}, 
-                                     {_, _, Dog},
-                                     {_, _, Parrot},
-                                     {_, _, Seagull},
-                                     {_, _, Brontosaurus}]}}] = Typed,
-    ?assertEqual(Cat, ['Animal','Cat']),
-    ?assertEqual(Dog, ['Animal','Dog']),
-    ?assertEqual(Parrot, ['Animal','Parrot']),
-    ?assertEqual(Seagull, ['Animal','Seagull']),
-    ?assertEqual(Brontosaurus, ['Animal','Brontosaurus']).
+    ?assertMatch({ok, {_, [{type_def, _, 'Animal', [],
+                            {tuple, _,
+                             [{type, _, 'Cat', ['Animal', 'Cat']},
+                              {type, _, 'Dog', ['Animal', 'Dog']},
+                              {type, _, 'Parrot', ['Animal', 'Parrot']},
+                              {type, _, 'Seagull', ['Animal', 'Seagull']},
+                              {type, _, 'Brontosaurus', ['Animal', 'Brontosaurus']}]}}]}},
+                 kind:get_AST(Code)).
 
 simple_product_type_test() ->
     Code =
         "type Monkey -> Monkey: { food: Banana, plant: Trees }",
-    {Typed, _} = tag_AST(Code),
-    ?assertMatch([{type_def, _, 'Monkey', [],
-                 {pair, _,
-                  {type, _, ['Monkey']},
-                  {dict, _,
-                   [{pair,_,
-                     {variable,_,food,_},
-                     {type,_,['Monkey', 'Banana']}},
-                    {pair,_,
-                     {variable,_,plant,_},
-                     {type,_,['Monkey', 'Trees']}}]}}}], Typed).
+    ?assertMatch({ok, {_, [{type_def, _, 'Monkey', [],
+                            {pair, _,
+                             {type, _, 'Monkey', ['Monkey']},
+                             {dict, _,
+                              [{pair,_,
+                                {key,_,food},
+                                {type,_,'Banana',['Monkey', 'Banana']}},
+                               {pair,_,
+                                {key,_,plant},
+                                {type,_,'Trees',['Monkey', 'Trees']}}]}}}]}}, kind:get_AST(Code)).
 
 complex_type_test() ->
     Code =
         "type BooleanList -> (Cons: { value: (True | False)\n"
         "                             cons: BooleanList }\n"
         "                     Nil)",
-    {Typed, _} = tag_AST(Code),
-    ?assertMatch([{type_def,_,'BooleanList',[],
-                   {tuple,_,
-                    [{pair,_,
-                      {type,_,['BooleanList','Cons']},
-                      {dict,_,
-                       [{pair,_,
-                         {variable,_,value,_},
-                         {tuple,_,
-                          [{type,_,['BooleanList','True']},
-                           {type,_,['BooleanList','False']}]}},
-                        {pair,_,
-                         {variable,_,cons,_},
-                         {type,_,['BooleanList']}}]}},
-                     {type,_,['BooleanList','Nil']}]}}], Typed).
+    ?assertMatch({ok, {_, [{type_def,_,'BooleanList',[],
+                           {tuple,_,
+                            [{pair,_,
+                              {type,_,'Cons',['BooleanList','Cons']},
+                              {dict,_,
+                               [{pair,_,
+                                 {key,_,value},
+                                 {tuple,_,
+                                  [{type,_,'True',['BooleanList','True']},
+                                   {type,_,'False',['BooleanList','False']}]}},
+                                {pair,_,
+                                 {key,_,cons},
+                                 {type,_,'BooleanList',['BooleanList']}}]}},
+                             {type,_,'Nil',['BooleanList','Nil']}]}}]}}, kind:get_AST(Code)).
+
 
 product_key_not_propagated_test() ->
     Code =
-        "type Blip -> { blup: blyp }\n"
+        "type Blip -> { blup: Blyp }\n"
         "def blap -> blup",
-    {Typed, Tagged} = tag_AST(Code),
-    [{type_def, _, 'Blip', [], {dict, _, [{pair, _, {variable, _, 'blup', BlupKey}, _}]}}] = Typed,
-    [{def, _, 'blap', [], {variable, _, 'blup', BlupTag}}] = Tagged,
-    ?assertNotEqual(BlupKey, BlupTag).
+    ?errorMatch({undefined_variable, blup}, kind:get_AST(Code)).
 
 pattern_product_key_propagated_test() ->
     Code = "def test a\n"
            " | {b, c} -> b(c)",
-    {_, Tagged} = tag_AST(Code),
-    ?assertMatch([{def,_,test,
-                   [{variable,_,a,_}],
-                   [{clause,_,
-                     [{dict,_,
-                       [{variable,_,b,B},
-                        {variable,_,c,C}]}],
-                     {application,_,
-                      {variable,_,b,B},
-                      [{variable,_,c,C}]}}]}],
-                 Tagged).
+    Tagged = kind:get_AST(Code),
+    ?assertMatch({ok, {#{a := {variable, _, a, A},
+                         b := {variable, _, b, B},
+                         c := {variable, _, c, C}},
+                       [{def,_,test,
+                         [{variable,_,a,A}],
+                         [{clause,_,
+                           [{dict,_,
+                             [{variable,_,b,B},
+                              {variable,_,c,C}]}],
+                           {application,_,
+                            {variable,_,b,B},
+                            [{variable,_,c,C}]}}]}]}}, Tagged).
+
+undefined_type_test() ->
+    Code = "def test -> T",
+    ?errorMatch({undefined_type, 'T'}, kind:get_AST(Code)).
+
+undefined_variable_test() ->
+    Code = "def test -> a",
+    ?errorMatch({undefined_variable, a}, kind:get_AST(Code)).
+
+symbol_already_defined_test() ->
+    Code = "def test a\n"
+           " | a -> a",
+    ?errorMatch({symbol_in_pattern_already_defined, a}, kind:get_AST(Code)).
+
+undefined_qualified_type_test() ->
+    Code = "def test -> T/T",
+    ?errorMatch({undefined_type, 'T/T'}, kind:get_AST(Code)).
+
+nested_def_test_() ->
+    Code = "def test a -> (def f b -> a,\n"
+           "               f(a))",
+    ?_assertMatch({ok, {_,
+                        [{def, _, test, [{variable, _, a, A1}],
+                          {'let', _, {variable, _, f, F},
+                           {def, _, f, [{variable, _, b, _B}], {variable, _, a, _A2}},
+                           {application, _, {variable, _, f, F},
+                            [{variable, _, a, A1}]}}}]}}, kind:get_AST(Code)).
+
+nested_type_test_() ->
+    Code = "def test a -> (type T -> A | B,\n"
+           "               a.match(T -> a\n"
+           "                       T/A -> T/B))",
+    ?_assertMatch({ok, {_,
+                        [{def, _, test, [{variable, _, a, _A}],
+                          {let_type, _,
+                           {type_def, _, 'T', [],
+                            {tuple, _, [{type, _, 'A', ['T', 'A']},
+                                        {type, _, 'B', ['T', 'B']}]}},
+                           {match, _, {variable, _, a, _A},
+                            [{clause, _, [{type, _, 'T', ['T']}],
+                              {variable, _, a, _A}},
+                             {clause, _, [{type, _, 'A', ['T', 'A']}],
+                              {type, _, 'B', ['T', 'B']}}]}}}]}},
+                  kind:get_AST(Code)).
+
+type_already_defined_error_test() ->
+    Code = "type B -> A | B\n"
+           "def test -> (type B -> C | B/A,\n"
+           "             B/C)",
+    ?errorMatch({type_already_defined, 'B'}, kind:get_AST(Code)).
+
+type_variable_test() ->
+    Code = "type F a -> a",
+    ?assertMatch({ok, {_,
+                       [{type_def, _, 'F', [{variable, _, 'a', A}],
+                         {variable, _, 'a', A}}]}}, kind:get_AST(Code)).
