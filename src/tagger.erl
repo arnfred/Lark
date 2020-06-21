@@ -5,12 +5,10 @@ tag(AST) ->
     case ast:traverse(fun tag_defs_pre/3, fun tag_defs_post/3, AST) of
         {error, Errs}   -> {error, Errs};
         {ok, {Defs, _}} ->
-            io:format("Defs: ~p~n", [Defs]),
             case ast:traverse(fun add_type_path/3, fun tag_types/3, Defs, AST) of
                 {error, Errs}       -> {error, Errs};
                 {ok, {Types, _}}    ->
                     Scope = maps:merge(Types, Defs),
-                    io:format("Types+Defs: ~p~n", [Scope]),
                     ast:traverse(fun add_path/3, fun tag_symbols/3, Scope, AST)
             end
     end.
@@ -30,11 +28,13 @@ tag_defs_post(_, _, _) -> skip.
 
 % Step 2: Scan types (but skip types local to a definition)
 add_type_path(top_level, _, {def, _, _, _, _})  -> skip;
-add_type_path(top_level, _, {type_def, _, Name, _, _} = Term) -> ast:tag(path, Term, [Name]);
+add_type_path(top_level, _, {type_def, _, Name, _, _} = Term) -> {ok, ast:tag(path, Term, [Name])};
 add_type_path(Type, Scope, Term)        -> add_path(Type, Scope, Term).
 
 tag_types(_, Scope, {symbol, Ctx, type, S} = Term) -> 
-    case type_defined(Scope, Term) of
+    % We look for [S] in case the type is a top-level type
+    % We look for path(Term) in case the type is a tag
+    case maps:is_key([S], Scope) orelse maps:is_key(path(Term), Scope) of
         true    -> {ok, replace(Scope, Term)};
         false   -> {ok, path(Term), {type, Ctx, S, path(Term)}}
     end;
@@ -51,14 +51,11 @@ tag_types(_, _, _) -> ok.
 
 % Step 3: Scan and tag all types and defs in the module
 add_path(_, _, {def, _, Name, _, _} = Term) ->
-    ast:tag(path, Term, fun(Tag) -> [Name | Tag] end, []);
+    {ok, ast:tag(path, Term, fun(Tag) -> [Name | Tag] end, [])};
 add_path(_, _, {type_def, _, Name, _, _} = Term) ->
-    case ast:tag(path, Term, [Name]) of
-        {error, Errs}   -> {error, Errs};
-        {ok, Tagged}    -> {change, fun tag_symbols_and_types/3, Tagged}
-    end;
+    {change, fun tag_symbols_and_types/3, ast:tag(path, Term, [Name])};
 add_path(_, _, Term) ->
-    ast:tag(path, Term).
+    {ok, ast:tag(path, Term)}.
 
 
 tag_symbols(Type, Scope, {symbol, _, type, T} = Term) ->
@@ -79,16 +76,14 @@ tag_symbols(Type, Scope, {qualified_type, Ctx, Symbols} = Term) ->
     case Module of
         [{variable, M}]                     -> {ok, {qualified_type, Ctx, [M], Types}};
         [{variable, erlang}, {variable, M}] -> {ok, {qualified_type, Ctx, [erlang, M], Types}};
-        [] -> io:format("Qualified type: ~p~nScope: ~p~n", [Types, Scope]),
-            case maps:is_key(Types, Scope) of
+        [] -> case maps:is_key(Types, Scope) of
                   true  -> {ok, replace(Scope, {qualified_type, Ctx, Types})};
                   false -> 
                       Tag = symbol:tag({type, #{}, Types, Types}),
                       error:format({undefined_type, Tag}, {tagger, Type, Term})
               end;
-        _  -> 
-            Tag = symbol:tag({type, #{}, Module, Module}),
-            error:format({unrecognized_module, Tag},{tagger, Type, Term})
+        _  -> Tag = symbol:tag({type, #{}, Module, Module}),
+              error:format({unrecognized_module, Tag},{tagger, Type, Term})
     end;
 tag_symbols(_, _, {qualified_variable, Ctx, Symbols}) ->
     {Module, Def} = lists:split(length(Symbols) - 1, Symbols),
@@ -101,11 +96,6 @@ tag_symbols_and_types(Type, Scope, Term) -> tag_types(Type, Scope, Term).
 
 
 path({symbol, _, _, S} = Term) -> lists:reverse([S | ast:get_tag(path, Term)]).
-
-
-type_defined(Scope, {symbol, _, _, S} = Term) when is_map(Scope) ->
-    maps:is_key([S], Scope) orelse maps:is_key(path(Term), Scope).
-
 
 
 replace(Scope, {symbol, Ctx, type, S} = Term) when is_map(Scope) ->

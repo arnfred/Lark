@@ -10,7 +10,8 @@ preen(AST) -> case expand_tuples(AST) of
                   {ok, {_, DetupledAST}}  ->
                       case dict_keys(DetupledAST) of
                           {error, Errs}         -> {error, Errs};
-                          {ok, {_, KeyedAst}}   -> {ok, KeyedAst}
+                          {ok, {_, KeyedAst}}   -> {ok, {_, Ret}} = add_ids(KeyedAst),
+                                                   Ret
                       end
               end.
 
@@ -59,6 +60,11 @@ dict_elem(Type, _, Term) ->
 dict_pair_elem(_Type, _Scope, {symbol, Ctx, variable, Name}) -> {ok, {key, Ctx, Name}};
 dict_pair_elem(Type, _, Term) ->
     error:format({illegal_dict_pair_element, ast:term_type(Term), Type}, {preener, Term}).
+
+add_ids(AST) ->
+    TagId = fun(_, _, Term) -> {ok, ast:tag(id, Term, symbol:id(id))} end,
+    Skip = fun(_, _, _) -> ok end,
+    ast:traverse(TagId, Skip, AST).
 
 -ifdef(TEST).
 

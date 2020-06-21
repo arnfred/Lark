@@ -5,7 +5,6 @@
 
 run(Code, RunAsserts) ->
     {ok, {_, AST}} = kind:get_AST(Code),
-    io:format("AST: ~p~n", [AST]),
     case typer:load("test", AST) of
         {error, Errs} -> 
             RunAsserts({error, Errs});
@@ -14,6 +13,10 @@ run(Code, RunAsserts) ->
             true = code:soft_purge(TypeMod),
             true = code:delete(TypeMod)
     end.
+
+compare(Code) -> 
+    {ok, {_, AST}} = kind:get_AST(Code),
+    typer:load_old("old_test", AST).
 
 sum_type_boolean_test() ->
     Code = "type Boolean -> True | False",
@@ -131,7 +134,7 @@ var_order_test() ->
                                                            {tagged, 'Order/A', 'Args/A'},
                                                            {tagged, 'Order/B', 'Args/B'}])}},
                          {f, 'Order/T', DomainFun} = Mod:domain('Order/T'),
-                         Actual = DomainFun('Args/A', 'Args/B', 'Args/C'),
+                         Actual = DomainFun('Args/C', 'Args/B', 'Args/A'),
                          ?assertEqual(none, domain:diff(Expected, Actual))
                  end,
     run(Code, RunAsserts).
@@ -181,6 +184,16 @@ application_first_order_type_test() ->
                  end,
     run(Code, RunAsserts).
 
+application_product_test() ->
+    Code = "type P a b -> {a: a, b: b}\n"
+           "type Test -> P(A, B)",
+    RunAsserts = fun(Mod) ->
+                         Expected = {product, #{a => 'Test/A', b => 'Test/B'}},
+                         ?assertEqual(Expected, Mod:domain('Test'))
+                 end,
+    run(Code, RunAsserts).
+
+
 recursion_top_level_f_test() ->
     Code = "type List a -> Nil | Cons: {head: a, tail: List(a)}",
     RunAsserts = fun(Mod) ->
@@ -219,6 +232,7 @@ pattern_type_test() ->
                          Actual = DomainFun('F/A'),
                          ?assertMatch('F/B', Actual)
                  end,
+    compare(Code),
     run(Code, RunAsserts).
 
 pattern_variable1_test() ->
@@ -303,6 +317,26 @@ pattern_dict_dict_test() ->
                  end,
     run(Code, RunAsserts).
 
+pattern_dict_sum_test() ->
+    Code = "type Args -> A | B | C\n"
+           "type Test t\n"
+           " | {a, b: (Args/A | Args/B)} -> a\n"
+           " | {a, b: Args} -> t",
+    RunAsserts = fun(Mod) ->
+                         {f, 'Test', DomainFun} = Mod:domain('Test'),
+                         Input1 = {product, #{a => 'Args/A', 
+                                              b => 'Args/B'}},
+                         Actual1 = DomainFun(Input1),
+                         Expected1 = 'Args/A',
+                         ?assertEqual(none, domain:diff(Expected1, Actual1)),
+
+                         Input2 = {product, #{a => 'Args/A', 
+                                              b => 'Args/C'}},
+                         Expected2 = Input2,%{sum, ordsets:from_list(['Args/A', 'Args/C'])},
+                         ?assertEqual(none, domain:diff(Expected2, DomainFun(Input2)))
+                 end,
+    run(Code, RunAsserts).
+
 pattern_tagged_test() ->
     Code = "type Args -> T: {a: A, b: B}\n"
            "type Test t\n"
@@ -330,8 +364,7 @@ pattern_application_test() ->
            "type Test t\n"
            " | F(q) -> q",
     RunAsserts = fun(Error) ->
-                         ?errorMatch({pattern_application,
-                                      {application, {type, 'F'}, [{variable, _}], _}}, Error)
+                         ?errorMatch({pattern_application, {type, _, 'F', _}, [{variable, _, q, _}]}, Error)
                  end,
     run(Code, RunAsserts).
 
@@ -347,6 +380,22 @@ pattern_sum_test() ->
                          ?assertEqual('Test/Matched', DomainFun('Args/B')),
                          ?assertEqual('Test/Matched', DomainFun('Args/C')),
                          ?assertEqual('Test/Unmatched', DomainFun('Test/Matched'))
+                 end,
+    run(Code, RunAsserts).
+
+pattern_sum_tagged_test() ->
+    Code =
+           "type Args -> A: ({b: B} | {c: C})\n"
+           "type Test t\n"
+           " | Args/A: {b} -> b\n"
+           " | Args/A: {c} -> c\n"
+           " | _ -> Unmatched",
+    RunAsserts = fun(Mod) ->
+                         {f, 'Test', DomainFun} = Mod:domain('Test'),
+                         ?assertEqual('Args/B', DomainFun({tagged, 'Args/A', {product, #{b => 'Args/B'}}})),
+                         ?assertEqual('Args/C', DomainFun({tagged, 'Args/A', {product, #{c => 'Args/C'}}})),
+                         ?assertEqual('Test/Unmatched', DomainFun({tagged, 'Args/A', {product, #{a => 'Args/A'}}})),
+                         ?assertEqual('Test/Unmatched', DomainFun({tagged, 'Args/B', {product, #{b => 'Args/B'}}}))
                  end,
     run(Code, RunAsserts).
 
@@ -377,3 +426,21 @@ pattern_tagged_pair_test() ->
                          ?assertEqual('Args/C', DomainFun('Args/B'))
                  end,
     run(Code, RunAsserts).
+
+tagged_pair_in_pattern_test() ->
+     Code = "type Test -> Blip/Blop(T)\n"
+            "type Blip a\n"
+            " | value -> Blop: {key: value}",
+    RunAsserts = fun(Mod) ->
+                         Expected = {tagged, 'Blip/Blop',
+                                     {product, #{key => 'Test/T'}}},
+                         ?assertEqual(none, domain:diff(Expected, Mod:domain('Test')))
+                 end,
+    run(Code, RunAsserts).
+
+%multiple_tagged_pair_in_pattern_test() ->
+%     Code = "type Test a\n"
+%            " | {value} -> Blop: {key: value}\n"
+%            " | value -> Blop: {key: value}",
+%    RunAsserts = fun(Err) -> ?errorMatch({multiple_definitions, 'Test/Blop'}, Err) end,
+%    run(Code, RunAsserts).

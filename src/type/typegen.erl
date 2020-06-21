@@ -3,8 +3,6 @@
 -import(symbol, [tag/1]).
 -export([gen/2]).
 
--include_lib("eunit/include/eunit.hrl").
-
 gen(Module, AST) when is_list(AST) ->
     TypeDefs = maps:from_list([{Name, Args} || {type_def, _, Name, Args, _} <- AST]),
     {Mappings, _, _} = unzip3([domain([], [], TypeDef) || {type_def, _, _, _, _} = TypeDef <- AST]),

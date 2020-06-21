@@ -1,6 +1,6 @@
 -module(ast).
 -export([traverse/2, traverse/3, traverse/4, traverse/5, 
-         term_type/1, context/1, tag/2, tag/3, tag/4, get_tag/2]).
+         term_type/1, context/1, tag/2, tag/3, tag/4, get_tag/2, get_tag/3]).
 -import(maps, [merge/2]).
 -include_lib("eunit/include/eunit.hrl").
 
@@ -15,10 +15,12 @@ traverse(Post, AST)                                 -> climb({fun(_, _, T) -> T 
 climb({Pre, Post}, Type, Scope, Term) ->
     case Pre(Type, Scope, Term) of
         {error, Errs}                   -> {error, Errs};
-        skip                            -> {ok, {Scope, Term}};
+        skip                            -> {ok, {#{}, Term}};
         ok                              -> chew(Pre, Post, Type, Scope, Term);
         {ok, NewTerm}                   -> chew(Pre, Post, Type, Scope, NewTerm);
-        {change, NewPost, NewTerm}      -> chew(Pre, NewPost, Type, Scope, NewTerm)
+        {change, NewPost, NewTerm}      -> chew(Pre, NewPost, Type, Scope, NewTerm);
+        Other                           -> error:format({unrecognized_pre_response, Other}, {ast, Term})
+
     end.
 
 chew(Pre, Post, Type, Scope, Term) ->
@@ -31,18 +33,22 @@ chew(Pre, Post, Type, Scope, Term) ->
                 ok                          -> {ok, {Env, TraversedTerm}};
                 {ok, PostTerm}              -> {ok, {Env, PostTerm}};
                 {ok, Key, PostTerm}         -> {ok, {maps:put(Key, PostTerm, Env), PostTerm}};
-                {ok, Key, Value, PostTerm}  -> {ok, {maps:put(Key, Value, Env), PostTerm}}
+                {ok, Key, Value, PostTerm}  -> {ok, {maps:put(Key, Value, Env), PostTerm}};
+                Other                       -> error:format({unrecognized_post_response, Other}, {ast, Term})
             end
     end.
 
-step(Meta, _, Scope, {def, Context, Name, Args, Expr}) when is_list(Args) ->
+step(Meta, top_level, Scope, {def, Context, Name, Args, Expr}) when is_list(Args) ->
+    step(Meta, expr, Scope, {def, Context, Name, Args, Expr});
+
+step(Meta, Type, Scope, {def, Context, Name, Args, Expr}) when is_list(Args) ->
     case map(Meta, pattern, Scope, Args) of
         {error, Errs}            -> {error, Errs};
         {ok, {ArgsEnvs, TArgs}}  ->
             ExprScope = merge([Scope | ArgsEnvs]),
             RawExpr = case Expr of
-                          _ when is_list(Expr)  -> map(Meta, expr, ExprScope, Expr);
-                          _                     -> climb(Meta, expr, ExprScope, Expr)
+                          _ when is_list(Expr)  -> map(Meta, Type, ExprScope, Expr);
+                          _                     -> climb(Meta, Type, ExprScope, Expr)
                       end,
             case RawExpr of
                 {error, Errs}                           -> {error, Errs};
@@ -89,11 +95,16 @@ step(Meta, expr, Scope, {match, Context, Expr, Clauses}) when is_list(Clauses) -
                fun({ExprEnv, TExpr}, {ClauseEnvs, TClauses}) ->
                        {merge([ExprEnv | ClauseEnvs]), {match, Context, TExpr, TClauses}} end);
 
-step(Meta, Type, Scope, {application, Context, Expr, Args}) when is_list(Args) ->
+step(Meta, Type, Scope, {application, Context, Expr, Args}) ->
     error:map2(map(Meta, Type, Scope, Args),
                climb(Meta, Type, Scope, Expr),
                fun({ArgsEnvs, TArgs}, {ExprEnv, TExpr}) -> 
                        {merge([ExprEnv | ArgsEnvs]), {application, Context, TExpr, TArgs}} end);
+
+step(Meta, Type, Scope, {type_application, Context, Tag, Args}) ->
+    error:map(map(Meta, Type, Scope, Args),
+	      fun({ArgsEnvs, TArgs}) -> 
+                       {merge(ArgsEnvs), {type_application, Context, Tag, TArgs}} end);
 
 step(Meta, Type, Scope, {lookup, Context, Expr, Elems}) when is_list(Elems) ->
     error:map2(climb(Meta, Type, Scope, Expr),
@@ -152,27 +163,22 @@ step(Meta, Type, Scope, {dict, Context, Expressions}) when is_list(Expressions) 
             {ok, {merge(ExprsEnvs), {dict, Context, TExprs}}}
     end;
 
-%% Element in dictionary
-%step(Meta, {dict, Type}, Scope, Term) ->
-%    case {Type, climb_type(Term), symbol:is(Term)} of
-%        {pattern, pair, _}    -> step(Meta, pattern, Scope, Term);
-%        {expr, pair, _}       -> step(Meta, {pair, expr}, Scope, Term);
-%        {_, _, false}         -> error:format({illegal_dict_element, climb_type(Term), Type}, {ast, Term});
-%        {pattern, Symbol, _}  -> climb(Meta, pattern, #{}, Symbol); % Also true for lookup expr
-%        {expr, _Symbol, _}    -> error:format({illegal_dict_element, symbol:name(Term), Type}, {ast, Term})
-%    end;
-%
-%step(Meta, {pair, expr}, Scope, {pair, Ctx, Key, Val}) ->
-%    error:map2(climb(Meta, expr, #{}, Key),
-%               climb(Meta, expr, Scope, Val),
-%               fun({_, TKey}, {ValEnv, TVal}) -> 
-%                       {ValEnv, {pair, Ctx, TKey, TVal}} end);
+%step(Meta, Type, Scope, {tagged, Ctx, Tag, Key, Val}) ->
+%    error:map2(climb(Meta, Type, Scope, Key),
+%               climb(Meta, Type, Scope, Val),
+%               fun({KeyEnv, TKey}, {ValEnv, TVal}) -> 
+%                       {merge(KeyEnv, ValEnv), {tagged, Ctx, Tag, TKey, TVal}} end);
 
-step(Meta, Type, Scope, {pair, Ctx, Key, Val}) ->
+step(Meta, Type, Scope, {tagged, Ctx, Tag, Val}) ->
+    error:map(climb(Meta, Type, Scope, Val),
+	      fun({ValEnv, TVal}) -> {ValEnv, {tagged, Ctx, Tag, TVal}} end);
+
+step(Meta, Type, Scope, {TermType, Ctx, Key, Val}) when TermType =:= pair;
+                                                        TermType =:= dict_pair ->
     error:map2(climb(Meta, Type, Scope, Key),
                climb(Meta, Type, Scope, Val),
                fun({KeyEnv, TKey}, {ValEnv, TVal}) -> 
-                       {merge(KeyEnv, ValEnv), {pair, Ctx, TKey, TVal}} end);
+                       {merge(KeyEnv, ValEnv), {TermType, Ctx, TKey, TVal}} end);
 
 
 step(_, _, _, {symbol, _, _, _} = Term)           -> {ok, {#{}, Term}};
@@ -214,14 +220,13 @@ tag(Key, Term)                              -> tag(Key, Term, fun(Tag) -> Tag en
 tag(Key, Term, F) when is_function(F)       -> 
     case get_tag(Key, Term, undefined) of
         undefined   -> error:format({undefined_tag, Key},{ast, Term});
-        Tag         -> {ok, with_tag(Key, F(Tag), Term)}
+        Tag         -> with_tag(Key, F(Tag), Term)
     end;
-tag(Key, Term, Tag)                         -> {ok, with_tag(Key, Tag, Term)}.
+tag(Key, Term, Tag)                         -> with_tag(Key, Tag, Term).
 tag(Key, Term, F, Def) when is_function(F)  ->
     OldTag = get_tag(Key, Term, Def),
     NewTag = F(OldTag),
-    NewTerm = with_tag(Key, NewTag, Term),
-    {ok, NewTerm}.
+    with_tag(Key, NewTag, Term).
 
 with_tag(Key, Tag, {A, B, C}) ->
     {A, add_tag(Key, Tag, B), add_tag(Key, Tag, C)};
