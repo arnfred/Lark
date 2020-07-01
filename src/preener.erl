@@ -20,6 +20,7 @@ expand_tuples(AST) -> ast:traverse(fun tuple_pre/3, fun tuple_post/3, AST).
 tuple_pre(_, _, {type_def, _, _, _, _})   -> skip;
 tuple_pre(_, _, Term)                     -> {ok, Term}.
 
+tuple_post(_, _, {tuple, _, [Elem]}) -> {ok, Elem};
 tuple_post(expr, _, {tuple, _, Elems}) -> clean_tuple_elements(Elems);
 tuple_post(_, _, _)                 -> ok.
 
@@ -158,22 +159,24 @@ dict_illegal_element_test_() ->
     ?_errorMatch({illegal_dict_pair_element, dict, expr}, 
                  {illegal_dict_element, dict, expr}, do_preen(Code)).
 
-lookup_expr_test_() ->
-    Code = "def test a -> a {a: a, b}",
+pair_expr_test_() ->
+    Code = "def test a -> a: {a: a, b}",
     ?_assertMatch({ok, [{def, _, _, _,
-                         {lookup, _,
+                         {pair, _,
                           {symbol, _, _, a},
-                          [{pair, _, {key, _, a}, {symbol, _, _, a}},
-                           {key, _, b}]}}]}, do_preen(Code)).
-lookup_pattern_test_() ->
+                          {dict, _,
+                           [{pair, _, {key, _, a}, {symbol, _, _, a}},
+                            {key, _, b}]}}}]}, do_preen(Code)).
+pair_pattern_test_() ->
     Code = "def test a\n"
-           " | a {a: b, c} -> c",
+           " | (a: {a: b, c}) -> c",
     ?_assertMatch({ok, [{def, _, _, _,
                          [{clause, _,
-                           [{lookup, _,
+                           [{pair, _,
                              {symbol, _, _, a},
-                             [{pair, _, {key, _, a}, {symbol, _, _, b}},
-                              {symbol, _, _, c}]}],
+                             {dict, _,
+                              [{pair, _, {key, _, a}, {symbol, _, _, b}},
+                               {symbol, _, _, c}]}}],
                            {symbol, _, _, c}}]}]}, do_preen(Code)).
 
 -endif.

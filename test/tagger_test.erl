@@ -65,14 +65,15 @@ dict_pair_test() ->
 
 
 dict_value_test() ->
-    Code = "def f d a -> d{a}",
+    Code = "def f d a -> d: {a}",
     ?assertMatch({ok, {_,
                        [{def, _, _,
                          [{variable, _, d, D},
                           {variable, _, a, _A}],
-                         {lookup,_,
+                         {pair,_,
                           {variable, _, d, D},
-                          [{key, _, a}]}}]}}, kind:get_AST(Code)).
+                          {dict, _,
+                           [{key, _, a}]}}}]}}, kind:get_AST(Code)).
 
 
 simple_sum_type_test() ->
@@ -93,7 +94,7 @@ simple_sum_type_test() ->
 complex_sum_syntax_test() ->
     Code =
         "\n"
-        "type Animal -> (Cat | Dog\n"
+        "type Animal -> (Cat | Dog |\n"
         "                Parrot | Seagull\n"
         "                Brontosaurus)",
     ?assertMatch({ok, {_, [{type_def, _, 'Animal', [],
@@ -121,6 +122,7 @@ simple_product_type_test() ->
 
 complex_type_test() ->
     Code =
+        %"type BooleanList -> (Cons: BooleanList\n"
         "type BooleanList -> (Cons: { value: (True | False)\n"
         "                             cons: BooleanList }\n"
         "                     Nil)",
@@ -191,20 +193,24 @@ nested_def_test_() ->
                             [{variable, _, a, A1}]}}}]}}, kind:get_AST(Code)).
 
 nested_type_test_() ->
-    Code = "def test a -> (type T -> A | B,\n"
+    Code = "def match a f -> f(a)\n"
+           "def test a -> (type T -> A | B,\n"
            "               a.match(T -> a\n"
            "                       T/A -> T/B))",
     ?_assertMatch({ok, {_,
-                        [{def, _, test, [{variable, _, a, _A}],
+                        [_,
+                         {def, _, test, [{variable, _, a, _A}],
                           {let_type, _,
                            {type_def, _, 'T', [],
                             {tuple, _, [{type, _, 'A', ['T', 'A']},
                                         {type, _, 'B', ['T', 'B']}]}},
-                           {match, _, {variable, _, a, _A},
-                            [{clause, _, [{type, _, 'T', ['T']}],
-                              {variable, _, a, _A}},
-                             {clause, _, [{type, _, 'A', ['T', 'A']}],
-                              {type, _, 'B', ['T', 'B']}}]}}}]}},
+                           {application, _, {variable, _, match, {match, 2}},
+                            [{variable, _, a, _A},
+                             {lambda, _,
+                              [{clause, _, [{type, _, 'T', ['T']}],
+                                {variable, _, a, _A}},
+                               {clause, _, [{type, _, 'A', ['T', 'A']}],
+                                {type, _, 'B', ['T', 'B']}}]}]}}}]}},
                   kind:get_AST(Code)).
 
 type_already_defined_error_test() ->

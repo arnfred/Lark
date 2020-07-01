@@ -47,17 +47,6 @@ scan(Env, Stack, TypeMod, {application, _, Expr, Args} = Parsnip) ->
     Domain = apply_domain(ExprDomain, Stack, ArgDomains, Parsnip),
     {intersection([ExprEnv | ArgEnvs]), Domain};
 
-scan(Env, Stack, TypeMod, {lookup, _, Var, Elems} = Parsnip) ->
-    {_, ElemDomains} = unzip([scan(Env, Stack, TypeMod, E) || E <- Elems]),
-    Entries = maps:from_list([{symbol:name(E), D} || {E, D} <- zip(Elems, ElemDomains)]),
-    {VarEnv, VarDomain} = scan(Env, Stack, TypeMod, Var),
-    Error = error:format({expected_product_domain, VarDomain}, {scanner, Parsnip, Stack}),
-    case VarDomain of
-        {product,_} = D     -> {intersection(VarEnv, Env), domain:lookup(D, Entries)};
-        {tagged,_,_} = D    -> {intersection(VarEnv, Env), domain:lookup(D, Entries)};
-        D                   -> {intersection(VarEnv, Env), error:leftbias(D, Error)}
-    end;
-
 scan(Env, Stack, TypeMod, {pair, _, Key, Value} = Pair) ->
     {ValueEnv, ValueDomain} = scan(Env, Stack, TypeMod, Value),
     {KeyEnv, KeyDomain} = scan(Env, Stack, TypeMod, Key),
@@ -96,11 +85,13 @@ scan(Env, Stack, TypeMod, {val, _, Pattern, Expr}) ->
 
 scan(Env, Stack, TypeMod, {'let', _, Pattern, Expr, Term}) ->
     {_, ExprDomain} = scan(Env, Stack, TypeMod, Expr),
-    {PatternEnv, _} = scan_pattern(ExprDomain, TypeMod, Stack, Pattern),
-    NewEnv = intersection(Env, PatternEnv),
-    {TermEnv, TermDomain} = scan(NewEnv, Stack, TypeMod, Term),
-    {intersection(NewEnv, TermEnv), TermDomain};
-
+    {PatternEnv, PatternDomain} = scan_pattern(ExprDomain, TypeMod, Stack, Pattern),
+    case PatternDomain of
+        {error, Errs} -> {Env, {error, Errs}};
+        _             -> NewEnv = intersection(Env, PatternEnv),
+                         {TermEnv, TermDomain} = scan(NewEnv, Stack, TypeMod, Term),
+                         {intersection(NewEnv, TermEnv), TermDomain}
+    end;
 
 scan(Env, Stack, TypeMod, {seq, _, Expr1, Expr2}) ->
     {Expr1Env, _} = scan(Env, Stack, TypeMod, Expr1),
@@ -109,11 +100,6 @@ scan(Env, Stack, TypeMod, {seq, _, Expr1, Expr2}) ->
     {intersection(Expr1Env, Expr2Env), Expr2Domain};
 
 scan(Env, Stack, TypeMod, {tuple, _, Elems}) -> fold(Env, Stack, TypeMod, Elems);
-
-scan(Env, Stack, TypeMod, {match, _, Arg, Clauses}) ->
-    {_, ArgDomain} = scan(Env, Stack, TypeMod, Arg),
-    Var = {variable, 0, '', symbol:id('')},
-    scan_clauses(Env, Stack, TypeMod, [{Var, ArgDomain}], Clauses);
 
 scan(Env, _, _, {variable, _, _, Tag}) -> 
     io:format("variable Env for ~p: ~p~n", [Tag, Env]),
@@ -182,27 +168,6 @@ scan_pattern(Domain, TypeMod, Stack, {application, _, {type, _, _, T}, Args}) ->
     {f, _, TDomainFun} = TypeMod:domain(T), 
     {intersection(ArgEnvs), intersection(Domain, TDomainFun(ArgDomains))};
 
-% Pattern of: `T { k: v, ... }`
-% The dictionary either contains pairs or variables named after product keywords
-scan_pattern(Domain, TypeMod, Stack, {lookup, Ctx, Var, Elems}) ->
-    {VarEnv, VarDomain} = scan_pattern(Domain, TypeMod, Stack, Var),
-    {ElemsEnv, ElemsDomain} = scan_pattern(VarDomain, TypeMod, Stack, {dict, Ctx, Elems}),
-
-    io:format("-> VarDomain: ~p~n", [VarDomain]),
-    io:format("-> ElemsEnv: ~p~n", [ElemsEnv]),
-    % `ElemsDomain` as a domain of a Dict will always be a product, but
-    % `VarDomain` can legitimately (and will often) be a tagged product. To
-    % make sure the intersection isn't none, we make sure to intersect the two
-    % products.
-    NewDomain = case VarDomain of
-                    {tagged, Tag, D} -> {tagged, Tag, intersection(ElemsDomain, D)};
-                    D -> intersection(ElemsDomain, D)
-                end,
-    io:format("-> NewDomain: ~p~n", [NewDomain]),
-    % TODO: The error coming out of the tag not being unwrapped was hella
-    % confusing. Might make sense to see that it gets carried through ok
-    {intersection(ElemsEnv, VarEnv), NewDomain};
-
 % Pattern of: `{ k: v, ... }`
 scan_pattern(Domain, TypeMod, Stack, {dict, _, Keys} = Dict) ->
 
@@ -261,6 +226,16 @@ scan_pattern(Domain, TypeMod, Stack, {type, _, _, _} = T) ->
 
 % Pattern of `v` for any non-type
 scan_pattern(Domain, _, _, {variable, _, _, _} = Var) -> {#{symbol:tag(Var) => Domain}, Domain};
+
+% Pattern of `T: {k: S}`
+scan_pattern(Domain, TypeMod, Stack, {pair, _, {type, _, _, _} = T, Val} = P) ->
+    {TEnv, TDomain} = scan_pattern(Domain, TypeMod, Stack, T),
+    case TDomain of
+        {tagged, Tag, D}    -> {ValEnv, ValDomain} = scan_pattern(D, TypeMod, Stack, Val),
+                               {ValEnv, {tagged, Tag, intersection(D, ValDomain)}};
+        {error, Errs}       -> {#{}, {error, Errs}};
+        D                   -> {#{}, error:format({expected_tagged_domain, TDomain, symbol:tag(T)}, {scanner, P, Stack})}
+    end;
 
 % Pattern of `k: T`
 scan_pattern(Domain, TypeMod, Stack, {pair, _, Key, Val}) ->

@@ -35,8 +35,6 @@ gen_expr({application, _, Symbol, Args}) ->
     CompiledArgs = [gen_expr(E) || E <- Args],
     gen_apply(Symbol, CompiledArgs);
 
-gen_expr({match, _, Expr, Clauses}) -> gen_pattern_match([Expr], Clauses);
-
 gen_expr({Args, Clauses}) when is_list(Clauses) -> gen_pattern_match(Args, Clauses);
 gen_expr({_, Expr}) -> gen_expr(Expr);
 
@@ -141,9 +139,9 @@ pattern_match_multivariate_test() ->
     Code = 
         "type Boolean -> True | False\n"
         "def rexor a b\n"
-        " | Boolean/True, Boolean/False -> Boolean/True\n"
-        " | Boolean/False, Boolean/True -> Boolean/True\n"
-        " | _, _ -> Boolean/False",
+        " | Boolean/True Boolean/False -> Boolean/True\n"
+        " | Boolean/False Boolean/True -> Boolean/True\n"
+        " | _ _ -> Boolean/False",
     RunAsserts = fun(Mod) -> 
                          ?assertEqual('Boolean/True', Mod:rexor('Boolean/True', 'Boolean/False')),
                          ?assertEqual('Boolean/False', Mod:rexor('Boolean/True', 'Boolean/True'))
@@ -153,7 +151,8 @@ pattern_match_multivariate_test() ->
 pattern_match_expr_syntax1_test() ->
     Code = 
         "type Boolean -> True | False\n"
-        "def test2 a -> a.match(Boolean/False -> Boolean/True | Boolean/True -> Boolean/False)",
+        "def match a f -> f(a)\n"
+        "def test2 a -> a.match(Boolean/False -> Boolean/True, Boolean/True -> Boolean/False)",
     RunAsserts = fun(Mod) -> 
                          ?assertEqual('Boolean/True', Mod:test2('Boolean/False'))
                  end,
@@ -162,6 +161,7 @@ pattern_match_expr_syntax1_test() ->
 pattern_match_expr_syntax2_test() ->
     Code = 
         "type Boolean -> True | False\n"
+        "def match a f -> f(a)\n"
         "def test3 a -> a.match(Boolean/False -> Boolean/True\n"
         "                       Boolean/True -> Boolean/False)",
     RunAsserts = fun(Mod) -> 
@@ -198,14 +198,14 @@ anonymous_function2_test() ->
         "type Boolean -> True | False\n"
         "def blip a f -> f(a)\n"
         "def blap a -> a.blip(Boolean/False -> Boolean/True\n"
-        "                     Boolean/True -> Boolean/False)",
+        "                      Boolean/True -> Boolean/False)",
     RunAsserts = fun(Mod) -> ?assertEqual('Boolean/False', Mod:blap('Boolean/True')) end,
     run(Code, RunAsserts).
 
 anonymous_function3_test() ->
     Code = 
         "def blip a f -> f(a)\n"
-        "def blap a -> a.blip(arg -> arg)",
+        "def blap a -> a.blip((arg -> arg))",
     RunAsserts = fun(Mod) -> ?assertEqual(whatevs, Mod:blap(whatevs)) end,
     run(Code, RunAsserts).
 
@@ -213,8 +213,8 @@ anonymous_function4_test() ->
     Code = 
         "type Boolean -> True | False\n"
         "def blip a f -> f(a, a)\n"
-        "def blap a -> a.blip((arg1, Boolean/False) -> Boolean/False\n"
-        "                     (arg1, Boolean/True)  -> arg1)",
+        "def blap a -> a.blip(arg1 Boolean/False -> Boolean/False\n"
+        "                     arg1 Boolean/True  -> arg1)",
     RunAsserts = fun(Mod) -> ?assertEqual('Boolean/True', Mod:blap('Boolean/True')) end,
     run(Code, RunAsserts).
 
@@ -222,9 +222,9 @@ multiple_anonymous_functions1_test() ->
     Code = 
         "type Boolean -> True | False\n"
         "def blip a f g -> f(g(a))\n"
-        "def blap a -> a.blip(_ -> Boolean/False,\n"
-        "                     Boolean/False -> Boolean/True\n"
-        "                     Boolean/True -> Boolean/False)",
+        "def blap a -> a.blip((_ -> Boolean/False),\n"
+        "                     (Boolean/False -> Boolean/True\n"
+        "                      Boolean/True -> Boolean/False))",
     RunAsserts = fun(Mod) -> ?assertEqual('Boolean/False', Mod:blap('Boolean/True')) end,
     run(Code, RunAsserts).
 
@@ -232,9 +232,9 @@ multiple_anonymous_functions2_test() ->
     Code = 
         "type Boolean -> True | False\n"
         "def blip a f g -> f(g(a))\n"
-        "def blap a -> a.blip(Boolean/True -> Boolean/False\n"
-        "                     Boolean/False -> Boolean/True,\n"
-        "                     _ -> Boolean/False)",
+        "def blap a -> a.blip((Boolean/True -> Boolean/False\n"
+        "                      Boolean/False -> Boolean/True),\n"
+        "                     (_ -> Boolean/False))",
     RunAsserts = fun(Mod) -> ?assertEqual('Boolean/True', Mod:blap('whatevs')) end,
     run(Code, RunAsserts).
 
