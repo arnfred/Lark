@@ -7,7 +7,7 @@ type(Module, Defs) ->
         {ok, TypeMod} ->
             Envs = scanner:scan(TypeMod, Defs),
             io:format("Envs: ~p~n", [Envs]),
-            {ok, ok}
+            {ok, Envs}
     end.
 
 load(Module, Defs) ->

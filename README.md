@@ -4,7 +4,18 @@
 
 _Kurt Vonnegut_.
 
-# Compiling and Running Tests
+Kind is a programming language built on top of the [Erlang Virtual Machine (BEAM)](https://stackoverflow.com/questions/16779162/what-kind-of-virtual-machine-is-beam-the-erlang-vm). It's designed to be _simple to use_, _easy to read_ and provide _powerful static guarantees_. My goal with the langauge is to bring the goodness of both functional programming and strong type inference to the BEAM. It's inspired by a host of different language features that I've had the pleasure to use over the last two decades:
+
+* The no-nonsense succint syntax of Haskell
+* The ease of passing around and modifying data structures using Clojure
+* The power of pattern matching in Erlang
+* The expressability of Scala
+
+The language relies on domain inference to learn the values that a function or variable can take. These values can be numbers, strings, relations, ranges or functions. Knowing the domain allows Kind to provide static guarantees similar to languages with dependent types, but without having the programmer jump through hoops of formal logic and complex type errors.
+
+# Development
+
+## Compiling and Running Tests
 
 Use `rebar3` to compile and run tests:
 
@@ -13,11 +24,11 @@ rebar3 compile
 rebar3 eunit
 ```
 
-# Notes from building individual components
+## Notes from building individual components
 
 As I've built the compiler, I've tried to keep notes on how to run and test new additions as I've progressed. I've kept these notes here because I think they might be valuable for someone else (or me from the future) trying to repurpose the code for something else.
 
-## Lexing
+### Lexing
 
 Open erlang OTP using `erl`. Then use `leex` to generate `lexer.erl` and the compiler to compile it:
 
@@ -40,7 +51,7 @@ lexer:string("def ?blah").
 > {error,{1,lexer,{illegal,"?"}},1}
 ```
 
-## Parsing
+### Parsing
 
 Open erlang OTP using `erl`. Then use `yecc` to generate `parser.erl` and the compiler to compile it:
 
@@ -60,7 +71,7 @@ parser:parse(Tokens).
        {type_application,1,'False',[]}]}
 ```
 
-## Code Generation
+### Code Generation
 
 Open earlang OTP using `erl`. Then compile the codegen module once you've followed the steps above to compile the lexer and parser:
 
@@ -87,7 +98,7 @@ To run the unit tests I've included the eunit lib which enables us to run:
 codegen:test().
 ```
 
-## Dializer
+### Dializer
 
 To type check the src directory, run dializer and see if it's happy:
 
@@ -98,7 +109,7 @@ dializer --src src
 
 More info here: https://learnyousomeerlang.com/dialyzer
 
-## Using the Debugger
+### Using the Debugger
 To use the debugger, first open a shell with the modules on path:
 
 ```
@@ -118,16 +129,7 @@ domain:union({product, #{a => 1, b => 2}}, {product, #{a => 1, c => 3}}).
 
 More information in [this helpful stackoverflow answer](https://stackoverflow.com/questions/6438041/how-to-debug-erlang-code).
 
-## Type representation
-
-How do I represent a line containing e.g. `type Bool = True | False`?
-
-The answer probably depends on what I need to do with the type afterwards:
-* I'd like for a match to know that it is complete
-* I'd like for the type-checker to understand that the values belong to a type
-* I'd like to be able to qualify the type values so that True always refer to the same atom
-
-# Running from CLI
+## Running from CLI
 
 Ideally I'd like to run the Kind compiler via the cli as in `kind compile my-program.kind` and run the output of the compiler using `kind run my-program`. However this turns out not to be so super simple. Erlang programs are compiled to beam files that run on the Erlang Beam VM.
 
@@ -154,21 +156,43 @@ One way I've found of parsing in arguments is to use the `escript` option instea
 
 This is currently very unfinished. Instead of a Trello board, I'm keeping this section as way to think about next steps.
 
+### 2020-07-02
+I'd like to be able to compile a single-file program that's submitted via a webpage. I think one possible path there is:
+
+* Imports (to be able to import a prelude)
+* Exports (so I can define in the prelude what's exported)
+* A prelude (Not sure what it would contain other than `match` and maybe `True` and `False`)
+* Main function (so I know what to input to the type inference)
+* Codegen for `seq` and `let`
+* Codegen for pattern matching
+
+There's plenty more that would be nice to put in place:
+
+* Better error messages
+* support for range types (e.g. numbers)
+* support for lists and list types
+* inference for type statements
+* constraints (or interfaces or type classs or whatever we want to call them)
+
+I think it might be nice when I've gotten the first part done to develop some examples of the language that are missing features and work out a path for making them work, instead of trying to decide on an order of development untied to actual code I'd like to see working.
+
+### Long pause
+For a while I mostly put these kind of lists in the commit message
+
 ### 2020-04-15
 
-* Product types (e.g. `type Test = Blip(blap: Bool, blup: Bool)`)
-* Evaluation rules for tuples (e.g. `(val x = False, x or True)` should evaluate to `True`)
+* ~Product types (e.g. `type Test = Blip(blap: Bool, blup: Bool)`)~
+* ~Evaluation rules for tuples (e.g. `(val x = False, x or True)` should evaluate to `True`)~
 * Guards for pattern match (e.g. `a.match(n if n < 5 -> True | _ -> False)`)
-* Type inference from guard constraints (e.g. `def not a -> a.match(True -> False | False -> true)` infers that `not` accepts only `True` and `False`
-* Type
+* ~Type inference from guard constraints (e.g. `def not a -> a.match(True -> False | False -> true)` infers that `not` accepts only `True` and `False`~
 
 
 ### 2020-04-01
 
 * ~Code generation support for type enum declarations (e.g. `type Bool = True | False`)~
-* Parser module to sanitise AST into something more intuitive
+* ~Parser module to sanitise AST into something more intuitive~
 * ~guards and matching~
-* type inference
+* ~type inference~
 * ~Figure out an FFI so that I can add support for lists and numbers without hard-coding it in to the code-gen~
 * lists
 * infix functions
