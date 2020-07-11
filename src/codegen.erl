@@ -3,10 +3,10 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-gen({Module, AST}) ->
-    io:format("---> AST: ~p~n", [AST]),
-    Compiled = [gen_expr(D) || D <- AST],
-    CompiledExports = [cerl:c_fname(Name, length(Args)) || {def, _, Name, Args, _} <- AST],
+gen({Module, {ast, _, _, _, Defs}}) ->
+    io:format("---> Defs: ~p~n", [Defs]),
+    Compiled = [gen_expr(D) || D <- maps:values(Defs)],
+    CompiledExports = [cerl:c_fname(Name, length(Args)) || {def, _, Name, Args, _} <- maps:values(Defs)],
     {ok, cerl:c_module(cerl:c_atom(Module), CompiledExports, [], Compiled)}.
 
 gen_expr({def, _, Name, Args, Expr}) ->
@@ -27,7 +27,7 @@ gen_expr({type, _, _, Symbols}) ->
     cerl:c_atom(Tag);
 
 gen_expr({qualified_variable, _, Parts, S}) -> 
-    Symbols = [S || {_, S} <- lists:reverse([S | lists:reverse(Parts)])],
+    Symbols = [S || {_, _, _, S} <- lists:reverse([S | lists:reverse(Parts)])],
     Tag = list_to_atom(lists:flatten([atom_to_list(A) || {_, A} <- lists:join('/', Symbols)])),
     cerl:c_atom(Tag);
 
@@ -54,8 +54,8 @@ gen_expr({tuple, _, []}) -> cerl:c_atom('()');
 % TODO: Don't just discard everything but the last element. That's a silly thing to do.
 gen_expr({tuple, _, Expressions}) -> lists:last([gen_expr(Expr) || Expr <- Expressions]).
 
-gen_apply({qualified_variable, _, Parts, [{_, S}]}, CompiledArgs) ->
-    Symbols = [S || {_, S} <- Parts],
+gen_apply({qualified_variable, _, Parts, [{_, _, _, S}]}, CompiledArgs) ->
+    Symbols = [S || {_, _, _, S} <- Parts],
     case Symbols of
         ['erlang', Module] -> cerl:c_call(cerl:c_atom(Module), cerl:c_atom(S), CompiledArgs);
         ['erlang']         -> cerl:c_call(cerl:c_atom('erlang'), cerl:c_atom(S), CompiledArgs)

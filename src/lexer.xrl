@@ -26,9 +26,11 @@ val                     : {token, {val,             #{line => TokenLine}, list_t
 {RightArrow}            : {token, {right_arrow,     #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {LeftArrow}             : {token, {left_arrow,      #{line => TokenLine}, list_to_atom(TokenChars)}}.
 type                    : {token, {type,            #{line => TokenLine}, list_to_atom(TokenChars)}}.
+import                  : {token, {import_keyword,  #{line => TokenLine}, list_to_atom(TokenChars)}}.
+module                  : {token, {module_keyword,  #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {Symbol}                : {token, {var_symbol,      #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {Type_Symbol}           : {token, {type_symbol,     #{line => TokenLine}, list_to_atom(TokenChars)}}.
-[\n]+                   : {token, {newline,	        #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\n]+                   : {token, {newline,	    #{line => TokenLine}, list_to_atom(TokenChars)}}.
 [\s]+                   : skip_token.
 #.*                     : skip_token.
 {String}                : build_string(string, TokenChars, TokenLine, TokenLen).

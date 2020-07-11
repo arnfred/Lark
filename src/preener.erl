@@ -11,7 +11,7 @@ preen(AST) -> case expand_tuples(AST) of
                       case dict_keys(DetupledAST) of
                           {error, Errs}         -> {error, Errs};
                           {ok, {_, KeyedAst}}   -> {ok, {_, Ret}} = add_ids(KeyedAst),
-                                                   Ret
+                                                   {ok, Ret}
                       end
               end.
 

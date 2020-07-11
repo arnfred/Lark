@@ -15,15 +15,14 @@ tag(AST) ->
 
 
 % Step 1: Scan all top-level module definitions
-tag_defs_pre(top_level, _, {def, _, _, _, _})       -> ok;
-tag_defs_pre(top_level, _, {type_def, _, _, _, _})  -> ok;
+tag_defs_pre(top_level, _, _)                       -> ok;
 tag_defs_pre(_, _, _)                               -> skip.
 
 tag_defs_post(top_level, _, {def, _, Name, Args, _}) ->
     {ok, Name, {variable, #{}, Name, {Name, length(Args)}}};
 tag_defs_post(top_level, _, {type_def, _, Name, _, _}) ->
     {ok, [Name], {type, #{}, Name, [Name]}};
-tag_defs_post(_, _, _) -> skip.
+tag_defs_post(_, _, _) -> ok.
 
 
 % Step 2: Scan types (but skip types local to a definition)
@@ -50,6 +49,8 @@ tag_types(_, _, _) -> ok.
 
 
 % Step 3: Scan and tag all types and defs in the module
+add_path(_, _, {ast, _, _, _, _} = Term) ->
+    {ok, ast:tag(path, Term, fun(Tag) -> Tag end, [])};
 add_path(_, _, {def, _, Name, _, _} = Term) ->
     {ok, ast:tag(path, Term, fun(Tag) -> [Name | Tag] end, [])};
 add_path(_, _, {type_def, _, Name, _, _} = Term) ->
@@ -64,6 +65,7 @@ tag_symbols(Type, Scope, {symbol, _, type, T} = Term) ->
         true    -> {ok, replace(Scope, Term)}
     end;
 tag_symbols(Type, Scope, {symbol, Ctx, variable, S} = Term) ->
+    io:format("Path of ~p: ~p~n", [S, path(Term)]),
     case {Type, maps:is_key(S, Scope)} of
         {pattern, true}  -> error:format({symbol_in_pattern_already_defined, S}, {tagger, Type, Term});
         {pattern, false} -> {ok, S, {variable, Ctx, S, symbol:id(path(Term))}};
@@ -71,8 +73,8 @@ tag_symbols(Type, Scope, {symbol, Ctx, variable, S} = Term) ->
         {expr, true}     -> {ok, replace(Scope, Term)}
     end;
 tag_symbols(Type, Scope, {qualified_type, Ctx, Symbols} = Term) ->
-    {Module, Rest} = lists:splitwith(fun({T, _}) -> T == variable end, Symbols),
-    Types = [S || {_, S} <- Rest],
+    {Module, Rest} = lists:splitwith(fun({_, _, T, _}) -> T == variable end, Symbols),
+    Types = [S || {_, _, _, S} <- Rest],
     case Module of
         [{variable, M}]                     -> {ok, {qualified_type, Ctx, [M], Types}};
         [{variable, erlang}, {variable, M}] -> {ok, {qualified_type, Ctx, [erlang, M], Types}};

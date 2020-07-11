@@ -14,7 +14,9 @@ run(Code, RunAsserts) ->
 
 
 env_gen_test() ->
-    AST = [{def, 1, function1, [], []}, {def, 2, function2, [], []}],
+    AST = {ast, #{}, [], [], maps:from_list(
+                          [{function1, {def, 1, function1, [], []}}, 
+                           {function2, {def, 2, function2, [], []}}])},
     Output = scanner:scan({}, AST),
     ExpectedDomains = [none, none],
     ActualDomains = [DomainFun([]) || {_, {f, _, DomainFun}} <- maps:to_list(Output)],

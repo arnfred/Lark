@@ -23,7 +23,9 @@ compile({Module, Code}) ->
             end
     end.
 
-get_AST(Code) ->
+get_AST(Code) -> get_AST(Code, no_name).
+
+get_AST(Code, FileName) ->
     case lexer:string(Code) of
         {error, Error}          -> error:format({lexer_error, Error},{kind});
         {error, Error1, Error2} -> error:format({lexer_error, Error1, Error2},{kind});
@@ -31,11 +33,15 @@ get_AST(Code) ->
             case parser:parse(Tokens) of
                 {error, Error}  -> error:format({parser_error, Error}, {kind});
                 {ok, Parsed}    ->
-                    case preener:preen(Parsed) of
+                    case module:prepare(Parsed, FileName) of
                         {error, Errs}   -> {error, Errs};
                         {ok, AST}       ->
-                            io:format("AST is ~p~n", [AST]),
-                            tagger:tag(AST)
+                            case preener:preen(AST) of
+                                {error, Errs}   -> {error, Errs};
+                                {ok, Preened}       ->
+                                    io:format("AST is ~p~n", [Preened]),
+                                    tagger:tag(Preened)
+                            end
                     end
             end
     end.

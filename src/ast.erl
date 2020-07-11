@@ -1,16 +1,17 @@
 -module(ast).
--export([traverse/2, traverse/3, traverse/4, traverse/5, 
+-export([traverse/2, traverse/3, traverse/4, traverse_term/5, 
          term_type/1, context/1, tag/2, tag/3, tag/4, get_tag/2, get_tag/3]).
 -import(maps, [merge/2]).
 -include_lib("eunit/include/eunit.hrl").
 
-traverse(Type, Pre, Post, Scope, AST)               -> climb({Pre, Post}, Type, Scope, AST).
 traverse(Pre, Post, Scope, ASTs) when is_list(ASTs) -> map_asts(Pre, Post, Scope, ASTs);
 traverse(Pre, Post, Scope, AST)                     -> climb({Pre, Post}, top_level, Scope, AST).
 traverse(Pre, Post, ASTs) when is_list(ASTs)        -> map_asts(Pre, Post, #{}, ASTs);
 traverse(Pre, Post, AST)                            -> climb({Pre, Post}, top_level, #{}, AST).
 traverse(Post, ASTs) when is_list(ASTs)             -> map_asts(fun(_,_,T) -> T end, Post, #{}, ASTs);
 traverse(Post, AST)                                 -> climb({fun(_, _, T) -> T end, Post}, top_level, #{}, AST).
+
+traverse_term(Type, Pre, Post, Scope, AST)          -> climb({Pre, Post}, Type, Scope, AST).
 
 climb({Pre, Post}, Type, Scope, Term) ->
     case Pre(Type, Scope, Term) of
@@ -37,6 +38,24 @@ chew(Pre, Post, Type, Scope, Term) ->
                 Other                       -> error:format({unrecognized_post_response, Other}, {ast, Term})
             end
     end.
+
+step(Meta, top_level, Scope, {ast, Ctx, Modules, Imports, Defs}) ->
+    error:flatmap(map(Meta, top_level, Scope, Modules),
+                  fun({MEnvs, TModules}) ->
+                          NewScope = merge([Scope | MEnvs]),
+                          case map(Meta, top_level, NewScope, maps:values(Defs)) of
+                              {error, Errs}    -> {error, Errs};
+                              {ok, {DefEnvs, TDefs}} -> 
+                                  NewDefs = maps:from_list(lists:zip(maps:keys(Defs), TDefs)),
+                                  NewEnv = merge(DefEnvs ++ MEnvs),
+                                  {ok, {NewEnv, {ast, Ctx, TModules, Imports, NewDefs}}}
+                          end end);
+
+step(Meta, top_level, Scope, {module, Ctx, BeamName, KindName, Exports}) ->
+    case map(Meta, top_level, Scope, Exports) of
+        {error, Errs}                   -> {error, Errs};
+        {ok, {ExportEnvs, TExports}}    -> {ok, {merge(ExportEnvs), {module, Ctx, BeamName, KindName, TExports}}}
+    end;
 
 step(Meta, top_level, Scope, {def, Context, Name, Args, Expr}) when is_list(Args) ->
     step(Meta, expr, Scope, {def, Context, Name, Args, Expr});
@@ -186,7 +205,6 @@ step(_, _, _, {variable, _, _, _} = Term)         -> {ok, {#{}, Term}};
 step(_, _, _, {type, _, _, _} = Term)             -> {ok, {#{}, Term}};
 step(_, _, _, {qualified_type, _, _} = Term)      -> {ok, {#{}, Term}};
 step(_, _, _, {qualified_variable, _, _} = Term)  -> {ok, {#{}, Term}};
-step(_, _, _, {qualified_symbol, _, _} = Term)    -> {ok, {#{}, Term}};
 step(_, _, _, {key, _, _} = Term)                 -> {ok, {#{}, Term}};
 
 step(_, Type, _, Term) ->
@@ -228,6 +246,11 @@ tag(Key, Term, F, Def) when is_function(F)  ->
     NewTag = F(OldTag),
     with_tag(Key, NewTag, Term).
 
+with_tag(Key, Tag, {ast, Ctx, Modules, Imports, Defs}) ->
+    {ast, add_tag(Key, Tag, Ctx), 
+          add_tag(Key, Tag, Modules), 
+          add_tag(Key, Tag, Imports),
+          maps:from_list([{K, add_tag(Key, Tag, V)} || {K, V} <- maps:to_list(Defs)])};
 with_tag(Key, Tag, {A, B, C}) ->
     {A, add_tag(Key, Tag, B), add_tag(Key, Tag, C)};
 with_tag(Key, Tag, {A, B, C, D}) ->

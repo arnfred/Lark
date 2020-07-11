@@ -4,11 +4,13 @@ Terminals
     integer float string
     open close square_open square_close curly_open curly_close
     apply comma newline assign
+    module_keyword import_keyword
     pipe right_arrow slash colon.
 
 Nonterminals
-    all definitions definition
-    assignment function newtype implies
+    all statements statement
+    assignment function newtype module import
+    implies
     pattern patterns
     def_clauses clause lambda_clauses lambda
     type_clauses type_clause
@@ -31,23 +33,25 @@ Unary 100 expression.
 Unary 200 pattern.
 Nonassoc 300 pair.
 
-all -> definitions          : '$1'.
-all -> newlines definitions : '$2'.
+all -> statements          : '$1'.
+all -> newlines statements : '$2'.
 
 newlines -> newline          : '$1'.
 newlines -> newline newlines : '$1'.
 
 
 
-% Definitions
-% -----------
+% Statements
+% ----------
 
-definitions -> definition                                  : ['$1'].
-definitions -> definition definitions                      : ['$1' | '$2'].
+statements -> statement                                  : ['$1'].
+statements -> statement statements                       : ['$1' | '$2'].
 
-definition -> definition newline : '$1'.
-definition -> function          : '$1'.
-definition -> newtype           : '$1'.
+statement -> statement newlines : '$1'.
+statement -> function           : '$1'.
+statement -> newtype            : '$1'.
+statement -> module             : '$1'.
+statement -> import             : '$1'.
 
 implies -> right_arrow          : '$1'.
 implies -> right_arrow newlines : '$1'.
@@ -60,9 +64,8 @@ newtype -> type symbols clause_separator type_clauses   : {type_def, ctx('$1'), 
 
 
 
-% Elements
-% --------
-
+% Symbols
+% -------
 
 symbol -> type_symbol : make_symbol('$1').
 symbol -> var_symbol : make_symbol('$1').
@@ -70,8 +73,8 @@ symbol -> var_symbol : make_symbol('$1').
 symbols -> symbol           : ['$1'].
 symbols -> symbol symbols   : ['$1' | '$2'].
 
-qualified_symbol -> qualified_type      : {qualified_type, ctx('$1'), unwrap_symbols('$1')}.
-qualified_symbol -> qualified_variable  : {qualified_variable, ctx('$1'), unwrap_symbols('$1')}.
+qualified_symbol -> qualified_type      : {qualified_type, ctx('$1'), '$1'}.
+qualified_symbol -> qualified_variable  : {qualified_variable, ctx('$1'), '$1'}.
 
 qualified_type -> var_symbol slash qualified_type_type          : [make_symbol('$1') | '$3'].
 qualified_type -> qualified_variable slash qualified_type_type  : '$1' ++ '$3'.
@@ -82,29 +85,25 @@ qualified_type_type -> type_symbol slash qualified_type_type    : [make_symbol('
 qualified_variable -> var_symbol slash var_symbol               : [make_symbol('$1'), make_symbol('$3')].
 qualified_variable -> var_symbol slash qualified_variable       : [make_symbol('$1') | '$3'].
 
+
+
+% Module
+% ------
+
+module -> module_keyword var_symbol dict                : {module, ctx('$1'), [unwrap('$2')], unwrap('$3')}.
+module -> module_keyword qualified_variable dict        : {module, ctx('$1'), '$2', unwrap('$3')}.
+
+import -> import_keyword qualified_symbol slash dict    : {import, ctx('$1'), unwrap('$2') ++ ['$4']}.
+import -> import_keyword qualified_symbol               : {import, ctx('$1'), unwrap('$2')}.
+
+
+
+% Literals
+% --------
+
 literal -> string   : '$1'.
 literal -> integer  : '$1'.
 literal -> float    : '$1'.
-
-
-
-% Pair
-% ----
-
-pair -> pair_key colon pair_val : {pair, ctx('$1'), '$1', '$3'}.
-
-pair_key -> application             : '$1'.
-pair_key -> collection              : '$1'.
-pair_key -> symbol                  : '$1'.
-pair_key -> qualified_symbol        : '$1'.
-pair_key -> literal                 : '$1'.
-
-pair_val -> sum_list                : '$1'.
-pair_val -> application             : '$1'.
-pair_val -> collection              : '$1'.
-pair_val -> symbol                  : '$1'.
-pair_val -> qualified_symbol        : '$1'.
-pair_val -> literal                 : '$1'.
 
 
 
@@ -123,6 +122,7 @@ expression -> sequence              : '$1'.  % (val a = 1, a + b)
 expressions -> expression                        : ['$1'].
 expressions -> expression newlines               : ['$1'].
 expressions -> expression separator expressions  : ['$1' | '$3'].
+
 
 
 % Application
@@ -154,6 +154,26 @@ application -> noun apply verb lambda       : {application, ctx('$1'), '$3', ['$
 arguments -> open close                          : [].
 arguments -> open expressions close              : '$2'.
 arguments -> open newlines expressions close     : '$3'.
+
+
+
+% Pair
+% ----
+
+pair -> pair_key colon pair_val : {pair, ctx('$1'), '$1', '$3'}.
+
+pair_key -> application             : '$1'.
+pair_key -> collection              : '$1'.
+pair_key -> symbol                  : '$1'.
+pair_key -> qualified_symbol        : '$1'.
+pair_key -> literal                 : '$1'.
+
+pair_val -> sum_list                : '$1'.
+pair_val -> application             : '$1'.
+pair_val -> collection              : '$1'.
+pair_val -> symbol                  : '$1'.
+pair_val -> qualified_symbol        : '$1'.
+pair_val -> literal                 : '$1'.
 
 
 
@@ -284,8 +304,6 @@ unwrap({_,_,V}) -> V.
 
 make_symbol({var_symbol, L, S}) -> {symbol, L, variable, S};
 make_symbol({type_symbol, L, S}) -> {symbol, L, type, S}.
-
-unwrap_symbols(Symbols) -> [{T, S} || {_, _, T, S} <- Symbols].
 
 ctx({_, Ctx})         -> Ctx;
 ctx({_, Ctx, _})      -> Ctx;

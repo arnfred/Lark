@@ -3,7 +3,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-gen(Module, AST) when is_list(AST) ->
+gen(Module, AST) ->
     error:flatmap2(collect_args(AST),
                    collect_types(AST),
                    fun({ArgsEnv, _}, {TypesEnv, TypedAST}) ->
@@ -20,11 +20,11 @@ gen_types(TypesEnv, ArgsEnv, AST) ->
     ast:traverse(fun pre_gen_term/3, Post, AST).
 
 % Generate the function for `TypeMod:domain(T)`
-gen_module(Module, Types, AST) ->
+gen_module(Module, Types, {ast, _, _, _, Defs}) ->
     DomainDef = gen_domain(Types),
 
     % Top level defs `TypeMod:T()` for `T` in `type T -> ...`
-    TopLevelDefs = [gen_type_def(Name, Args) || {type_def, _, Name, Args, _} <- AST],
+    TopLevelDefs = [gen_type_def(Name, Args) || {type_def, _, Name, Args, _} <- maps:values(Defs)],
 
     {Exports, _} = lists:unzip([DomainDef | TopLevelDefs]),
     {ok, cerl:c_module(cerl:c_atom(Module), Exports, [], [DomainDef | TopLevelDefs])}.
@@ -88,6 +88,7 @@ get_vars(Term) when is_tuple(Term) ->
 % types_pre adds a `path` tag to the term contexts and checks a few
 % assumptions about the type tree. It also renames `pairs` inside of a
 % dict to `dict_pair` to make it easier to generate erlang core afterwards
+types_pre(top_level, _, {ast, _, _, _, _})  -> ok;
 types_pre(top_level, _, {def, _, _, _, _})  -> skip;
 types_pre(top_level, _, {type_def, _, Name, _, _} = Term) -> {ok, ast:tag(path, Term, [Name])};
 types_pre(_, _, {pair, Ctx, {type, _, _, _} = T, Val}) -> 
@@ -127,6 +128,7 @@ pre_gen_term(_, _, _) -> ok.
 
 
 % gen_term translates types from kind AST to erlang core AST
+gen_term(_, _, _, _, {ast, _, _, _, _}) -> ok;
 gen_term(_, _, pattern, _, {type_def, _, _, [], Expr}) -> {ok, Expr};
 
 gen_term(TypesEnv, ArgsEnv, Type, Scope, {type_def, Ctx, Name, ArgList, Clauses}) when is_list(Clauses) ->
@@ -203,7 +205,7 @@ gen_term(TypesEnv, ArgsEnv, expr, _, {type, _, _, _} = Term) ->
                                 end,
                        io:format("Type Domain: ~p~n", [Domain]),
                        Gen = fun(Type, Scope, T) -> gen_term(TypesEnv, ArgsEnv, Type, Scope, T) end,
-                       error:map(ast:traverse(expr, fun pre_gen_term/3, Gen, #{}, Domain),
+                       error:map(ast:traverse_term(expr, fun pre_gen_term/3, Gen, #{}, Domain),
                                  fun({_, Forms}) -> Forms end);
         _           -> {ok, Tag, cerl:c_atom(Tag)}
     end;
@@ -231,7 +233,7 @@ gen_term(TypesEnv, ArgsEnv, pattern, _, {type, _, _, _} = Term) ->
                                 D -> D
                             end,
                    io:format("Type Domain: ~p~n", [Domain]),
-                   error:map(ast:traverse(pattern, fun pre_gen_term/3, Gen, #{}, Domain),
+                   error:map(ast:traverse_term(pattern, fun pre_gen_term/3, Gen, #{}, Domain),
                              fun({_, Forms}) -> Forms end)
     end;
 

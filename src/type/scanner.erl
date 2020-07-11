@@ -3,8 +3,8 @@
 -import(domain, [intersection/1, intersection/2, union/1, union/2]).
 -export([scan/2]).
 
-scan(TypeMod, AST) when is_list(AST) ->
-    Scanned = [scan_top_level(TypeMod, Def) || {def, _, _, _, _} = Def <- AST],
+scan(TypeMod, {ast, _, _, _, Defs}) ->
+    Scanned = [scan_top_level(TypeMod, Def) || {def, _, _, _, _} = Def <- maps:values(Defs)],
     {_, Names, Domains} = unzip3([EnvFun(Scanned) || EnvFun <- Scanned]),
     maps:from_list(zip(Names, Domains)).
 
@@ -113,6 +113,10 @@ scan(Env, _, TypeMod, {type, _, _, _} = T) ->
                  {f, Name, F}   -> two_step_ignore_stack(F, Name);
                  D              -> D end,
     {Env, Domain};
+
+scan(Env, _, _, {qualified_type, _, S}) ->
+    D = maps:get(S, Env, any),
+    {intersection(Env, #{S => D}), D};
 
 scan(Env, _, _, {qualified_symbol, _, S}) ->
     D = maps:get(S, Env, any),
