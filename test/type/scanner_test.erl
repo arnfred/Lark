@@ -4,7 +4,7 @@
 -include("src/error.hrl").
 
 run(Code, RunAsserts) ->
-    {ok, {_, AST}} = kind:get_AST(Code),
+    {ok, [{_, AST}]} = parser:parse(text, [Code]),
     io:format("DefAST: ~p~n", [AST]),
     {ok, TypeMod} = typer:load("test", AST),
     Env = scanner:scan(TypeMod, AST),

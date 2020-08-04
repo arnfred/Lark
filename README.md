@@ -110,24 +110,32 @@ dializer --src src
 More info here: https://learnyousomeerlang.com/dialyzer
 
 ### Using the Debugger
-To use the debugger, first open a shell with the modules on path:
+To use the debugger to run tests, first open a shell with the modules on path:
 
 ```
-> rebar3 shell
+> rebar3 as test shell
 ```
 
-Then attach the debugger and run a command:
+Then attach the debugger:
 ```
-dbg:tracer().
-dbg:p(all, c). % Trace all processes, only calls
-
-% tpl = trace local functions as well
-% x means print exceptions (and normal return values)
-dbg:tpl(domain, union, x). 
-domain:union({product, #{a => 1, b => 2}}, {product, #{a => 1, c => 3}}).
+debugger:start().
 ```
 
-More information in [this helpful stackoverflow answer](https://stackoverflow.com/questions/6438041/how-to-debug-erlang-code).
+Once attached, use the GUI to add modules that are interpreted by the debugger. Then add break points.
+
+At this point things are set up to run a test, but the default test timeout is 5 seconds which will interrupt the debugger. To avoid this issue, change the tests you're interested in running to have a longer timeout in the test source:
+
+```
+{timeout,3600, [?_assertMatch({ok, _}, parser:parse(text, [Module]))]}
+```
+
+Then run the tests:
+
+```
+eunit:test(parser_test).
+```
+
+For more information, see this [very helpful stackoverflow answer](https://stackoverflow.com/questions/34658714/how-to-debug-my-eunit-test-suite-run-when-using-rebar3#34667937). There's also [this helpful answer](https://stackoverflow.com/questions/6438041/how-to-debug-erlang-code) if you want to use a command line debugger instead.
 
 ## Running from CLI
 

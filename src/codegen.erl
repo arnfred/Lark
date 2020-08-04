@@ -26,10 +26,9 @@ gen_expr({type, _, _, Symbols}) ->
     Tag = list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)])),
     cerl:c_atom(Tag);
 
-gen_expr({qualified_variable, _, Parts, S}) -> 
-    Symbols = [S || {_, _, _, S} <- lists:reverse([S | lists:reverse(Parts)])],
-    Tag = list_to_atom(lists:flatten([atom_to_list(A) || {_, A} <- lists:join('/', Symbols)])),
-    cerl:c_atom(Tag);
+gen_expr({qualified_variable, _, ModulePath, Name}) ->
+    ModuleName = module:beam_name(ModulePath),
+    cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(Name), []);
 
 gen_expr({application, _, Symbol, Args}) ->
     CompiledArgs = [gen_expr(E) || E <- Args],
@@ -54,12 +53,9 @@ gen_expr({tuple, _, []}) -> cerl:c_atom('()');
 % TODO: Don't just discard everything but the last element. That's a silly thing to do.
 gen_expr({tuple, _, Expressions}) -> lists:last([gen_expr(Expr) || Expr <- Expressions]).
 
-gen_apply({qualified_variable, _, Parts, [{_, _, _, S}]}, CompiledArgs) ->
-    Symbols = [S || {_, _, _, S} <- Parts],
-    case Symbols of
-        ['erlang', Module] -> cerl:c_call(cerl:c_atom(Module), cerl:c_atom(S), CompiledArgs);
-        ['erlang']         -> cerl:c_call(cerl:c_atom('erlang'), cerl:c_atom(S), CompiledArgs)
-    end;
+gen_apply({qualified_variable, _, ModulePath, Name}, CompiledArgs) ->
+    ModuleName = module:beam_name(ModulePath),
+    cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(Name), CompiledArgs);
 
 gen_apply({variable, _, _, Tag}, CompiledArgs) ->
     cerl:c_apply(cerl:c_var(Tag), CompiledArgs).
@@ -239,17 +235,20 @@ multiple_anonymous_functions2_test() ->
     run(Code, RunAsserts).
 
 erlang_module_call_test() ->
-    Code = "def get_last l -> l.erlang/lists/last",
+    Code = "import lists\n"
+           "def get_last l -> l.lists/last",
     RunAsserts = fun(Mod) -> ?assertEqual('last_item', Mod:get_last(['first_item', 'last_item'])) end,
     run(Code, RunAsserts).
 
 erlang_module_call_erlang_test() ->
-    Code = "def test a -> a.erlang/atom_to_list",
+    Code = "import erlang\n"
+           "def test a -> a.erlang/atom_to_list",
     RunAsserts = fun(Mod) -> ?assertEqual("an_atom", Mod:test('an_atom')) end,
     run(Code, RunAsserts).
 
 erlang_module_call_no_dot_notation_test() ->
-    Code = "def test a -> erlang/atom_to_list(a)",
+    Code = "import erlang\n"
+           "def test a -> erlang/atom_to_list(a)",
     RunAsserts = fun(Mod) -> ?assertEqual("another_atom", Mod:test('another_atom')) end,
     run(Code, RunAsserts).
 

@@ -80,6 +80,7 @@ qualified_type -> var_symbol slash qualified_type_type          : [make_symbol('
 qualified_type -> qualified_variable slash qualified_type_type  : '$1' ++ '$3'.
 qualified_type -> qualified_type_type                           : '$1'.
 qualified_type_type -> type_symbol slash type_symbol            : [make_symbol('$1'), make_symbol('$3')].
+qualified_type_type -> type_symbol slash var_symbol             : [make_symbol('$1'), make_symbol('$3')].
 qualified_type_type -> type_symbol slash qualified_type_type    : [make_symbol('$1') | '$3'].
 
 qualified_variable -> var_symbol slash var_symbol               : [make_symbol('$1'), make_symbol('$3')].
@@ -95,6 +96,7 @@ module -> module_keyword qualified_variable dict        : {module, ctx('$1'), '$
 
 import -> import_keyword qualified_symbol slash dict    : {import, ctx('$1'), unwrap('$2') ++ ['$4']}.
 import -> import_keyword qualified_symbol               : {import, ctx('$1'), unwrap('$2')}.
+import -> import_keyword symbol                         : {import, ctx('$1'), ['$2']}.
 
 
 

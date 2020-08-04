@@ -4,7 +4,7 @@
 -include("src/error.hrl").
 
 run(Code, RunAsserts) ->
-    {ok, {_, AST}} = kind:get_AST(Code),
+    {ok, [{_, AST}]} = parser:parse(text, [Code]),
     case typer:load("test", AST) of
         {error, Errs} -> 
             RunAsserts({error, Errs});

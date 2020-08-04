@@ -5,14 +5,25 @@
 -include_lib("eunit/include/eunit.hrl").
 
 traverse(Pre, Post, Scope, ASTs) when is_list(ASTs) -> map_asts(Pre, Post, Scope, ASTs);
-traverse(Pre, Post, Scope, AST)                     -> climb({Pre, Post}, top_level, Scope, AST).
+traverse(Pre, Post, Scope, AST)                     -> traverse_ast(Pre, Post, Scope, AST).
 traverse(Pre, Post, ASTs) when is_list(ASTs)        -> map_asts(Pre, Post, #{}, ASTs);
-traverse(Pre, Post, AST)                            -> climb({Pre, Post}, top_level, #{}, AST).
+traverse(Pre, Post, AST)                            -> traverse_ast(Pre, Post, #{}, AST).
 traverse(Post, ASTs) when is_list(ASTs)             -> map_asts(fun(_,_,T) -> T end, Post, #{}, ASTs);
-traverse(Post, AST)                                 -> climb({fun(_, _, T) -> T end, Post}, top_level, #{}, AST).
+traverse(Post, AST)                                 -> traverse_ast(fun(_, _, T) -> T end, Post, #{}, AST).
 
 traverse_term(Type, Pre, Post, Scope, AST)          -> climb({Pre, Post}, Type, Scope, AST).
 
+traverse_ast(Pre, Post, Scope, {ast, Ctx, Modules, Imports, Defs}) ->
+    case map({Pre, Post}, top_level, Scope, maps:values(Defs)) of
+        {error, Errs}    -> {error, Errs};
+        {ok, {DefEnvs, TDefs}} ->
+            NewDefs = maps:from_list(lists:zip(maps:keys(Defs), TDefs)),
+            NewEnv = merge(DefEnvs),
+            {ok, {NewEnv, {ast, Ctx, Modules, Imports, NewDefs}}}
+    end.
+
+climb(_, top_level, _, {import, _, _} = Term) -> {ok, {#{}, Term}};
+climb(_, top_level, _, {module, _, _} = Term) -> {ok, {#{}, Term}};
 climb({Pre, Post}, Type, Scope, Term) ->
     case Pre(Type, Scope, Term) of
         {error, Errs}                   -> {error, Errs};

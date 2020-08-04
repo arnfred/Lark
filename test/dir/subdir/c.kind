@@ -1,0 +1,6 @@
+type Args -> A | B | C
+
+def rotate a
+ | Args/A -> Args/B
+ | Args/B -> Args/C
+ | Args/C -> Args/A

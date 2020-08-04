@@ -1,14 +1,14 @@
 -module(kind).
--export([compile/1, get_AST/1]).
+-export([compile/1]).
 
 compile({Module, Code}) ->
-    case get_AST(Code) of
-        {error, Errs} -> {error, Errs};
-        {ok, {_Env, AST}} ->
+    case parser:parse(text, [Code]) of
+        {error, Errs}   -> {error, Errs};
+        {ok, [{no_file, AST}]}     ->
             io:format("Tagged AST is ~p~n", [AST]),
             case typer:type(Module, AST) of
                 {error, Errs} -> {error, Errs};
-                {ok, _} ->
+                {ok, _}       ->
                     case codegen:gen({Module, AST}) of
                         {error, Errs} -> {error, Errs};
                         {ok, Forms} ->
@@ -18,29 +18,6 @@ compile({Module, Code}) ->
                                     BeamName = lists:flatten(io_lib:format("~w.beam", [Module])),
                                     code:load_binary(Mod, BeamName, Bin);
                                 Error -> Error
-                            end
-                    end
-            end
-    end.
-
-get_AST(Code) -> get_AST(Code, no_name).
-
-get_AST(Code, FileName) ->
-    case lexer:string(Code) of
-        {error, Error}          -> error:format({lexer_error, Error},{kind});
-        {error, Error1, Error2} -> error:format({lexer_error, Error1, Error2},{kind});
-        {ok, Tokens, _}         ->
-            case parser:parse(Tokens) of
-                {error, Error}  -> error:format({parser_error, Error}, {kind});
-                {ok, Parsed}    ->
-                    case module:prepare(Parsed, FileName) of
-                        {error, Errs}   -> {error, Errs};
-                        {ok, AST}       ->
-                            case preener:preen(AST) of
-                                {error, Errs}   -> {error, Errs};
-                                {ok, Preened}       ->
-                                    io:format("AST is ~p~n", [Preened]),
-                                    tagger:tag(Preened)
                             end
                     end
             end

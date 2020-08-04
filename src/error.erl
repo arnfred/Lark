@@ -37,18 +37,11 @@ collect_ok([{ok, Head} | Tail], Ret) -> collect_ok(Tail, [Head | Ret]);
 collect_ok([{error, Err} | Tail], _) -> collect_error(Tail, [Err]);
 collect_ok([Head | Tail], Ret) -> collect_ok(Tail, [Head | Ret]).
 
-collect_error([], Ret) -> {error, unique(lists:reverse(lists:flatten(Ret)))};
+collect_error([], Ret) -> {error, utils:unique(lists:reverse(lists:flatten(Ret)))};
 collect_error([{error, Err} | Tail], Ret) -> collect_error(Tail, [Err | Ret]);
 collect_error([{ok, _} | Tail], Ret) -> collect_error(Tail, Ret);
 collect_error([_ | Tail], Ret) -> collect_error(Tail, Ret).
 
-unique(L) -> 
-    {Out, _} = lists:foldl(fun(Elem, {Out, Seen}) -> 
-                                      case ordsets:is_element(Elem, Seen) of
-                                          true -> {Out, Seen};
-                                          false -> {[Elem | Out], ordsets:add_element(Elem, Seen)}
-                                      end end, {[], ordsets:new()}, L),
-    lists:reverse(Out).
 
 -ifdef(TEST).
 

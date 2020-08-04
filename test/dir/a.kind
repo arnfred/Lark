@@ -1,0 +1,6 @@
+type Boolean -> True | False
+
+def xor a b
+ | Boolean/True Boolean/False -> Boolean/True
+ | Boolean/False Boolean/True -> Boolean/True
+ | _ _                        -> Boolean/False

@@ -4,7 +4,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("src/error.hrl").
 
-preen(ASTs) when is_list(ASTs) -> error:collect([preen(AST) || AST <- ASTs]);
+%preen(ASTs) when is_list(ASTs) -> error:collect([preen(AST) || AST <- ASTs]);
 preen(AST) -> case expand_tuples(AST) of
                   {error, Errs}         -> {error, Errs};
                   {ok, {_, DetupledAST}}  ->
@@ -72,9 +72,9 @@ add_ids(AST) ->
 do_preen(Code) ->
     {ok, Tokens, _} = lexer:string(Code),
     io:format("Tokens are ~p~n", [Tokens]),
-    {ok, Parsed} = parser:parse(Tokens),
+    {ok, Parsed} = grammar:parse(Tokens),
     io:format("Parsed is ~p~n", [Parsed]),
-    error:collect([preener:preen(P) || P <- Parsed]).
+    preener:preen(Parsed).
 
 illegal_end_of_tuple_test_() ->
     Code = "def test a b -> (val a = b, val b = a)",

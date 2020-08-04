@@ -1,5 +1,5 @@
 -module(typegen).
--export([gen/2]).
+-export([gen/2, collect_types/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -80,7 +80,7 @@ args_post(_, _, Term) when is_tuple(Term) ->
 
 get_vars(Term) when is_tuple(Term) ->
     Args = [{var, V} || I <- lists:seq(3, size(Term)), {var, V} <- lists:flatten([element(I, Term)])],
-    unique(Args).
+    utils:unique(Args).
 
 
 
@@ -276,21 +276,9 @@ unsafe_call_form(NameForm, ArgForms) ->
                   [cerl:c_int(3), cerl:c_apply(cerl:c_fname(domain, 1), [NameForm])]),
       ArgForms).
 
-
-
-unique(L) -> 
-    {Out, _} = lists:foldl(fun(Elem, {Out, Seen}) -> 
-                                      case ordsets:is_element(Elem, Seen) of
-                                          true -> {Out, Seen};
-                                          false -> {[Elem | Out], ordsets:add_element(Elem, Seen)}
-                                      end end, {[], ordsets:new()}, L),
-    lists:reverse(Out).
-
-
 combinations(L) -> 
     Rs = lists:foldl(fun(Es, Accs) -> [[E | Acc] || E <- Es, Acc <- Accs] end, [[]], L),
     [lists:reverse(R) || R <- Rs].
-
 
 catchall(Args) ->
     Error = cerl:c_tuple([cerl:c_atom(error),

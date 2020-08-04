@@ -46,7 +46,7 @@ compact_sum_groups(Elements) ->
     % Filter out `none` and group by domain type
     KeyFun = fun({Type, _}) -> Type;
                 (Other)     -> Other end,
-    Keyed = [{K, V} || {K, V} <- group_by(KeyFun, Elements)],
+    Keyed = [{K, V} || {K, V} <- utils:group_by(KeyFun, Elements)],
     
     % Based on domain type compact appropriately
     L = lists:map(fun({product, Products}) -> compact_product_list(Products);
@@ -118,7 +118,7 @@ compact_maps(Maps) ->
         1 -> [#{Pivot => union:union([maps:get(Pivot, M, any) || M <- Maps])}];
         _ -> 
             % Group maps by domain of pivot key
-            Grouped = group_by(fun(Map) -> maps:get(Pivot, Map, undefined) end, Maps),
+            Grouped = utils:group_by(fun(Map) -> maps:get(Pivot, Map, undefined) end, Maps),
 
             Compact = fun(Key, Domain, PivotedMaps) -> 
                               Compacted = compact_maps([maps:remove(Key, Map) || Map <- PivotedMaps]),
@@ -137,5 +137,3 @@ compact_maps(Maps) ->
             % function recursively
             lists:flatten([Compact(Pivot, Domain, Group) || {Domain, Group} <- Grouped])
     end.
-
-group_by(F, L) -> dict:to_list(lists:foldr(fun({K,V}, D) -> dict:append(K, V, D) end , dict:new(), [ {F(X), X} || X <- L ])).
