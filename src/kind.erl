@@ -4,7 +4,7 @@
 compile({Module, Code}) ->
     case parser:parse(text, [Code]) of
         {error, Errs}   -> {error, Errs};
-        {ok, [{no_file, AST}]}     ->
+        {ok, [{_, AST}]}     ->
             io:format("Tagged AST is ~p~n", [AST]),
             case typer:type(Module, AST) of
                 {error, Errs} -> {error, Errs};

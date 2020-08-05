@@ -7,7 +7,7 @@
         begin
             ((fun () ->
                       case (Expr) of
-                          {error, [{Error, _}]} -> ok;
+                          {error, [{Error, _} | _]} -> ok;
                           __V -> erlang:error({errorMatch,
                                                [{module, ?MODULE},
                                                 {line, ?LINE},
@@ -23,7 +23,7 @@
         begin
             ((fun () ->
                       case (Expr) of
-                          {error, [{Err1, _}, {Err2, _}]} -> ok;
+                          {error, [{Err1, _} | [{Err2, _} | _]]} -> ok;
                           __V -> erlang:error({errorMatch,
                                                [{module, ?MODULE},
                                                 {line, ?LINE},
@@ -39,7 +39,7 @@
         begin
             ((fun () ->
                       case (Expr) of
-                          {error, [{Err1, _}, {Err2, _}, {Err3, _}]} -> ok;
+                          {error, [{Err1, _} | [{Err2, _} | [{Err3, _} | _]]]} -> ok;
                           __V -> erlang:error({errorMatch,
                                                [{module, ?MODULE},
                                                 {line, ?LINE},

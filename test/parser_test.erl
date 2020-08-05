@@ -3,13 +3,230 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("src/error.hrl").
 
+-define(TIMEOUT, 3600).
+
+-define(test(Expected, Actual),
+        begin
+            {timeout, ?TIMEOUT,
+             [?_assertMatch(Expected, Actual)]}
+        end).
+
+-define(testError(Error, Expr),
+        begin
+            {timeout, ?TIMEOUT,
+             [?_errorMatch(Error, Expr)]}
+        end).
+-define(testError(Error1, Error2, Expr),
+        begin
+            {timeout, ?TIMEOUT,
+             [?_errorMatch(Error1, Error2, Expr)]}
+        end).
+-define(testError(Error1, Error2, Error3, Expr),
+        begin
+            {timeout, ?TIMEOUT,
+             [?_errorMatch(Error1, Error2, Error3, Expr)]}
+        end).
+
 local_type_test_() ->
     Module = 
-      "import Boolean/_\n"
-      "type Boolean -> True | False\n"
-      "def xor a b\n"
-      " | True False -> True\n"
-      " | False True -> True\n"
-      " | _ _ -> False",
-	{timeout,3600, 
-	 [?_assertMatch({ok, _}, parser:parse(text, [Module]))]}.
+    "type Boolean -> True | False\n"
+    "import Boolean/{True, False}\n"
+    "def xor a b\n"
+    " | True False -> True\n"
+    " | False True -> True\n"
+    " | _ _ -> False",
+    ?test({ok, _}, parser:parse(text, [Module])).
+
+undefined_local_type_test_() ->
+    Module = 
+    "type Boolean -> True | False\n"
+    "import Boolean/Blah",
+    ?testError({undefined_local_type, 'Boolean', 'Blah', ['Boolean']}, parser:parse(text, [Module])).
+
+
+local_type_alias_test_() ->
+    Module = 
+    "type Boolean -> True | False\n"
+    "import Boolean/{True: T, False: F}\n"
+    "def xor a b\n"
+    " | T F -> T\n"
+    " | F T -> T\n"
+    " | _ _ -> F",
+    ?test({ok, _}, parser:parse(text, [Module])).
+
+local_type_no_import_test_() ->
+    Module = 
+    "type Boolean -> True | False\n"
+    "import Boolean/False\n"
+    "def xor a b\n"
+    " | True False -> True\n"
+    " | False True -> True\n"
+    " | _ _ -> False",
+    ?testError({undefined_type, 'True'}, parser:parse(text, [Module])).
+
+local_type_wildcard_test_() ->
+    Module = 
+    "type Boolean -> True | False\n"
+    "import Boolean/_\n"
+    "def xor a b\n"
+    " | True False -> True\n"
+    " | False True -> True\n"
+    " | _ _ -> False",
+    ?test({ok, _}, parser:parse(text, [Module])).
+
+external_type_test_() ->
+    Module1 = 
+    "module blup {\n"
+    "  Boolean\n"
+    "}\n"
+    "type Boolean -> True | False\n",
+    Module2 =
+    "import blup/Boolean/_\n"
+    "def xor a b\n"
+    " | True False -> True\n"
+    " | False True -> True\n"
+    " | _ _ -> False",
+    ?test({ok, _}, parser:parse(text, [Module1, Module2])).
+
+undefined_external_type_test_() ->
+    Module1 = 
+    "module blup {\n"
+    "  Boolean\n"
+    "}\n"
+    "type Boolean -> True | False\n",
+    Module2 =
+    "import blup/Blap/_",
+    ?testError({nonexistent_module, 'blup/Blap'}, parser:parse(text, [Module1, Module2])).
+
+source_def_test_() ->
+    Module1 = 
+    "module blup {\n"
+    "  identity\n"
+    "}\n"
+    "def identity a -> a\n",
+    Module2 =
+    "import blup/identity\n"
+    "def blap a -> a.identity",
+    ?test({ok, _}, parser:parse(text, [Module2, Module1])).
+
+unexported_source_def_test_() ->
+    Module1 = 
+    "module blup {}\n"
+    "def identity a -> a\n",
+    Module2 =
+    "import blup/identity\n"
+    "def blap a -> a.identity",
+    ?testError({nonexistent_import, source, 'blup/identity'}, parser:parse(text, [Module2, Module1])).
+
+beam_def_test_() ->
+    Module =
+    "import lists/reverse\n"
+    "def blap a -> a.reverse",
+    ?test({ok, _}, parser:parse(text, [Module])).
+
+unexported_beam_def_test_() ->
+    Module =
+    "import lists/blup\n"
+    "def blap a -> a.blup",
+    ?testError({nonexistent_import, beam, 'lists/blup'}, parser:parse(text, [Module])).
+
+wildcard_beam_def_test_() ->
+    Module =
+    "import lists/_\n"
+    "def blap a -> a.reverse",
+    ?test({ok, _}, parser:parse(text, [Module])).
+
+import_conflict_test_() ->
+    Module1 = 
+    "module blup {\n"
+    "  identity\n"
+    "}\n"
+    "def identity a -> a\n",
+    Module2 = 
+    "module blip {\n"
+    "  identity\n"
+    "}\n"
+    "def identity a -> a\n",
+    Module3 =
+    "import blup/identity\n"
+    "import blip/_\n"
+    "def blap a -> a.identity",
+    ?testError({duplicate_import, 'identity'}, parser:parse(text, [Module2, Module1, Module3])).
+
+import_already_defined_test_() ->
+    Module1 = 
+    "module blip {\n"
+    "  identity\n"
+    "}\n"
+    "def identity a -> a\n",
+    Module2 =
+    "import blip/identity\n"
+    "def identity a -> a",
+    ?testError({import_conflicts_with_local_def, 'identity', 'blip/identity'}, parser:parse(text, [Module2, Module1])).
+
+import_type_already_defined_test_() ->
+    Module1 = 
+    "module blip {\n"
+    "  T\n"
+    "}\n"
+    "type T -> A | B\n",
+    Module2 =
+    "import blip/_\n"
+    "type T -> Q | R",
+    ?testError({import_conflicts_with_local_def, 'T', 'blip/T'}, parser:parse(text, [Module2, Module1])).
+
+import_alias_already_defined_test_() ->
+    Module1 = 
+    "module blip {\n"
+    "  identity\n"
+    "}\n"
+    "def identity a -> a\n",
+    Module2 =
+    "import blip/{identity: id}\n"
+    "def id a -> a",
+    ?testError({import_conflicts_with_local_def, 'id', 'blip/identity'}, parser:parse(text, [Module2, Module1])).
+
+multiple_beam_import_test_() ->
+    Module =
+    "import lists/_\n"
+    "import maps/_\n"
+    "def blap a -> a.reverse.from_list",
+    ?testError({duplicate_import, filter},
+               {duplicate_import, map},
+               {duplicate_import, merge}, parser:parse(text, [Module])).
+
+qualified_beam_import_test_() ->
+    Module =
+    "import lists/_\n"
+    "def blap -> reverse",
+    ?test({ok, [{_,
+                 {ast, _, _, _,
+                  #{blap := {def, _, 'blap', [],
+                             {qualified_variable, _, [lists], reverse}}}}}]},
+          parser:parse(text, [Module])).
+
+qualified_source_import_test_() ->
+    Module1 = 
+    "module blip {T}\n"
+    "type T -> A | B\n",
+    Module2 =
+    "import blip/T\n"
+    "def blap -> T/A",
+    ?test({ok, [_,
+                {_,
+                 {ast, _, _, _,
+                  #{blap := {def, _, 'blap', [],
+                             {qualified_type, _, [blip, 'T'], 'A'}}}}}]},
+          parser:parse(text, [Module1, Module2])).
+
+qualified_local_import_test_() ->
+    Module = 
+    "type T -> A | B\n"
+    "import T/A\n"
+    "def blap -> A",
+    ?test({ok, [{_,
+                 {ast, _, _, _,
+                  #{blap := {def, _, 'blap', [],
+                             {type, _, 'A', ['T', 'A']}}}}}]},
+          parser:parse(text, [Module])).
+

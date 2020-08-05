@@ -24,17 +24,11 @@ merge_scopes(LocalScope, ImportScope) ->
 				case maps:is_key(Alias, LocalScope) of
 					false	-> {ok, {Alias, Term}};
 					true	->
-                        {Tag, Ctx, Module, Name} = Term,
+                        {_, Ctx, Module, Name} = Term,
 						Import = maps:get(import, Ctx),
-                        ModuleName = module:kind_name(Module),
-						case Tag of
-							qualified_type 	    -> error:format({import_conflicts_with_local_type, 
-                                                                 Alias, ModuleName, Name},
-                                                                {tagger, Import});
-							qualified_variable  -> error:format({import_conflicts_with_local_def, 
-                                                                 Alias, ModuleName, Name},
-                                                                {tagger, Import})
-                        end
+                        ImportName = module:kind_name(Module ++ [Name]),
+					    error:format({import_conflicts_with_local_def, Alias, ImportName},
+                                     {tagger, Import})
                 end
         end,
     case error:collect([F(Alias, Term) || {Alias, Term} <- maps:to_list(ImportScope)]) of

@@ -23,7 +23,7 @@ traverse_ast(Pre, Post, Scope, {ast, Ctx, Modules, Imports, Defs}) ->
     end.
 
 climb(_, top_level, _, {import, _, _} = Term) -> {ok, {#{}, Term}};
-climb(_, top_level, _, {module, _, _} = Term) -> {ok, {#{}, Term}};
+climb(_, top_level, _, {module, _, _, _} = Term) -> {ok, {#{}, Term}};
 climb({Pre, Post}, Type, Scope, Term) ->
     case Pre(Type, Scope, Term) of
         {error, Errs}                   -> {error, Errs};

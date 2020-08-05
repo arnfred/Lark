@@ -107,7 +107,7 @@ errors_test_() ->
                   import:import({import, #{}, [{blip}]}, #{}, #{})),
      ?_errorMatch({nonexistent_module, blap},
                   test_import([blap, blip], #{})),
-     ?_errorMatch({nonexistent_import, beam, random, blip},
+     ?_errorMatch({nonexistent_import, beam, 'random/blip'},
                   test_import([random, blip], #{})),
-     ?_errorMatch({nonexistent_import, source, blap, blip},
+     ?_errorMatch({nonexistent_import, source, 'blap/blip'},
                   test_import([blap, blip], SourceMap))].

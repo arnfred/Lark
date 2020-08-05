@@ -30,37 +30,19 @@ prepare(File, Code) ->
 
 handle_modules({module, Ctx, Name, Exports}, Defs) ->
     F = fun({pair, _, K, _} = Elem) -> case maps:is_key(symbol:tag(K), Defs) of
-                                           true  -> {ok, Elem};
+                                           true  -> {ok, symbol:tag(K)};
                                            false -> error:format({export_missing, symbol:tag(K)}, {module, Elem})
                                        end;
            (Elem)                   -> case maps:is_key(symbol:tag(Elem), Defs) of
-                                           true  -> {ok, Elem};
+                                           true  -> {ok, symbol:tag(Elem)};
                                            false -> error:format({export_missing, symbol:tag(Elem)}, {module, Elem})
                                        end
         end,
-    case error:collect([F(E) || E <- maps:keys(Exports)]) of
+    case error:collect([F(E) || E <- Exports]) of
         {error, Errs}   -> {error, Errs};
-        {ok, _}         -> {ok, {module, Ctx, Name, Exports}}
+        {ok, Tags}      -> ExportMap = maps:from_list(lists:zip(Tags, Exports)),
+                           {ok, {module, Ctx, Name, ExportMap}}
     end.
-
-handle_imports(ImportClauses) ->
-    case error:collect([import:format(Imp, #{}) || Imp <- ImportClauses]) of
-        {error, Errs} -> {error, Errs};
-        {ok, All} ->
-            Dependencies = lists:filter(fun({dependency, _, _}) -> true;
-                                           (_) -> false end, All),
-            Rewrites = lists:filter(fun({rewrite, _, _, _}) -> true;
-                                       (_) -> false end, All),
-            Aliases = lists:filter(fun({alias, _, _, _}) -> true;
-                                      (_) -> false end, All),
-            ErrFun = fun({alias, _, Alias, _} = Term) -> error:format({duplicate_import, Alias}, {import, Term}) end,
-            case utils:duplicates(Aliases, fun({_, _, Alias, _}) -> Alias end) of
-                []          -> {ok, {Aliases, Rewrites, Dependencies}};
-                Duplicates  -> error:collect([ErrFun(Dup) || Dup <- Duplicates])
-            end
-    end.
-
-
 
 beam_name(Path) ->
     PathString = [atom_to_list(A) || A <- lists:join('_', Path)],
