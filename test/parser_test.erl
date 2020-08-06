@@ -35,13 +35,13 @@ local_type_test_() ->
     " | True False -> True\n"
     " | False True -> True\n"
     " | _ _ -> False",
-    ?test({ok, _}, parser:parse(text, [Module])).
+    ?test({ok, _}, parser:parse([{text, Module}])).
 
 undefined_local_type_test_() ->
     Module = 
     "type Boolean -> True | False\n"
     "import Boolean/Blah",
-    ?testError({undefined_local_type, 'Boolean', 'Blah', ['Boolean']}, parser:parse(text, [Module])).
+    ?testError({undefined_local_type, 'Boolean', 'Blah', ['Boolean']}, parser:parse([{text, Module}])).
 
 
 local_type_alias_test_() ->
@@ -52,7 +52,7 @@ local_type_alias_test_() ->
     " | T F -> T\n"
     " | F T -> T\n"
     " | _ _ -> F",
-    ?test({ok, _}, parser:parse(text, [Module])).
+    ?test({ok, _}, parser:parse([{text, Module}])).
 
 local_type_no_import_test_() ->
     Module = 
@@ -62,7 +62,7 @@ local_type_no_import_test_() ->
     " | True False -> True\n"
     " | False True -> True\n"
     " | _ _ -> False",
-    ?testError({undefined_type, 'True'}, parser:parse(text, [Module])).
+    ?testError({undefined_type, 'True'}, parser:parse([{text, Module}])).
 
 local_type_wildcard_test_() ->
     Module = 
@@ -72,7 +72,7 @@ local_type_wildcard_test_() ->
     " | True False -> True\n"
     " | False True -> True\n"
     " | _ _ -> False",
-    ?test({ok, _}, parser:parse(text, [Module])).
+    ?test({ok, _}, parser:parse([{text, Module}])).
 
 external_type_test_() ->
     Module1 = 
@@ -86,7 +86,7 @@ external_type_test_() ->
     " | True False -> True\n"
     " | False True -> True\n"
     " | _ _ -> False",
-    ?test({ok, _}, parser:parse(text, [Module1, Module2])).
+    ?test({ok, _}, parser:parse([{text, Module1}, {text, Module2}])).
 
 undefined_external_type_test_() ->
     Module1 = 
@@ -96,7 +96,7 @@ undefined_external_type_test_() ->
     "type Boolean -> True | False\n",
     Module2 =
     "import blup/Blap/_",
-    ?testError({nonexistent_module, 'blup/Blap'}, parser:parse(text, [Module1, Module2])).
+    ?testError({nonexistent_module, 'blup/Blap'}, parser:parse([{text, Module1}, {text, Module2}])).
 
 source_def_test_() ->
     Module1 = 
@@ -107,7 +107,7 @@ source_def_test_() ->
     Module2 =
     "import blup/identity\n"
     "def blap a -> a.identity",
-    ?test({ok, _}, parser:parse(text, [Module2, Module1])).
+    ?test({ok, _}, parser:parse([{text, Module2}, {text, Module1}])).
 
 unexported_source_def_test_() ->
     Module1 = 
@@ -116,25 +116,25 @@ unexported_source_def_test_() ->
     Module2 =
     "import blup/identity\n"
     "def blap a -> a.identity",
-    ?testError({nonexistent_import, source, 'blup/identity'}, parser:parse(text, [Module2, Module1])).
+    ?testError({nonexistent_import, source, 'blup/identity'}, parser:parse([{text, Module2}, {text, Module1}])).
 
 beam_def_test_() ->
     Module =
     "import lists/reverse\n"
     "def blap a -> a.reverse",
-    ?test({ok, _}, parser:parse(text, [Module])).
+    ?test({ok, _}, parser:parse([{text, Module}])).
 
 unexported_beam_def_test_() ->
     Module =
     "import lists/blup\n"
     "def blap a -> a.blup",
-    ?testError({nonexistent_import, beam, 'lists/blup'}, parser:parse(text, [Module])).
+    ?testError({nonexistent_import, beam, 'lists/blup'}, parser:parse([{text, Module}])).
 
 wildcard_beam_def_test_() ->
     Module =
     "import lists/_\n"
     "def blap a -> a.reverse",
-    ?test({ok, _}, parser:parse(text, [Module])).
+    ?test({ok, _}, parser:parse([{text, Module}])).
 
 import_conflict_test_() ->
     Module1 = 
@@ -151,7 +151,7 @@ import_conflict_test_() ->
     "import blup/identity\n"
     "import blip/_\n"
     "def blap a -> a.identity",
-    ?testError({duplicate_import, 'identity'}, parser:parse(text, [Module2, Module1, Module3])).
+    ?testError({duplicate_import, 'identity'}, parser:parse([{text, Module2}, {text, Module1}, {text, Module3}])).
 
 import_already_defined_test_() ->
     Module1 = 
@@ -162,7 +162,7 @@ import_already_defined_test_() ->
     Module2 =
     "import blip/identity\n"
     "def identity a -> a",
-    ?testError({import_conflicts_with_local_def, 'identity', 'blip/identity'}, parser:parse(text, [Module2, Module1])).
+    ?testError({import_conflicts_with_local_def, 'identity', 'blip/identity'}, parser:parse([{text, Module2}, {text, Module1}])).
 
 import_type_already_defined_test_() ->
     Module1 = 
@@ -173,7 +173,7 @@ import_type_already_defined_test_() ->
     Module2 =
     "import blip/_\n"
     "type T -> Q | R",
-    ?testError({import_conflicts_with_local_def, 'T', 'blip/T'}, parser:parse(text, [Module2, Module1])).
+    ?testError({import_conflicts_with_local_def, 'T', 'blip/T'}, parser:parse([{text, Module2}, {text, Module1}])).
 
 import_alias_already_defined_test_() ->
     Module1 = 
@@ -184,7 +184,7 @@ import_alias_already_defined_test_() ->
     Module2 =
     "import blip/{identity: id}\n"
     "def id a -> a",
-    ?testError({import_conflicts_with_local_def, 'id', 'blip/identity'}, parser:parse(text, [Module2, Module1])).
+    ?testError({import_conflicts_with_local_def, 'id', 'blip/identity'}, parser:parse([{text, Module2}, {text, Module1}])).
 
 multiple_beam_import_test_() ->
     Module =
@@ -193,7 +193,7 @@ multiple_beam_import_test_() ->
     "def blap a -> a.reverse.from_list",
     ?testError({duplicate_import, filter},
                {duplicate_import, map},
-               {duplicate_import, merge}, parser:parse(text, [Module])).
+               {duplicate_import, merge}, parser:parse([{text, Module}])).
 
 qualified_beam_import_test_() ->
     Module =
@@ -203,7 +203,7 @@ qualified_beam_import_test_() ->
                  {ast, _, _, _,
                   #{blap := {def, _, 'blap', [],
                              {qualified_variable, _, [lists], reverse}}}}}]},
-          parser:parse(text, [Module])).
+          parser:parse([{text, Module}])).
 
 qualified_source_import_test_() ->
     Module1 = 
@@ -217,7 +217,7 @@ qualified_source_import_test_() ->
                  {ast, _, _, _,
                   #{blap := {def, _, 'blap', [],
                              {qualified_type, _, [blip, 'T'], 'A'}}}}}]},
-          parser:parse(text, [Module1, Module2])).
+          parser:parse([{text, Module1}, {text, Module2}])).
 
 qualified_local_import_test_() ->
     Module = 
@@ -228,5 +228,5 @@ qualified_local_import_test_() ->
                  {ast, _, _, _,
                   #{blap := {def, _, 'blap', [],
                              {type, _, 'A', ['T', 'A']}}}}}]},
-          parser:parse(text, [Module])).
+          parser:parse([{text, Module}])).
 

@@ -4,15 +4,18 @@
 -include("src/error.hrl").
 
 run(Code, RunAsserts) ->
-    {ok, [{_, AST}]} = parser:parse(text, [Code]),
-    case typer:load("test", AST) of
-        {error, Errs} -> 
-            RunAsserts({error, Errs});
-        {ok, TypeMod} ->
-            RunAsserts(TypeMod),
-            true = code:soft_purge(TypeMod),
-            true = code:delete(TypeMod)
-    end.
+    {ok, ASTs} = parser:parse([{text, "test", Code}]),
+    F = fun(AST) -> 
+                case typer:load("test", AST) of
+                    {error, Errs} -> 
+                        RunAsserts({error, Errs});
+                    {ok, TypeMod} ->
+                        RunAsserts(TypeMod),
+                        true = code:soft_purge(TypeMod),
+                        true = code:delete(TypeMod)
+                end
+        end,
+    [F(AST) || {"test", AST} <- ASTs].
 
 sum_type_boolean_test() ->
     Code = "type Boolean -> True | False",

@@ -1,24 +1,44 @@
 -module(kind).
--export([compile/1]).
+-export([load/1]).
+-import(lists, [zip/2, unzip/1]).
+-include_lib("eunit/include/eunit.hrl").
 
-compile({Module, Code}) ->
-    case parser:parse(text, [Code]) of
+load(CodeRaw) ->
+    Code = "import kind/prelude/_\n" ++ CodeRaw,
+    case parser:parse([{path, "src/lib/"}, {text, Code}]) of
         {error, Errs}   -> {error, Errs};
-        {ok, [{_, AST}]}     ->
-            io:format("Tagged AST is ~p~n", [AST]),
-            case typer:type(Module, AST) of
+        {ok, ASTs}     ->
+            io:format("Tagged AST is ~p~n", [ASTs]),
+            case error:collect([typer:type(Path, AST) || {Path, AST} <- ASTs]) of
                 {error, Errs} -> {error, Errs};
                 {ok, _}       ->
-                    case codegen:gen({Module, AST}) of
-                        {error, Errs} -> {error, Errs};
-                        {ok, Forms} ->
-                            io:format("Erlang Core Forms are ~p~n", [Forms]),
-                            case compile:forms(Forms, [report, verbose, from_core]) of
-                                {ok, Mod, Bin} ->
-                                    BeamName = lists:flatten(io_lib:format("~w.beam", [Module])),
-                                    code:load_binary(Mod, BeamName, Bin);
-                                Error -> Error
-                            end
-                    end
+                    Forms = lists:flatten([codegen:gen(AST) || {_, AST} <- ASTs]),
+                    io:format("Erlang Core Forms are ~p~n", [Forms]),
+                    compile(Forms)
             end
     end.
+
+compile(Forms) ->
+    Options = [report, verbose, from_core],
+    CompiledList = [compile_form(Form, Options) || {_, Form} <- Forms],
+    case error:collect(CompiledList) of
+        {error, Errs}   -> {error, Errs};
+        {ok, Bins}      ->
+            LoadedModules = [load_binary(B) || B <- Bins],
+            error:collect(LoadedModules)
+    end.
+
+compile_form(Form, Options) ->
+    Module = cerl:atom_val(cerl:module_name(Form)),
+    case compile:forms(Form, Options) of
+        {ok, Module, Bin}   -> {ok, {Module, Bin}};
+        Error               -> error:format({compile_error, Error}, {kind, Module})
+    end.
+
+load_binary({Module, Bin}) ->
+    BeamName = lists:flatten(io_lib:format("~w.beam", [Module])),
+    case code:load_binary(Module, BeamName, Bin) of
+        {module, Module} -> {ok, Module};
+        {error, Err}     -> error:format({loading_error, Err}, {kind, Module})
+    end.
+

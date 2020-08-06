@@ -3,11 +3,18 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-gen({Module, {ast, _, _, _, Defs}}) ->
+gen({ast, _, Modules, _, Defs}) ->
     io:format("---> Defs: ~p~n", [Defs]),
     Compiled = [gen_expr(D) || D <- maps:values(Defs)],
-    CompiledExports = [cerl:c_fname(Name, length(Args)) || {def, _, Name, Args, _} <- maps:values(Defs)],
-    {ok, cerl:c_module(cerl:c_atom(Module), CompiledExports, [], Compiled)}.
+    [gen_module(M, Defs, Compiled) || M <- Modules].
+
+gen_module({module, _, Path, Exports}, Defs, Compiled) ->
+    CompiledExports = [cerl:c_fname(Name, length(Args)) || {def, _, Name, Args, _} <- maps:values(Defs), 
+                                                           maps:is_key(Name, Exports)],
+    ModuleName = module:beam_name(Path),
+    {ModuleName, cerl:c_module(cerl:c_atom(ModuleName), CompiledExports, [], Compiled)}.
+
+
 
 gen_expr({def, _, Name, Args, Expr}) ->
     FName = cerl:c_fname(Name, length(Args)),
@@ -26,9 +33,9 @@ gen_expr({type, _, _, Symbols}) ->
     Tag = list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)])),
     cerl:c_atom(Tag);
 
-gen_expr({qualified_variable, _, ModulePath, Name}) ->
-    ModuleName = module:beam_name(ModulePath),
-    cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(Name), []);
+%gen_expr({qualified_variable, _, ModulePath, Name}) ->
+%    ModuleName = module:beam_name(ModulePath),
+%    cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(Name), []);
 
 gen_expr({application, _, Symbol, Args}) ->
     CompiledArgs = [gen_expr(E) || E <- Args],
@@ -69,194 +76,212 @@ gen_clause(Patterns, Expr) ->
     CompiledPatterns = [gen_expr(P) || P <- Patterns],
     cerl:c_clause(CompiledPatterns, gen_expr(Expr)).
 
-gen_type_fun(Values) ->
-    Instances = [cerl:c_map_pair(cerl:c_atom(S), cerl:c_atom(true)) ||{type, _, S, _} <- Values],
-    cerl:c_map(Instances).
-
 -ifdef(TEST).
 
 run(Code, RunAsserts) ->
-    {module, Mod} = kind:compile({"test", Code}),
-    RunAsserts(Mod),
-    true = code:soft_purge(Mod),
-    true = code:delete(Mod).
+    {ok, Results} = kind:load(Code),
+    RunAsserts(),
+    [clean(R) || R <- Results].
+
+clean(Module) -> true = code:soft_purge(Module),
+                 true = code:delete(Module).
 
 identity_run_test() ->
-    Code = "def id a -> a",
-    RunAsserts = fun(Mod) ->
-                         ?assertEqual(2, Mod:id(2)),
-                         ?assertEqual(1.3, Mod:id(1.3)),
-                         ?assertEqual("string", Mod:id("string")),
-                         ?assertEqual(atom, Mod:id(atom))
+    Code =
+        "module kind/test { id }\n"
+        "def id a -> a",
+    RunAsserts = fun() ->
+                         ?assertEqual(2, kind_test:id(2)),
+                         ?assertEqual(1.3, kind_test:id(1.3)),
+                         ?assertEqual("string", kind_test:id("string")),
+                         ?assertEqual(atom, kind_test:id(atom))
                  end,
     run(Code, RunAsserts).
 
 function_call_test() ->
     Code = 
+        "module kind/test { callId }\n"
         "def id a -> a\n"
         "def callId b -> b.id",
-    RunAsserts = fun(Mod) -> ?assertEqual(2, Mod:callId(2)) end,
+    RunAsserts = fun() -> ?assertEqual(2, kind_test:callId(2)) end,
     run(Code, RunAsserts).
 
 function_def_newline_test() ->
     Code = 
+        "module kind/test { id }\n"
         "def id b ->\n"
         "    b",
-    RunAsserts = fun(Mod) -> ?assertEqual(2, Mod:id(2)) end,
+    RunAsserts = fun() -> ?assertEqual(2, kind_test:id(2)) end,
     run(Code, RunAsserts).
 
 function_call_multiple_args_test() ->
     Code = 
+        "module kind/test { callId }\n"
         "def firstId a b c -> a\n"
         "def callId a b -> b.firstId(b, a)",
-    RunAsserts = fun(Mod) -> ?assertEqual(3, Mod:callId(2, 3)) end,
+    RunAsserts = fun() -> ?assertEqual(3, kind_test:callId(2, 3)) end,
     run(Code, RunAsserts).
 
 always_true_test() ->
     Code = 
+        "module kind/test { alwaysTrue }\n"
         "type Boolean -> True | False\n"
         "def alwaysTrue a -> Boolean/True",
-    RunAsserts = fun(Mod) -> ?assertEqual('Boolean/True', Mod:alwaysTrue(2)) end,
+    RunAsserts = fun() -> ?assertEqual('Boolean/True', kind_test:alwaysTrue(2)) end,
     run(Code, RunAsserts).
 
 pattern_match_test() ->
-    Code = 
+    Code =
+        "module kind/test { rexor }\n"
         "type Boolean -> True | False\n"
         "def rexor a\n"
         " | Boolean/True -> Boolean/False\n"
         " | Boolean/False -> Boolean/True",
-    RunAsserts = fun(Mod) -> 
-                         ?assertEqual('Boolean/True', Mod:rexor('Boolean/False')),
-                         ?assertEqual('Boolean/False', Mod:rexor('Boolean/True'))
+    RunAsserts = fun() ->
+                         ?assertEqual('Boolean/True', kind_test:rexor('Boolean/False')),
+                         ?assertEqual('Boolean/False', kind_test:rexor('Boolean/True'))
                  end,
     run(Code, RunAsserts).
 
 pattern_match_multivariate_test() ->
-    Code = 
+    Code =
+        "module kind/test { rexor }\n"
         "type Boolean -> True | False\n"
         "def rexor a b\n"
         " | Boolean/True Boolean/False -> Boolean/True\n"
         " | Boolean/False Boolean/True -> Boolean/True\n"
         " | _ _ -> Boolean/False",
-    RunAsserts = fun(Mod) -> 
-                         ?assertEqual('Boolean/True', Mod:rexor('Boolean/True', 'Boolean/False')),
-                         ?assertEqual('Boolean/False', Mod:rexor('Boolean/True', 'Boolean/True'))
+    RunAsserts = fun() ->
+                         ?assertEqual('Boolean/True', kind_test:rexor('Boolean/True', 'Boolean/False')),
+                         ?assertEqual('Boolean/False', kind_test:rexor('Boolean/True', 'Boolean/True'))
                  end,
     run(Code, RunAsserts).
 
 pattern_match_expr_syntax1_test() ->
-    Code = 
+    Code =
+        "module kind/test { test2 }\n"
         "type Boolean -> True | False\n"
-        "def match a f -> f(a)\n"
         "def test2 a -> a.match(Boolean/False -> Boolean/True, Boolean/True -> Boolean/False)",
-    RunAsserts = fun(Mod) -> 
-                         ?assertEqual('Boolean/True', Mod:test2('Boolean/False'))
+    RunAsserts = fun() ->
+                         ?assertEqual('Boolean/True', kind_test:test2('Boolean/False'))
                  end,
     run(Code, RunAsserts).
 
 pattern_match_expr_syntax2_test() ->
-    Code = 
+    Code =
+        "module kind/test { test3 }\n"
         "type Boolean -> True | False\n"
-        "def match a f -> f(a)\n"
         "def test3 a -> a.match(Boolean/False -> Boolean/True\n"
         "                       Boolean/True -> Boolean/False)",
-    RunAsserts = fun(Mod) -> 
-                         ?assertEqual('Boolean/True', Mod:test3('Boolean/False'))
+    RunAsserts = fun() ->
+                         ?assertEqual('Boolean/True', kind_test:test3('Boolean/False'))
                  end,
     run(Code, RunAsserts).
 
 
 pattern_match3_test() ->
-    Code = 
+    Code =
+        "module kind/test { blah }\n"
         "def blah a\n"
         " | b -> b",
-    RunAsserts = fun(Mod) -> 
-                         ?assertEqual('Boolean/True', Mod:blah('Boolean/True'))
+    RunAsserts = fun() ->
+                         ?assertEqual('Boolean/True', kind_test:blah('Boolean/True'))
                  end,
     run(Code, RunAsserts).
 
 underscore_arg_test() ->
-    Code = 
+    Code =
+        "module kind/test { blip }\n"
         "def blip _ _ c -> c",
-    RunAsserts = fun(Mod) -> ?assertEqual(blop, Mod:blip(blip, blab, blop)) end,
+    RunAsserts = fun() -> ?assertEqual(blop, kind_test:blip(blip, blab, blop)) end,
     run(Code, RunAsserts).
 
 anonymous_function1_test() ->
     TestFunction = fun('Boolean/True') -> 'Boolean/False' end,
-    Code = 
+    Code =
+        "module kind/test { blip }\n"
         "type Boolean -> True | False\n"
         "def blip f -> f(Boolean/True)",
-    RunAsserts = fun(Mod) -> ?assertEqual('Boolean/False', Mod:blip(TestFunction)) end,
+    RunAsserts = fun() -> ?assertEqual('Boolean/False', kind_test:blip(TestFunction)) end,
     run(Code, RunAsserts).
 
 anonymous_function2_test() ->
-    Code = 
+    Code =
+        "module kind/test { blap }\n"
         "type Boolean -> True | False\n"
         "def blip a f -> f(a)\n"
         "def blap a -> a.blip(Boolean/False -> Boolean/True\n"
         "                      Boolean/True -> Boolean/False)",
-    RunAsserts = fun(Mod) -> ?assertEqual('Boolean/False', Mod:blap('Boolean/True')) end,
+    RunAsserts = fun() -> ?assertEqual('Boolean/False', kind_test:blap('Boolean/True')) end,
     run(Code, RunAsserts).
 
 anonymous_function3_test() ->
     Code = 
+        "module kind/test { blap }\n"
         "def blip a f -> f(a)\n"
         "def blap a -> a.blip((arg -> arg))",
-    RunAsserts = fun(Mod) -> ?assertEqual(whatevs, Mod:blap(whatevs)) end,
+    RunAsserts = fun() -> ?assertEqual(whatevs, kind_test:blap(whatevs)) end,
     run(Code, RunAsserts).
 
 anonymous_function4_test() ->
     Code = 
+        "module kind/test { blap }\n"
         "type Boolean -> True | False\n"
         "def blip a f -> f(a, a)\n"
         "def blap a -> a.blip(arg1 Boolean/False -> Boolean/False\n"
         "                     arg1 Boolean/True  -> arg1)",
-    RunAsserts = fun(Mod) -> ?assertEqual('Boolean/True', Mod:blap('Boolean/True')) end,
+    RunAsserts = fun() -> ?assertEqual('Boolean/True', kind_test:blap('Boolean/True')) end,
     run(Code, RunAsserts).
 
 multiple_anonymous_functions1_test() ->
     Code = 
+        "module kind/test { blap }\n"
         "type Boolean -> True | False\n"
         "def blip a f g -> f(g(a))\n"
         "def blap a -> a.blip((_ -> Boolean/False),\n"
         "                     (Boolean/False -> Boolean/True\n"
         "                      Boolean/True -> Boolean/False))",
-    RunAsserts = fun(Mod) -> ?assertEqual('Boolean/False', Mod:blap('Boolean/True')) end,
+    RunAsserts = fun() -> ?assertEqual('Boolean/False', kind_test:blap('Boolean/True')) end,
     run(Code, RunAsserts).
 
 multiple_anonymous_functions2_test() ->
     Code = 
+        "module kind/test { blap }\n"
         "type Boolean -> True | False\n"
         "def blip a f g -> f(g(a))\n"
         "def blap a -> a.blip((Boolean/True -> Boolean/False\n"
         "                      Boolean/False -> Boolean/True),\n"
         "                     (_ -> Boolean/False))",
-    RunAsserts = fun(Mod) -> ?assertEqual('Boolean/True', Mod:blap('whatevs')) end,
+    RunAsserts = fun() -> ?assertEqual('Boolean/True', kind_test:blap('whatevs')) end,
     run(Code, RunAsserts).
 
 erlang_module_call_test() ->
     Code = "import lists\n"
+           "module kind/test { get_last }\n"
            "def get_last l -> l.lists/last",
-    RunAsserts = fun(Mod) -> ?assertEqual('last_item', Mod:get_last(['first_item', 'last_item'])) end,
+    RunAsserts = fun() -> ?assertEqual('last_item', kind_test:get_last(['first_item', 'last_item'])) end,
     run(Code, RunAsserts).
 
 erlang_module_call_erlang_test() ->
     Code = "import erlang\n"
+           "module kind/test { test }\n"
            "def test a -> a.erlang/atom_to_list",
-    RunAsserts = fun(Mod) -> ?assertEqual("an_atom", Mod:test('an_atom')) end,
+    RunAsserts = fun() -> ?assertEqual("an_atom", kind_test:test('an_atom')) end,
     run(Code, RunAsserts).
 
 erlang_module_call_no_dot_notation_test() ->
     Code = "import erlang\n"
+           "module kind/test { test }\n"
            "def test a -> erlang/atom_to_list(a)",
-    RunAsserts = fun(Mod) -> ?assertEqual("another_atom", Mod:test('another_atom')) end,
+    RunAsserts = fun() -> ?assertEqual("another_atom", kind_test:test('another_atom')) end,
     run(Code, RunAsserts).
 
 shadow_variable_test() ->
     Code = 
+        "module kind/test { test }\n"
         "def test a\n"
         " | b -> b",
-    RunAsserts = fun(Mod) -> ?assertEqual(test, Mod:test(test)) end,
+    RunAsserts = fun() -> ?assertEqual(test, kind_test:test(test)) end,
     run(Code, RunAsserts).
 
 -endif.

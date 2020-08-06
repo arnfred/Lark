@@ -94,7 +94,7 @@ qualified_variable -> var_symbol slash qualified_variable       : [make_symbol('
 % Module
 % ------
 
-module -> module_keyword var_symbol dict                : {module, ctx('$1'), [unwrap('$2')], unwrap('$3')}.
+module -> module_keyword var_symbol dict                : {module, ctx('$1'), [make_symbol('$2')], unwrap('$3')}.
 module -> module_keyword qualified_variable dict        : {module, ctx('$1'), '$2', unwrap('$3')}.
 
 import -> import_keyword symbol                         : {import, ctx('$1'), ['$2']}.

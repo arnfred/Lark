@@ -1,0 +1,5 @@
+module kind/prelude {
+    match
+}
+
+def match a f -> f(a)

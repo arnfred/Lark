@@ -27,7 +27,7 @@ gen_module(Module, Types, {ast, _, _, _, Defs}) ->
     TopLevelDefs = [gen_type_def(Name, Args) || {type_def, _, Name, Args, _} <- maps:values(Defs)],
 
     {Exports, _} = lists:unzip([DomainDef | TopLevelDefs]),
-    {ok, cerl:c_module(cerl:c_atom(Module), Exports, [], [DomainDef | TopLevelDefs])}.
+    {ok, cerl:c_module(cerl:c_atom(list_to_atom(Module)), Exports, [], [DomainDef | TopLevelDefs])}.
 
 gen_domain(Types) when map_size(Types) =:= 0 ->
     {cerl:c_fname(domain, 1),

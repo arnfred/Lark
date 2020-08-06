@@ -1,35 +1,32 @@
 -module(parser).
--export([parse/2]).
+-export([parse/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("src/error.hrl").
 
-parse(text, Texts) ->
-    case error:collect([to_ast(symbol:id(no_file), T) || T <- Texts]) of
-        {error, Errs}   -> {error, Errs};
-        {ok, ASTs}      -> 
-            case format(ASTs) of
-                {error, Errs}   -> {error, Errs};
-                {ok, Parsed}    -> {ok, Parsed}
-            end
-    end;
+parse(Inputs) ->
+    Paths = [Path || {path, Path} <- Inputs],
+    Tag = fun() -> atom_to_list(symbol:id(no_file)) end,
+    Texts = [{Tag(), Text} || {text, Text} <- Inputs],
 
-parse(paths, Paths) ->
-    case error:collect([traverse(P) || P <- Paths]) of
+    case error:collect([read(P) || P <- Paths]) of
         {error, Errs}   -> {error, Errs};
-        {ok, FileList}   ->
-            Files = lists:flatten(FileList),
+        {ok, ReadList}  ->
+            Read = lists:flatten(ReadList),
+            Sources = Texts ++ Read,
+            case error:collect([to_ast(File, Source) || {File, Source} <- Sources]) of
+                {error, Errs}   -> {error, Errs};
+                {ok, ASTs}      -> format(ASTs)
+            end
+    end.
+
+read(Path) ->
+    case traverse(Path) of
+        {error, Errs}   -> {error, Errs};
+        {ok, Files}     ->
             case error:collect([load(F) || F <- Files]) of
                 {error, Errs}   -> {error, Errs};
-                {ok, Sources}    ->
-                    case error:collect([to_ast(Path, Source) || {Path, Source} <- lists:zip(Files, Sources)]) of
-                        {error, Errs}   -> {error, Errs};
-                        {ok, ASTs}      -> 
-                            case format(ASTs) of
-                                {error, Errs}   -> {error, Errs};
-                                {ok, Formatted} -> {ok, Formatted}
-                            end
-                    end
+                {ok, Sources}    -> {ok, lists:zip([P || {source, P} <- Files], Sources)}
             end
     end.
 
@@ -157,7 +154,7 @@ import_and_tag(Path, {ast, _, _, ImportClauses, _} = AST, SourceMap, LocalTypes)
 -ifdef(TEST).
 
 traverse_test_() -> 
-    {timeout,3600, [?_assertMatch({ok, _}, parse(paths, ["test/dir"]))]}.
+    {timeout,3600, [?_assertMatch({ok, _}, parse([{path, "test/dir"}]))]}.
 
 
 -endif.

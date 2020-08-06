@@ -4,13 +4,16 @@
 -include("src/error.hrl").
 
 run(Code, RunAsserts) ->
-    {ok, [{_, AST}]} = parser:parse(text, [Code]),
-    io:format("DefAST: ~p~n", [AST]),
-    {ok, TypeMod} = typer:load("test", AST),
-    Env = scanner:scan(TypeMod, AST),
-    RunAsserts(Env),
-    true = code:soft_purge(TypeMod),
-    true = code:delete(TypeMod).
+    {ok, ASTs} = parser:parse([{text, "test", Code}]),
+    F = fun(AST) -> 
+                io:format("DefAST: ~p~n", [AST]),
+                {ok, TypeMod} = typer:load("test", AST),
+                Env = scanner:scan(TypeMod, AST),
+                RunAsserts(Env),
+                true = code:soft_purge(TypeMod),
+                true = code:delete(TypeMod)
+        end,
+    [F(AST) || {"test", AST} <- ASTs].
 
 
 env_gen_test() ->

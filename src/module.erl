@@ -28,7 +28,7 @@ prepare(File, Code) ->
         {ok, Mods}        -> {ok, {File, {ast, #{file => File}, Mods, Imports, Defs}}}
     end.
 
-handle_modules({module, Ctx, Name, Exports}, Defs) ->
+handle_modules({module, Ctx, Symbols, Exports}, Defs) ->
     F = fun({pair, _, K, _} = Elem) -> case maps:is_key(symbol:tag(K), Defs) of
                                            true  -> {ok, symbol:tag(K)};
                                            false -> error:format({export_missing, symbol:tag(K)}, {module, Elem})
@@ -38,6 +38,7 @@ handle_modules({module, Ctx, Name, Exports}, Defs) ->
                                            false -> error:format({export_missing, symbol:tag(Elem)}, {module, Elem})
                                        end
         end,
+    Name = [S || {symbol, _, variable, S} <- Symbols],
     case error:collect([F(E) || E <- Exports]) of
         {error, Errs}   -> {error, Errs};
         {ok, Tags}      -> ExportMap = maps:from_list(lists:zip(Tags, Exports)),
