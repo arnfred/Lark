@@ -233,12 +233,12 @@ scan_pattern(Domain, _, _, {variable, _, _, _} = Var) -> {#{symbol:tag(Var) => D
 
 % Pattern of `T: {k: S}`
 scan_pattern(Domain, TypeMod, Stack, {pair, _, {type, _, _, _} = T, Val} = P) ->
-    {TEnv, TDomain} = scan_pattern(Domain, TypeMod, Stack, T),
+    {_, TDomain} = scan_pattern(Domain, TypeMod, Stack, T),
     case TDomain of
         {tagged, Tag, D}    -> {ValEnv, ValDomain} = scan_pattern(D, TypeMod, Stack, Val),
                                {ValEnv, {tagged, Tag, intersection(D, ValDomain)}};
         {error, Errs}       -> {#{}, {error, Errs}};
-        D                   -> {#{}, error:format({expected_tagged_domain, TDomain, symbol:tag(T)}, {scanner, P, Stack})}
+        D                   -> {#{}, error:format({expected_tagged_domain, TDomain, D, symbol:tag(T)}, {scanner, P, Stack})}
     end;
 
 % Pattern of `k: T`

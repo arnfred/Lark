@@ -3,19 +3,48 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("src/error.hrl").
 
+-define(TIMEOUT, 3600).
+
+-define(test(Expected, Actual),
+        begin
+            {timeout, ?TIMEOUT,
+             [?_assertMatch(Expected, Actual)]}
+        end).
+
+-define(setup(Code, Tests), {setup, loadFun(Code), fun unload/1, Tests}).
+
+loadFun(Code) ->
+    {ok, ASTs} = parser:parse([{text, Code}]),
+    io:format("~p~n", [ASTs]),
+    fun() -> case error:collect([typer:load(AST) || {_, AST} <- ASTs]) of
+                 {error, Errs}      -> {error, Errs};
+                 {ok, ModuleNames}  -> {ok, lists:flatten(ModuleNames)}
+             end
+    end.
+
+unload({error, _}) -> noop;
+unload({ok, ModuleNames}) ->
+    Remove = fun(TypeMod) ->
+                     true = code:soft_purge(TypeMod),
+                     true = code:delete(TypeMod) end,
+    [Remove(ModuleName) || ModuleName <- ModuleNames].
+
 run(Code, RunAsserts) ->
-    {ok, ASTs} = parser:parse([{text, "test", Code}]),
+    {ok, ASTs} = parser:parse([{text, Code}]),
     F = fun(AST) -> 
-                case typer:load("test", AST) of
+                case typer:load(AST) of
                     {error, Errs} -> 
                         RunAsserts({error, Errs});
-                    {ok, TypeMod} ->
-                        RunAsserts(TypeMod),
-                        true = code:soft_purge(TypeMod),
-                        true = code:delete(TypeMod)
+                    {ok, TypeMods} ->
+                        [ScannerModule | _] = TypeMods,
+                        RunAsserts(ScannerModule),
+                        Remove = fun(TypeMod) ->
+                                         true = code:soft_purge(TypeMod),
+                                         true = code:delete(TypeMod) end,
+                        [Remove(ModuleName) || ModuleName <- TypeMods]
                 end
         end,
-    [F(AST) || {"test", AST} <- ASTs].
+    [F(AST) || {_, AST} <- ASTs].
 
 sum_type_boolean_test() ->
     Code = "type Boolean -> True | False",
@@ -324,25 +353,27 @@ pattern_dict_dict_test() ->
                  end,
     run(Code, RunAsserts).
 
-pattern_dict_sum_test() ->
-    Code = "type Args -> A | B | C\n"
-           "type Test t\n"
-           " | {a, b: (Args/A | Args/B)} -> a\n"
-           " | {a, b: Args} -> t",
-    RunAsserts = fun(Mod) ->
-                         {f, 'Test', DomainFun} = Mod:domain('Test'),
-                         Input1 = {product, #{a => 'Args/A', 
-                                              b => 'Args/B'}},
-                         Actual1 = DomainFun(Input1),
-                         Expected1 = 'Args/A',
-                         ?assertEqual(none, domain:diff(Expected1, Actual1)),
+pattern_dict_sum_test_() ->
+    {"'Args' in second line of pattern match should be expanded to "
+     "all members ('A', 'B', 'C') of the Args type and a clause "
+     "should be generated for each",
+     ?setup("type Args -> A | B | C\n"
+            "type Test t\n"
+            " | {a, b: (Args/A | Args/B)} -> a\n"
+            " | {a, b: Args} -> t",
+            fun({ok, [Mod | _]}) ->
+                    {f, 'Test', DomainFun} = Mod:domain('Test'),
+                    Input1 = {product, #{a => 'Args/A', 
+                                         b => 'Args/B'}},
+                    Actual1 = DomainFun(Input1),
+                    Expected1 = 'Args/A',
 
-                         Input2 = {product, #{a => 'Args/A', 
-                                              b => 'Args/C'}},
-                         Expected2 = Input2,%{sum, ordsets:from_list(['Args/A', 'Args/C'])},
-                         ?assertEqual(none, domain:diff(Expected2, DomainFun(Input2)))
-                 end,
-    run(Code, RunAsserts).
+                    Input2 = {product, #{a => 'Args/A', 
+                                         b => 'Args/C'}},
+                    Expected2 = Input2,%{sum, ordsets:from_list(['Args/A', 'Args/C'])},
+                    [?test(none, domain:diff(Expected1, Actual1)),
+                     ?test(none, domain:diff(Expected2, DomainFun(Input2)))]
+            end)}.
 
 pattern_tagged_test() ->
     Code = "type Args -> T: {a: A, b: B}\n"
@@ -397,21 +428,21 @@ pattern_sum_tagged_test() ->
                  end,
     run(Code, RunAsserts).
 
-pattern_product_sum_test() ->
-    Code = "type X -> Y | Z\n"
-           "type P -> {x: X, xx: X}\n"
-           "type Test t\n"
-           " | P -> Matched\n"
-           " | _ -> Unmatched",
-    RunAsserts = fun(Mod) ->
-                         {f, 'Test', DomainFun} = Mod:domain('Test'),
-                         ?assertEqual('Test/Matched', DomainFun({product, #{x => 'X/Y', xx => 'X/Y'}})),
-                         ?assertEqual('Test/Matched', DomainFun({product, #{x => 'X/Z', xx => 'X/Y'}})),
-                         ?assertEqual('Test/Matched', DomainFun({product, #{x => 'X/Y', xx => 'X/Z'}})),
-                         ?assertEqual('Test/Matched', DomainFun({product, #{x => 'X/Z', xx => 'X/Z'}})),
-                         ?assertEqual('Test/Unmatched', DomainFun('Test/Matched'))
-                 end,
-    run(Code, RunAsserts).
+pattern_product_sum_test_() ->
+    {"Pattern matching should match all members ('Y', 'Z') of type 'X' and generate a clause for each",
+     ?setup("type X -> Y | Z\n"
+            "type P -> {x: X, xx: X}\n"
+            "type Test t\n"
+            " | P -> Matched\n"
+            " | _ -> Unmatched",
+            fun({ok, [Mod | _]}) ->
+                    {f, 'Test', DomainFun} = Mod:domain('Test'),
+                    [?test('Test/Matched', DomainFun({product, #{x => 'X/Y', xx => 'X/Y'}})),
+                     ?test('Test/Matched', DomainFun({product, #{x => 'X/Z', xx => 'X/Y'}})),
+                     ?test('Test/Matched', DomainFun({product, #{x => 'X/Y', xx => 'X/Z'}})),
+                     ?test('Test/Matched', DomainFun({product, #{x => 'X/Z', xx => 'X/Z'}})),
+                     ?test('Test/Unmatched', DomainFun('Test/Matched'))]
+            end)}.
 
 pattern_tagged_pair_test() ->
     Code = "type Args -> A | B | C\n"
@@ -447,6 +478,23 @@ tagged_pair_in_pattern_test() ->
                          ?assertEqual(none, domain:diff(Expected, Mod:domain('Test')))
                  end,
     run(Code, RunAsserts).
+
+module_type_test_() ->
+    {"A type module should be created that can be called for any type member",
+     ?setup("module test { T }\n"
+            "type T -> {a: A, b: B}",
+            fun({ok, _}) ->
+                    [?test('T/A', 'test_T':'A'()),
+                     ?test('T/B', 'test_T':'B'())]
+            end)}.
+
+module_tagged_type_test_() ->
+    {"The created type module for `T` needs to contain a type function for the tagged type `F`",
+     ?setup("module test { T }\n"
+            "type T a -> F: {a: a}",
+            fun({ok, _}) ->
+                    [?test({tagged, 'T/F', {product, #{a := 'Input'}}}, 'test_T':'F'('Input'))]
+            end)}.
 
 %multiple_tagged_pair_in_pattern_test() ->
 %     Code = "type Test a\n"

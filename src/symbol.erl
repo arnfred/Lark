@@ -10,6 +10,8 @@ tag({type, _, Symbols}) ->
     list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)]));
 tag({type, _, _, Symbols}) -> 
     list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)]));
+tag({tagged, _, Symbols, _}) -> 
+    list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)]));
 tag({symbol, _, _, S}) -> S;
 tag({variable, _, _, Tag}) -> Tag;
 tag({key, _, K}) -> K.

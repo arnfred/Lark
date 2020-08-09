@@ -193,15 +193,9 @@ step(Meta, Type, Scope, {dict, Context, Expressions}) when is_list(Expressions) 
             {ok, {merge(ExprsEnvs), {dict, Context, TExprs}}}
     end;
 
-%step(Meta, Type, Scope, {tagged, Ctx, Tag, Key, Val}) ->
-%    error:map2(climb(Meta, Type, Scope, Key),
-%               climb(Meta, Type, Scope, Val),
-%               fun({KeyEnv, TKey}, {ValEnv, TVal}) -> 
-%                       {merge(KeyEnv, ValEnv), {tagged, Ctx, Tag, TKey, TVal}} end);
-
-step(Meta, Type, Scope, {tagged, Ctx, Tag, Val}) ->
+step(Meta, Type, Scope, {tagged, Ctx, Path, Val}) ->
     error:map(climb(Meta, Type, Scope, Val),
-	      fun({ValEnv, TVal}) -> {ValEnv, {tagged, Ctx, Tag, TVal}} end);
+	      fun({ValEnv, TVal}) -> {ValEnv, {tagged, Ctx, Path, TVal}} end);
 
 step(Meta, Type, Scope, {TermType, Ctx, Key, Val}) when TermType =:= pair;
                                                         TermType =:= dict_pair ->

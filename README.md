@@ -132,7 +132,13 @@ At this point things are set up to run a test, but the default test timeout is 5
 Then run the tests:
 
 ```
-eunit:test(parser_test).
+r3:do("eunit --suite parser_test").
+```
+
+To run a specific test (if it's a generator), do:
+
+```
+r3:do("eunit --generator typegen_test:pattern_dict_sum_test_").
 ```
 
 For more information, see this [very helpful stackoverflow answer](https://stackoverflow.com/questions/34658714/how-to-debug-my-eunit-test-suite-run-when-using-rebar3#34667937). There's also [this helpful answer](https://stackoverflow.com/questions/6438041/how-to-debug-erlang-code) if you want to use a command line debugger instead.

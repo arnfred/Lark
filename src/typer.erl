@@ -1,30 +1,30 @@
 -module(typer).
--export([type/2, load/2]).
+-export([type/1, load/1]).
 
-type(Module, Defs) -> 
-    case load(Module, Defs) of
+type(AST) -> 
+    case load(AST) of
         {error, Errs} -> {error, Errs};
-        {ok, TypeMod} ->
-            Envs = scanner:scan(TypeMod, Defs),
+        {ok, TypeModules} ->
+            [ScannerModule | _] = TypeModules,
+            Envs = scanner:scan(ScannerModule, AST),
             io:format("Envs: ~p~n", [Envs]),
-            {ok, Envs}
+            {ok, {TypeModules, Envs}}
     end.
 
-load(Module, Defs) ->
-    TypeMod = lists:flatten([Module, "_types"]),
-    case typegen:gen(TypeMod, Defs) of
-        {error, Errs} -> 
-            io:format("Errs: ~p~n", [Errs]),
-            {error, Errs};
-        {ok, Forms} ->
-            io:format("Forms are ~p~n", [Forms]),
-            case compile:forms(Forms, [report, verbose, from_core]) of
-                error -> error:format({compilation_error}, {typer, Forms});
-                {error, Err} -> error:format({compilation_error, Err}, {typer, Forms});
-                {ok, Mod, TypeBin} ->
-                    io:format("Mod: ~p, TypeMod: ~p~n", [Mod, TypeMod]),
-                    BeamName = lists:flatten([TypeMod, ".beam"]),
-                    code:load_binary(Mod, BeamName, TypeBin),
-                    {ok, Mod}
-            end
+load(AST) ->
+    case typegen:gen(AST) of
+        {error, Errs}       -> {error, Errs};
+        {ok, TypeModules}   -> Loaded = [load_type_module(Name, Form) || {Name, Form} <- TypeModules],
+                               error:collect(Loaded)
     end.
+
+load_type_module(Name, ModuleForm) ->
+    case compile:forms(ModuleForm, [report, verbose, from_core]) of
+        error -> error:format({compilation_error}, {typer, Name});
+        {error, Err} -> error:format({compilation_error, Err}, {typer, Name});
+        {ok, Name, TypeBin} ->
+            BeamName = lists:flatten([atom_to_list(Name), ".beam"]),
+            code:load_binary(Name, BeamName, TypeBin),
+            {ok, Name}
+    end.
+

@@ -1,5 +1,8 @@
 module kind/prelude {
+    Boolean
     match
 }
+
+type Boolean -> True | False
 
 def match a f -> f(a)

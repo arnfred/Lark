@@ -33,9 +33,9 @@ gen_expr({type, _, _, Symbols}) ->
     Tag = list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)])),
     cerl:c_atom(Tag);
 
-%gen_expr({qualified_variable, _, ModulePath, Name}) ->
-%    ModuleName = module:beam_name(ModulePath),
-%    cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(Name), []);
+gen_expr({qualified_type, _, ModulePath, Name}) ->
+    ModuleName = module:beam_name(ModulePath),
+    gen_expr(ModuleName:Name());
 
 gen_expr({application, _, Symbol, Args}) ->
     CompiledArgs = [gen_expr(E) || E <- Args],
@@ -53,6 +53,11 @@ gen_expr({lambda, Ctx, Clauses}) ->
     cerl:c_fun(CompiledArgs, CompiledBody);
 
 gen_expr({tuple, _, []}) -> cerl:c_atom('()');
+
+% When we evaluate a type member, we call the corresponding type module and run
+% `gen_expr` on the result. If the type member is an atom (like `Boolean/True`)
+% then we generate code for it here
+gen_expr(Atom) when is_atom(Atom) -> cerl:c_atom(Atom);
 
 % This makes is so we can use parenthesis to group evaluation like `(1 + 3).match( ... )`
 % However, currently it only evaluates the last element of a tuple.
@@ -125,7 +130,6 @@ function_call_multiple_args_test() ->
 always_true_test() ->
     Code = 
         "module kind/test { alwaysTrue }\n"
-        "type Boolean -> True | False\n"
         "def alwaysTrue a -> Boolean/True",
     RunAsserts = fun() -> ?assertEqual('Boolean/True', kind_test:alwaysTrue(2)) end,
     run(Code, RunAsserts).
@@ -133,7 +137,6 @@ always_true_test() ->
 pattern_match_test() ->
     Code =
         "module kind/test { rexor }\n"
-        "type Boolean -> True | False\n"
         "def rexor a\n"
         " | Boolean/True -> Boolean/False\n"
         " | Boolean/False -> Boolean/True",
@@ -146,7 +149,6 @@ pattern_match_test() ->
 pattern_match_multivariate_test() ->
     Code =
         "module kind/test { rexor }\n"
-        "type Boolean -> True | False\n"
         "def rexor a b\n"
         " | Boolean/True Boolean/False -> Boolean/True\n"
         " | Boolean/False Boolean/True -> Boolean/True\n"
@@ -160,7 +162,6 @@ pattern_match_multivariate_test() ->
 pattern_match_expr_syntax1_test() ->
     Code =
         "module kind/test { test2 }\n"
-        "type Boolean -> True | False\n"
         "def test2 a -> a.match(Boolean/False -> Boolean/True, Boolean/True -> Boolean/False)",
     RunAsserts = fun() ->
                          ?assertEqual('Boolean/True', kind_test:test2('Boolean/False'))
@@ -170,7 +171,6 @@ pattern_match_expr_syntax1_test() ->
 pattern_match_expr_syntax2_test() ->
     Code =
         "module kind/test { test3 }\n"
-        "type Boolean -> True | False\n"
         "def test3 a -> a.match(Boolean/False -> Boolean/True\n"
         "                       Boolean/True -> Boolean/False)",
     RunAsserts = fun() ->
@@ -200,7 +200,6 @@ anonymous_function1_test() ->
     TestFunction = fun('Boolean/True') -> 'Boolean/False' end,
     Code =
         "module kind/test { blip }\n"
-        "type Boolean -> True | False\n"
         "def blip f -> f(Boolean/True)",
     RunAsserts = fun() -> ?assertEqual('Boolean/False', kind_test:blip(TestFunction)) end,
     run(Code, RunAsserts).
@@ -208,7 +207,6 @@ anonymous_function1_test() ->
 anonymous_function2_test() ->
     Code =
         "module kind/test { blap }\n"
-        "type Boolean -> True | False\n"
         "def blip a f -> f(a)\n"
         "def blap a -> a.blip(Boolean/False -> Boolean/True\n"
         "                      Boolean/True -> Boolean/False)",
@@ -226,7 +224,6 @@ anonymous_function3_test() ->
 anonymous_function4_test() ->
     Code = 
         "module kind/test { blap }\n"
-        "type Boolean -> True | False\n"
         "def blip a f -> f(a, a)\n"
         "def blap a -> a.blip(arg1 Boolean/False -> Boolean/False\n"
         "                     arg1 Boolean/True  -> arg1)",
@@ -236,7 +233,6 @@ anonymous_function4_test() ->
 multiple_anonymous_functions1_test() ->
     Code = 
         "module kind/test { blap }\n"
-        "type Boolean -> True | False\n"
         "def blip a f g -> f(g(a))\n"
         "def blap a -> a.blip((_ -> Boolean/False),\n"
         "                     (Boolean/False -> Boolean/True\n"
@@ -247,7 +243,6 @@ multiple_anonymous_functions1_test() ->
 multiple_anonymous_functions2_test() ->
     Code = 
         "module kind/test { blap }\n"
-        "type Boolean -> True | False\n"
         "def blip a f g -> f(g(a))\n"
         "def blap a -> a.blip((Boolean/True -> Boolean/False\n"
         "                      Boolean/False -> Boolean/True),\n"

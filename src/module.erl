@@ -28,17 +28,38 @@ prepare(File, Code) ->
         {ok, Mods}        -> {ok, {File, {ast, #{file => File}, Mods, Imports, Defs}}}
     end.
 
-handle_modules({module, Ctx, Symbols, Exports}, Defs) ->
-    F = fun({pair, _, K, _} = Elem) -> case maps:is_key(symbol:tag(K), Defs) of
-                                           true  -> {ok, symbol:tag(K)};
-                                           false -> error:format({export_missing, symbol:tag(K)}, {module, Elem})
-                                       end;
-           (Elem)                   -> case maps:is_key(symbol:tag(Elem), Defs) of
-                                           true  -> {ok, symbol:tag(Elem)};
-                                           false -> error:format({export_missing, symbol:tag(Elem)}, {module, Elem})
-                                       end
+handle_modules({module, Ctx, Path, Exports}, Defs) ->
+    F = fun
+            % blah: T
+            ({pair, _, K, _} = Elem) ->
+                case maps:is_key(symbol:tag(K), Defs) of
+                    true  -> {ok, symbol:tag(K)};
+                    false -> error:format({export_missing, symbol:tag(K)}, {module, Elem})
+                end;
+            % Boolean/True
+            % When compiling types:
+            % * Include all exported types in the module
+            % * Include all exported subtypes in the module under their name. Maybe check for conflicts.
+            % To do this, return Forms from typegen. That way we can include
+            % them in the final module
+
+            % Another but separate step is to reorder the parsing logic so we
+            % collect types before assembling the module. That will allow us to
+            % check if a subtype exists when it's exported.
+            ({qualified_type, _, Symbols} = Elem) ->
+                [P, T] = [S || {symbol, _, _, S} <- Symbols],
+                case maps:is_key(P, Defs) of
+                    true  -> {ok, T};
+                    false -> error:format({export_missing, module:kind_name([P, T])}, {module, Elem})
+                end;
+            % blah
+            (Elem) ->
+                case maps:is_key(symbol:tag(Elem), Defs) of
+                    true  -> {ok, symbol:tag(Elem)};
+                    false -> error:format({export_missing, symbol:tag(Elem)}, {module, Elem})
+                end
         end,
-    Name = [S || {symbol, _, variable, S} <- Symbols],
+    Name = [S || {symbol, _, variable, S} <- Path],
     case error:collect([F(E) || E <- Exports]) of
         {error, Errs}   -> {error, Errs};
         {ok, Tags}      -> ExportMap = maps:from_list(lists:zip(Tags, Exports)),
@@ -53,7 +74,3 @@ kind_name(Path) ->
     PathString = [atom_to_list(A) || A <- lists:join('/', Path)],
     list_to_atom(lists:flatten([PathString])).
 
--ifdef(TEST).
-
-
--endif.
