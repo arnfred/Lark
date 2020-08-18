@@ -129,14 +129,14 @@ function_call_multiple_args_test_() ->
 
 always_true_test_() ->
     ?setup("module kind/test { alwaysTrue }\n"
-           "def alwaysTrue a -> Boolean/True",
+           "def alwaysTrue a -> True",
            fun({ok, _}) -> ?test('Boolean/True', kind_test:alwaysTrue(2)) end).
 
 pattern_match_test_() ->
     ?setup("module kind/test { rexor }\n"
            "def rexor a\n"
-           " | Boolean/True -> Boolean/False\n"
-           " | Boolean/False -> Boolean/True",
+           " | True -> False\n"
+           " | False -> True",
            fun({ok, _}) ->
                    [?test('Boolean/True', kind_test:rexor('Boolean/False')),
                    ?test('Boolean/False', kind_test:rexor('Boolean/True'))]
@@ -145,9 +145,9 @@ pattern_match_test_() ->
 pattern_match_multivariate_test_() ->
     ?setup("module kind/test { rexor }\n"
            "def rexor a b\n"
-           " | Boolean/True Boolean/False -> Boolean/True\n"
-           " | Boolean/False Boolean/True -> Boolean/True\n"
-           " | _ _ -> Boolean/False",
+           " | True False -> True\n"
+           " | False True -> True\n"
+           " | _ _ -> False",
            fun({ok, _}) ->
                    [?test('Boolean/True', kind_test:rexor('Boolean/True', 'Boolean/False')),
                     ?test('Boolean/False', kind_test:rexor('Boolean/True', 'Boolean/True'))]
@@ -155,15 +155,15 @@ pattern_match_multivariate_test_() ->
 
 pattern_match_expr_syntax1_test_() ->
     ?setup("module kind/test { test2 }\n"
-           "def test2 a -> a.match(Boolean/False -> Boolean/True, Boolean/True -> Boolean/False)",
+           "def test2 a -> a.match(False -> True, True -> False)",
            fun({ok, _}) ->
                    ?test('Boolean/True', kind_test:test2('Boolean/False'))
            end).
 
 pattern_match_expr_syntax2_test_() ->
     ?setup("module kind/test { test3 }\n"
-           "def test3 a -> a.match(Boolean/False -> Boolean/True\n"
-           "                       Boolean/True -> Boolean/False)",
+           "def test3 a -> a.match(False -> True\n"
+           "                       True -> False)",
            fun({ok, _}) ->
                    ?test('Boolean/True', kind_test:test3('Boolean/False'))
            end).
@@ -185,14 +185,14 @@ underscore_arg_test_() ->
 anonymous_function1_test_() ->
     TestFunction = fun('Boolean/True') -> 'Boolean/False' end,
     ?setup("module kind/test { blip }\n"
-           "def blip f -> f(Boolean/True)",
+           "def blip f -> f(True)",
            fun({ok, _}) -> ?test('Boolean/False', kind_test:blip(TestFunction)) end).
 
 anonymous_function2_test_() ->
     ?setup("module kind/test { blap }\n"
            "def blip a f -> f(a)\n"
-           "def blap a -> a.blip(Boolean/False -> Boolean/True\n"
-           "                      Boolean/True -> Boolean/False)",
+           "def blap a -> a.blip(False -> True\n"
+           "                      True -> False)",
            fun({ok, _}) -> ?test('Boolean/False', kind_test:blap('Boolean/True')) end).
 
 anonymous_function3_test_() ->
@@ -204,24 +204,24 @@ anonymous_function3_test_() ->
 anonymous_function4_test_() ->
     ?setup("module kind/test { blap }\n"
            "def blip a f -> f(a, a)\n"
-           "def blap a -> a.blip(arg1 Boolean/False -> Boolean/False\n"
-           "                     arg1 Boolean/True  -> arg1)",
+           "def blap a -> a.blip(arg1 False -> False\n"
+           "                     arg1 True  -> arg1)",
            fun({ok, _}) -> ?test('Boolean/True', kind_test:blap('Boolean/True')) end).
 
 multiple_anonymous_functions1_test_() ->
     ?setup("module kind/test { blap }\n"
            "def blip a f g -> f(g(a))\n"
-           "def blap a -> a.blip((_ -> Boolean/False),\n"
-           "                     (Boolean/False -> Boolean/True\n"
-           "                      Boolean/True -> Boolean/False))",
+           "def blap a -> a.blip((_ -> False),\n"
+           "                     (False -> True\n"
+           "                      True -> False))",
            fun({ok, _}) -> ?test('Boolean/False', kind_test:blap('Boolean/True')) end).
 
 multiple_anonymous_functions2_test_() ->
     ?setup("module kind/test { blap }\n"
            "def blip a f g -> f(g(a))\n"
-           "def blap a -> a.blip((Boolean/True -> Boolean/False\n"
-           "                      Boolean/False -> Boolean/True),\n"
-           "                     (_ -> Boolean/False))",
+           "def blap a -> a.blip((True -> False\n"
+           "                      False -> True),\n"
+           "                     (_ -> False))",
            fun({ok, _}) -> ?test('Boolean/True', kind_test:blap('whatevs')) end).
 
 erlang_module_call_test_() ->
@@ -257,6 +257,14 @@ top_level_type_import_test_() ->
             "type Test -> Boolean | Maybe",
             fun({ok, _}) -> 
                     ?testEqual({sum, ordsets:from_list(['Test/Maybe', 'Boolean/True', 'Boolean/False'])}, kind_test:'Test'())
+            end)}.
+
+sup_level_type_import_test_() ->
+    {"Test if we can use Boolean as defined in the prelude",
+     ?setup("module kind/test { Test }\n"
+            "type Test -> True | Maybe",
+            fun({ok, _}) -> 
+                    ?testEqual({sum, ordsets:from_list(['Test/Maybe', 'Boolean/True'])}, kind_test:'Test'())
             end)}.
 
 

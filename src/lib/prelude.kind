@@ -1,6 +1,8 @@
 module kind/prelude {
     Boolean
     match
+    Boolean/True
+    Boolean/False
 }
 
 type Boolean -> True | False

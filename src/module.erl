@@ -41,7 +41,7 @@ handle_modules({module, ModuleCtx, Path, Exports}, Defs, Types) ->
                      maps:is_key(P, Types) andalso
                      lists:member(T, maps:get(P, Types)) of
                     false -> error:format({export_missing, module:kind_name([P, T])}, {module, Elem});
-                    true  -> case not(maps:is_key(T, Defs)) of
+                    true  -> case maps:is_key(T, Defs) of
                                  false  -> {ok, {T, {type_export, Ctx, [P, T], none}}};
                                  true   -> error:format({type_export_already_defined, symbol:tag([P, T]), T}, {module, Elem})
                              end

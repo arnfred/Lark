@@ -76,7 +76,7 @@ gen_exported_types({module, _, _, Exports}, Types, ArgsEnv) ->
                 case maps:is_key(Tag, Types) of
                     false   -> error:format({undefined_type_export, Tag}, {typegen, Ctx});
                     true    -> 
-                        {ok, gen_type_def(Name, Name, maps:get(Tag, ArgsEnv))}
+                        {ok, gen_type_def(Name, Tag, maps:get(Tag, ArgsEnv))}
                 end
         end,
     error:collect([F(Entry) || {_, {type_export, _, _, _}} = Entry <- maps:to_list(Exports)]).
@@ -133,7 +133,7 @@ args_pre(_, _, _) -> ok.
 % the term itself or its children. For each term we map the list of free
 % variables to the term id in the returned environemnt
 args_post(expr, _, {variable, _, _, Tag}) -> {ok, [{var, Tag}]};
-args_post(expr, _, {type, _, _, _}) -> {ok, []};
+args_post(expr, _, {type, _, _, _} = T) -> {ok, symbol:tag(T), []};
 args_post(expr, _, {key, _, _}) -> {ok, []};
 args_post(expr, _, {pair, _, _, Val} = Term) -> 
     case ast:get_tag(tag, Term, undefined) of
