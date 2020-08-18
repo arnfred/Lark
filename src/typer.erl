@@ -3,19 +3,22 @@
 
 type(AST) -> 
     case load(AST) of
-        {error, Errs} -> {error, Errs};
-        {ok, TypeModules} ->
-            [ScannerModule | _] = TypeModules,
-            Envs = scanner:scan(ScannerModule, AST),
-            io:format("Envs: ~p~n", [Envs]),
-            {ok, {TypeModules, Envs}}
+        {error, Errs}                                       -> {error, Errs};
+        {ok, {Exported, ScannerMod, TypeMods, DomainDef}}   ->
+            Envs = scanner:scan(ScannerMod, AST),
+            true = code:soft_purge(ScannerMod),
+            true = code:delete(ScannerMod),
+            {ok, {Envs, Exported, TypeMods, DomainDef}}
     end.
 
 load(AST) ->
     case typegen:gen(AST) of
-        {error, Errs}       -> {error, Errs};
-        {ok, TypeModules}   -> Loaded = [load_type_module(Name, Form) || {Name, Form} <- TypeModules],
-                               error:collect(Loaded)
+        {error, Errs}                                       -> {error, Errs};
+        {ok, {Exported, ScannerMod, TypeMods, DomainDef}}   ->
+            AllModules = [ScannerMod | TypeMods],
+            LoadedModules = error:collect([load_type_module(Name, Form) || {Name, Form} <- AllModules]),
+            error:map(LoadedModules, fun([ScannerModule | Mods]) ->
+                                             {Exported, ScannerModule, Mods, DomainDef} end)
     end.
 
 load_type_module(Name, ModuleForm) ->

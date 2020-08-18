@@ -1,5 +1,5 @@
 -module(utils).
--export([duplicates/2, group_by/2, group_by/3, unique/1]).
+-export([duplicates/2, group_by/2, group_by/3, unique/1, merge/1]).
 
 duplicates(Elements, GetKey) ->
     F = fun(Elem, {Duplicates, Seen}) -> 
@@ -23,3 +23,6 @@ unique(L) ->
                                           false -> {[Elem | Out], ordsets:add_element(Elem, Seen)}
                                       end end, {[], ordsets:new()}, L),
     lists:reverse(Out).
+
+merge(Maps) when is_list(Maps) ->
+    lists:foldl(fun maps:merge/2, #{}, Maps).

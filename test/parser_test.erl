@@ -199,10 +199,9 @@ qualified_beam_import_test_() ->
     Module =
     "import lists/_\n"
     "def blap -> reverse",
-    ?test({ok, [{_,
-                 {ast, _, _, _,
-                  #{blap := {def, _, 'blap', [],
-                             {qualified_variable, _, [lists], reverse}}}}}]},
+    ?test({ok, [{ast, _, _, _,
+                 #{blap := {def, _, 'blap', [],
+                            {qualified_variable, _, [lists], reverse}}}}]},
           parser:parse([{text, Module}])).
 
 qualified_source_import_test_() ->
@@ -213,10 +212,9 @@ qualified_source_import_test_() ->
     "import blip/T\n"
     "def blap -> T/A",
     ?test({ok, [_,
-                {_,
-                 {ast, _, _, _,
-                  #{blap := {def, _, 'blap', [],
-                             {qualified_type, _, [blip, 'T'], 'A'}}}}}]},
+                {ast, _, _, _,
+                 #{blap := {def, _, 'blap', [],
+                            {qualified_type, _, [blip, 'T'], 'A'}}}}]},
           parser:parse([{text, Module1}, {text, Module2}])).
 
 qualified_local_import_test_() ->
@@ -224,9 +222,8 @@ qualified_local_import_test_() ->
     "type T -> A | B\n"
     "import T/A\n"
     "def blap -> A",
-    ?test({ok, [{_,
-                 {ast, _, _, _,
-                  #{blap := {def, _, 'blap', [],
-                             {type, _, 'A', ['T', 'A']}}}}}]},
+    ?test({ok, [{ast, _, _, _,
+                 #{blap := {def, _, 'blap', [],
+                            {type, _, 'A', ['T', 'A']}}}}]},
           parser:parse([{text, Module}])).
 

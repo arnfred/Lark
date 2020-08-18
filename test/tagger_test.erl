@@ -6,7 +6,7 @@
 get_AST(Code) ->
     case parser:parse([{text, Code}]) of
         {error, Errs} -> {error, Errs};
-        {ok, [{_, {ast, _, _, _, Defs}} | _]} -> {ok, maps:values(Defs)}
+        {ok, [{ast, _, _, _, Defs} | _]} -> {ok, maps:values(Defs)}
     end.
 
 

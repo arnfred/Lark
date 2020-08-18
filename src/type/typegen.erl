@@ -2,14 +2,13 @@
 -export([gen/1]).
 
 -include_lib("eunit/include/eunit.hrl").
-
 gen(AST) ->
     error:flatmap2(collect_args(AST),
                    collect_types(AST),
                    fun({ArgsEnv, _}, {TypesEnv, TypedAST}) ->
                            case gen_types(TypesEnv, ArgsEnv, TypedAST) of
                                {error, Errs}    -> {error, Errs};
-                               {ok, {Types, _}} -> {ok, gen_modules(Types, TypesEnv, ArgsEnv, TypedAST)}
+                               {ok, {Types, _}} -> gen_modules(Types, TypesEnv, ArgsEnv, TypedAST)
                            end
                    end).
 
@@ -18,32 +17,47 @@ gen_types(TypesEnv, ArgsEnv, AST) ->
     ast:traverse(fun pre_gen_term/3, Post, AST).
 
 gen_modules(Types, TypesEnv, ArgsEnv, {ast, _, Modules, _, _} = AST) ->
-
     % Create a map from types to type members
     F = fun([Parent | _] = Path, {tagged, _, _, _} = Term) ->
                 Tag = symbol:tag(Term),
                 Name = lists:last(Path),
                 Args = maps:get(Tag, ArgsEnv),
-                Form = maps:get(Tag, Types),
-                {Parent, {Name, Args, Form}};
+                {Parent, {Name, Tag, Args}};
            ([Parent | _], {type, _, Name, _} = T) ->
                 Tag = symbol:tag(T),
-                {Parent, {Name, [], cerl:c_atom(Tag)}}
+                {Parent, {Name, Tag, []}}
         end,
     TypePaths = [F(Path, Term) || {Path, Term} <- maps:to_list(TypesEnv), length(Path) > 1],
-    K = fun({K, _}) -> K end,
-    V = fun({_, V}) -> V end,
-    TypeParents = utils:group_by(K, V, TypePaths),
+    TypeParents = utils:group_by(fun({K, _}) -> K end,
+                                 fun({_, V}) -> V end,
+                                 TypePaths),
 
     % Inside a type module for a specific type we might refer to other types
     % created in the parent module. For this reason we include a domain
     % function of all module types within each type module
     DomainDef = gen_domain(Types),
 
-    TypeModules = [gen_type_modules(Modules, Parent, Children, DomainDef) || {Parent, Children} <- TypeParents],
+    % For each top level type (e.g. `Boolean`) we create a module which exports
+    % its type members (e.g. `True` and `False`). These type modules serve to
+    % simplify the import logic by making it trivial to import type members
+    % from compiled beam files. For a bit more context see commit
+    % 34ea58050b0200236324e963cd14ceb58ac1a32d
+    TypeModules = [gen_type_modules(Modules, Parent, Children, DomainDef) 
+                   || {Parent, Children} <- TypeParents],
+
+    % The scanner needs access to call all type functions. For this purpose a
+    % temporary type module is created which exports these types.
     ScannerModule = gen_scanner_module(Types, AST),
 
-    [ScannerModule | lists:flatten(TypeModules)].
+    % A normal module must contain the type definitions that it exports. To do
+    % so we generate a map of these exports that can be included in codegen
+    % when the module is created
+    case error:collect([gen_exported_types(Mod, Types, ArgsEnv) || Mod <- Modules]) of
+        {error, Errs}           -> {error, Errs};
+        {ok, ExportedTypeList}  ->
+            ExportedTypes = lists:flatten(ExportedTypeList),
+            {ok, {ExportedTypes, ScannerModule, lists:flatten(TypeModules), DomainDef}}
+    end.
 
 
 % For each module in the AST we create a type module which exports the children of the type
@@ -51,32 +65,30 @@ gen_type_modules(_, _, [], _) -> [];
 gen_type_modules(Modules, Parent, Children, DomainDef) ->
     ModuleNames = [module:beam_name(Path ++ [Parent]) || {module, _, Path, Exports} <- Modules,
                                                          maps:is_key(Parent, Exports)],
-    Defs = [gen_type_module_def(Name, Args, Form) || {Name, Args, Form} <- Children],
+    Defs = [gen_type_def(Name, Tag, Args) || {Name, Tag, Args} <- Children],
     {Exports, _} = lists:unzip(Defs),
     [{ModuleName, cerl:c_module(cerl:c_atom(ModuleName), Exports, [], [DomainDef | Defs])} ||
      ModuleName <- ModuleNames].
 
+gen_exported_types({module, _, _, Exports}, Types, ArgsEnv) ->
+    F = fun({Name, {type_export, Ctx, Key, _}}) ->
+                Tag = symbol:tag(Key),
+                case maps:is_key(Tag, Types) of
+                    false   -> error:format({undefined_type_export, Tag}, {typegen, Ctx});
+                    true    -> 
+                        {ok, gen_type_def(Name, Name, maps:get(Tag, ArgsEnv))}
+                end
+        end,
+    error:collect([F(Entry) || {_, {type_export, _, _, _}} = Entry <- maps:to_list(Exports)]).
 
-gen_type_module_def(Name, Args, Form) ->
-    ArgForms = [cerl:c_var(A) || {var, A} <- Args],
-    FName = cerl:c_fname(Name, length(Args)),
-    case length(Args) =:= 0 of
-        true    -> {FName, cerl:c_fun(ArgForms, Form)};
-        false   -> 
-            % type is wrapped in {f, Name, fun}
-            [_, _, Unpacked] = cerl:tuple_es(Form),
-            {FName, Unpacked}
-    end.
-
-
-
-    
 gen_scanner_module(Types, {ast, _, _, _, Defs}) ->
     ModuleName = symbol:id(types),
     DomainDef = gen_domain(Types),
 
     % Top level defs `TypeMod:T()` for `T` in `type T -> ...`
-    TopLevelDefs = [gen_type_def(Name, Args) || {type_def, _, Name, Args, _} <- maps:values(Defs)],
+    ArgsF = fun(Args) -> 
+                    [{var, symbol:tag(A)} || A <- Args] end,
+    TopLevelDefs = [gen_type_def(Name, Name, ArgsF(Args)) || {type_def, _, Name, Args, _} <- maps:values(Defs)],
 
     {Exports, _} = lists:unzip([DomainDef | TopLevelDefs]),
     {ModuleName, cerl:c_module(cerl:c_atom(ModuleName), Exports, [], [DomainDef | TopLevelDefs])}.
@@ -93,13 +105,13 @@ gen_domain(Types) ->
     FName = cerl:c_fname(domain, 1),
     {FName, cerl:c_fun([Arg], Compacted)}.
 
-gen_type_def(Name, []) ->
-    Body = cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Name)]),
+gen_type_def(Name, Tag, []) ->
+    Body = cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)]),
     FName = cerl:c_fname(Name, 0),
     {FName, cerl:c_fun([], Body)};
-gen_type_def(Name, Args) -> 
-    ArgForms = [cerl:c_var(symbol:tag(A)) || A <- Args],
-    Body = unsafe_call_form(cerl:c_atom(Name), ArgForms),
+gen_type_def(Name, Tag, Args) -> 
+    ArgForms = [cerl:c_var(A) || {var, A} <- Args],
+    Body = unsafe_call_form(cerl:c_atom(Tag), ArgForms),
     FName = cerl:c_fname(Name, length(Args)),
     {FName, cerl:c_fun(ArgForms, Body)}.
 
@@ -128,14 +140,15 @@ args_post(expr, _, {pair, _, _, Val} = Term) ->
         undefined -> {ok, get_vars(Term)};
         Tag -> {ok, Tag, Val}
     end;
-args_post(top_level, _, {type_def, _, Name, Args, _}) -> {ok, Name, [{var, A} || A <- Args]};
+args_post(top_level, _, {type_def, _, Name, _, Expr}) -> {ok, Name, Expr};
 args_post(pattern, _, _) -> skip;
 args_post(_, _, Term) when is_tuple(Term) -> 
     {ok, get_vars(Term)}.
 
 get_vars(Term) when is_tuple(Term) ->
     Args = [{var, V} || I <- lists:seq(3, size(Term)), {var, V} <- lists:flatten([element(I, Term)])],
-    utils:unique(Args).
+    utils:unique(Args);
+get_vars(Term) when is_list(Term) -> utils:unique([V || T <- Term, V <- get_vars(T)]).
 
 
 
@@ -212,6 +225,11 @@ gen_term(_, ArgsEnv, expr, _, {tagged, _, _, Val} = Term) ->
                end,
     {ok, Tag, TypeForm, CoreForm};
 
+gen_term(_, _, expr, _, {sum, Elements}) ->
+    SumElements = cerl:make_list(ordsets:to_list(Elements)),
+    DomainSet = cerl:c_call(cerl:c_atom(ordsets), cerl:c_atom(from_list), [SumElements]),
+    {ok, cerl:c_tuple([cerl:c_atom(sum), DomainSet])};
+
 gen_term(_, _, expr, _, {tuple, _, Elements}) ->
     SumElements = cerl:make_list(Elements),
     DomainSet = cerl:c_call(cerl:c_atom(ordsets), cerl:c_atom(from_list), [SumElements]),
@@ -258,13 +276,23 @@ gen_term(TypesEnv, ArgsEnv, expr, _, {type, _, _, Path} = Term) ->
             case maps:get(Path, TypesEnv) of
                 {tagged, _, _, T}          -> TraverseF(T);
                 {type_def, _, _, _, _} = T -> TraverseF(T);
-                {type, _, _, _} = T        -> {ok, cerl:c_atom(symbol:tag(T))}
+                {type, _, _, _} = T        -> {ok, symbol:tag(T), cerl:c_atom(symbol:tag(T))}
             end
     end;
+
+gen_term(TypesEnv, ArgsEnv, Type, Scope, {qualified_type, _, ModulePath, Name}) ->
+    ModuleName = module:beam_name(ModulePath),
+    Domain = ModuleName:Name(),
+    GenTermF = fun(Type, Scope, T) -> gen_term(TypesEnv, ArgsEnv, Type, Scope, T) end,
+    error:map(ast:traverse_term(Type, fun pre_gen_term/3, GenTermF, Scope, Domain),
+              fun({_, Forms}) -> Forms end);
 
 gen_term(_, _, expr, _, {key, _, _} = Term) -> {ok, cerl:c_atom(symbol:tag(Term))};
 
 gen_term(_, _, expr, _, {variable, _, _, _} = Term) -> {ok, cerl:c_var(symbol:tag(Term))};
+
+% Type Atom
+gen_term(_, _, expr, _, Atom) when is_atom(Atom) -> {ok, cerl:c_atom(Atom)};
 
 gen_term(_, _, expr, _, {clause, _, Patterns, Expr}) ->
     {ok, [cerl:c_clause(Ps, Expr) || Ps <- combinations(Patterns)]};

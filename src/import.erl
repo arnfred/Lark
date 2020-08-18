@@ -1,14 +1,14 @@
 -module(import).
 -export([import/3]).
 
-import({import, _, Path} = Import, SourceMap, LocalTypes) ->
-    case lists:reverse(Path) of
+import({import, _, ImportPath} = Import, SourceMap, LocalTypes) ->
+    case lists:reverse(ImportPath) of
         []                             -> error:format({empty_import}, {import, Import});
 
         % import lists                 -> [{lists/reverse, lists/reverse},
         %                                  {lists/split, lists/split},
         %                                  ...]
-        [{symbol, _, _, Name}]         -> import_module(Name, Path, SourceMap, LocalTypes, Import);
+        [{symbol, _, _, Name}]         -> import_module(Name, ImportPath, SourceMap, LocalTypes, Import);
 
         % import test/Test             -> [{Test, test/Test}]
         % import test/_                -> [{Test, test/Test},
@@ -41,21 +41,21 @@ import({import, _, Path} = Import, SourceMap, LocalTypes) ->
             error:format({unrecognized_import, Other}, {import, Import})
     end.
 
-import_module(ModuleName, Path, SourceMap, LocalTypes, ErrorCtx) ->
-    case error:collect(import_def('_', '_', Path, SourceMap, LocalTypes, ErrorCtx)) of
+import_module(ModuleName, ImportPath, SourceMap, LocalTypes, ErrorCtx) ->
+    case error:collect(import_def('_', '_', ImportPath, SourceMap, LocalTypes, ErrorCtx)) of
         {error, Errs}   -> {error, Errs};
         {ok, Aliases}   -> [{alias, Ctx, [ModuleName, Alias], Term} || {alias, Ctx, Alias, Term} <- Aliases]
     end.
 
-import_def(Name, Alias, Path, SourceMap, LocalTypes, ErrorCtx) ->
-    case lists:reverse(Path) of
+import_def(Name, Alias, ImportPath, SourceMap, LocalTypes, ErrorCtx) ->
+    case lists:reverse(ImportPath) of
 
         % 1. Check if it's a local type import and if it is, look it up in the typemap
         [{symbol, _, type, Parent}]             -> local_type(Parent, Name, Alias, LocalTypes, ErrorCtx);
 
         % 2. Otherwise, import from source or beam file
         _                                       ->
-            ModulePath = [P || {symbol, _, _, P} <- Path],
+            ModulePath = [P || {symbol, _, _, P} <- ImportPath],
             ModuleName = module:beam_name(ModulePath),
             io:format("SourceMap for ~p: ~p~n", [ModuleName, SourceMap]),
             case maps:get(ModuleName, SourceMap, undefined) of
@@ -91,7 +91,6 @@ beam_function(ModulePath, Name, Alias, ErrorCtx) ->
     Module = module:beam_name(ModulePath),
     ModuleName = module:kind_name(ModulePath),
     ImportName = module:kind_name(ModulePath ++ [Name]),
-    io:format("Beam Module: ~p~n", [Module]),
     case code:is_loaded(Module) of
         {file, _}   -> loaded_module_function(ModulePath, Name, Alias, ErrorCtx);
         false       -> case code:which(Module) of
@@ -136,11 +135,14 @@ beam_subtypes(qualified_type, ImportPath, Alias, ErrorCtx) ->
            {get_tag(T), #{import => ErrorCtx}, ImportPath, T}}}
      || {ok, {alias, _, T, _}} <- beam_function(ImportPath, '_', '_', ErrorCtx)].
 
-kind_source_function({module, _, _, Exports} = Module, '_', _, SourceMap, ErrorCtx) ->
-    lists:flatten([kind_source_function(Module, Name, Name, SourceMap, ErrorCtx) 
+kind_source_function({module, _, ModulePath, _} = Module, Name, Alias, SourceMap, ErrorCtx) ->
+    [{dependency, ErrorCtx, ModulePath} | kind_source_aliases(Module, Name, Alias, SourceMap, ErrorCtx)].
+
+kind_source_aliases({module, _, _, Exports} = Module, '_', _, SourceMap, ErrorCtx) ->
+    lists:flatten([kind_source_aliases(Module, Name, Name, SourceMap, ErrorCtx) 
                    || Name <- maps:keys(Exports)]);
 
-kind_source_function({module, _, ModulePath, Exports}, Name, Alias, SourceMap, ErrorCtx) ->
+kind_source_aliases({module, _, ModulePath, Exports}, Name, Alias, SourceMap, ErrorCtx) ->
     ImportPath = ModulePath ++ [Name],
     ImportName = module:kind_name(ImportPath),
     ImportBeamName = module:beam_name(ImportPath),
@@ -164,6 +166,7 @@ kind_subtypes(qualified_type, ImportPath, ImportBeamName, Alias, SourceMap, Erro
 % With exports coming directly from beam files we don't know from the context if they are a variable or a type
 % To import them correctly we decide if they are a type or a variable based on whether the first letter is uppercase or lowercase.
 % This isn't great, but here we are.
+% This is going to suck when I try to implement inline functions and types...
 get_tag(Name) -> 
     First = string:substr(atom_to_list(Name), 1, 1),
     case string:lowercase(First) =:= First of

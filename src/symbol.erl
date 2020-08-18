@@ -6,6 +6,8 @@ id(Path) when is_list(Path) ->
     list_to_atom(lists:flatten([PathString, "_", get_random_string(6)]));
 id(Symbol) -> id([Symbol]).
 
+tag(Symbols) when is_list(Symbols) ->
+    list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)]));
 tag({type, _, Symbols}) -> 
     list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)]));
 tag({type, _, _, Symbols}) -> 

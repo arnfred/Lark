@@ -2,52 +2,72 @@
 -export([parse/1]).
 
 -include_lib("eunit/include/eunit.hrl").
--include("src/error.hrl").
+-include("test/macros.hrl").
 
 parse(Inputs) ->
-    Paths = [Path || {path, Path} <- Inputs],
+    InputPaths = [Path || {path, Path} <- Inputs],
     Tag = fun() -> atom_to_list(symbol:id(no_file)) end,
-    Texts = [{Tag(), Text} || {text, Text} <- Inputs],
+    InlineTexts = [{Tag(), Text} || {text, Text} <- Inputs],
 
-    case error:collect([read(P) || P <- Paths]) of
+    case error:collect([load(P) || P <- InputPaths]) of
         {error, Errs}   -> {error, Errs};
-        {ok, ReadList}  ->
-            Read = lists:flatten(ReadList),
-            Sources = Texts ++ Read,
-            case error:collect([to_ast(File, Source) || {File, Source} <- Sources]) of
+        {ok, LoadedTexts}  ->
+            Texts = InlineTexts ++ lists:flatten(LoadedTexts),
+            case error:collect([to_ast(Id, T) || {Id, T} <- Texts]) of
                 {error, Errs}   -> {error, Errs};
-                {ok, ASTs}      -> format(ASTs)
+                {ok, Sources}      ->
+                    case format(Sources) of
+                        {error, Errs}   -> {error, Errs};
+                        {ok, Formatted} ->
+                            {DepList, TaggedASTs} = lists:unzip(Formatted),
+                            case topological_sort(lists:flatten(DepList)) of
+                                {error, Errs}   -> {error, Errs};
+                                {ok, Order}     -> 
+                                    {Paths, _} = lists:unzip(Sources),
+                                    TaggedSources = lists:zip(Paths, TaggedASTs),
+                                    {ok, reorder_asts(Order, TaggedSources)}
+                            end
+                    end
             end
     end.
 
-read(Path) ->
+load(Path) ->
     case traverse(Path) of
         {error, Errs}   -> {error, Errs};
-        {ok, Files}     ->
-            case error:collect([load(F) || F <- Files]) of
-                {error, Errs}   -> {error, Errs};
-                {ok, Sources}    -> {ok, lists:zip([P || {source, P} <- Files], Sources)}
-            end
+        {ok, Files}     -> error:collect([load_source(F) || F <- Files])
     end.
 
 format(Sources) ->
-    case module:format(Sources) of
+    CollectedTypes = [types(AST) || {_, AST} <- Sources],
+    case error:collect(CollectedTypes) of
         {error, Errs}   -> {error, Errs};
-        {ok, ParsedSources}    ->
-            SourceDefMap = maps:from_list([{module:beam_name(Name), M} || {_, {ast, _, Modules, _, _}} <- ParsedSources,
-                                                                          {module, _, Name, _} = M <- Modules]),
-            CollectedTypes = [types(Path, AST) || {Path, AST} <- ParsedSources],
-
-            case error:collect(CollectedTypes) of
+        {ok, Types}     ->
+            case module:format(Sources, Types) of
                 {error, Errs}   -> {error, Errs};
-                {ok, Types}     ->
-                    TypesByPath = maps:from_list([{Path, T} || {Path, _, T} <- Types]),
-                    SourceTypeList = [{module:beam_name(Path), S} || {_, Modules, T}             <- Types,
-                                                                     M                           <- Modules,
-                                                                     {module, _, Path, _} = S    <- type_source(M, T)],
-                    SourceMap = maps:merge(SourceDefMap, maps:from_list(SourceTypeList)),
-                    error:collect([import_and_tag(Path, AST, SourceMap, maps:get(Path, TypesByPath)) ||
-                                   {Path, AST} <- ParsedSources])
+                {ok, ParsedSources}    ->
+                    ModuleList = [{Path, Modules} || {Path, {ast, _, Modules, _, _}} <- ParsedSources],
+                    SourceDefList = [{module:beam_name(Name), M} || {_, Modules} <- ModuleList, 
+                                                                    {module, _, Name, _} = M <- Modules],
+                    SourceTypeList = [{Path, Name, Module} || {T, {Path, Mods}}  <- lists:zip(Types, ModuleList),
+                                                              DefModule          <- Mods,
+                                                              {Name, Module}     <- type_module(DefModule, T)],
+
+                    % Lookup table from Module Beam Name to Module for modules and type modules
+                    SourceDefMap = maps:from_list(SourceDefList),
+                    SourceTypeMap = maps:from_list([{Name, Source} || {_, Name, Source} <- SourceTypeList]),
+                    SourceMap = maps:merge(SourceDefMap, SourceTypeMap),
+
+
+                    % Lookup table from ModulePath to Path for modules and type modules
+                    DefModuleMap = maps:from_list([{ModulePath, Path} || {Path, Modules} <- ModuleList,
+                                                                      {module, _, ModulePath, _} <- Modules]),
+                    TypeModuleMap = maps:from_list([{ModulePath, Path}
+                                                    || {Path, _, {module, _, ModulePath, _}} <- SourceTypeList]),
+                    ModuleMap = maps:merge(DefModuleMap, TypeModuleMap),
+
+
+                    error:collect([import_and_tag(Path, AST, SourceMap, Ts, ModuleMap) ||
+                                   {{Path, AST}, Ts} <- lists:zip(ParsedSources, Types)])
             end
     end.
 
@@ -88,8 +108,7 @@ types_post(expr, _, {symbol, _, type, Name} = Term) ->
 types_post(_, _, _) -> ok.
 
 
-types(Path, AST) ->
-    {ast, _, Modules, _, _} = AST,
+types(AST) ->
     case ast:traverse(fun types_pre/3, fun types_post/3, AST) of
         {error, Errs}   -> 
             {error, Errs};
@@ -97,44 +116,47 @@ types(Path, AST) ->
             GetKey = fun({K, _}) -> K end,
             GetVal = fun({_, V}) -> V end,
             Types = maps:from_list(utils:group_by(GetKey, GetVal, maps:keys(Env))),
-            {ok, {Path, Modules, Types}}
+            {ok, Types}
     end.
 
 
-type_source({module, Ctx, Name, Exports}, Types) ->
+type_module({module, Ctx, Name, Exports}, Types) ->
     F = fun(Type, Members) ->
                 TypeExports = maps:from_list([{T, T} || T <- Members]),
-                {module, Ctx, Name ++ [Type], TypeExports}
+                Path = Name ++ [Type],
+                {module:beam_name(Path), {module, Ctx, Path, TypeExports}}
         end,
     [F(T, Members) || {T, Members} <- maps:to_list(Types), maps:is_key(T, Exports)].
 
-load({source, Path}) ->
+load_source({source, Path}) ->
     case file:read_file(Path) of
         {error, Err}    -> error:format({malformed_source_file, Err, Path}, {sourcemap, Path});
-        {ok, Data}      -> unicode:characters_to_list(Data, utf8)
+        {ok, Data}      -> {Path, unicode:characters_to_list(Data, utf8)}
     end.
 
-to_ast(Path, Source) -> 
-    case lexer:string(Source) of
+to_ast(Path, Text) -> 
+    case lexer:string(Text) of
         {error, Error}          -> error:format({lexer_error, Error},{sourcemap, Path});
         {error, Error1, Error2} -> error:format({lexer_error, Error1, Error2},{sourcemap, Path});
         {ok, Tokens, _}         ->
             case grammar:parse(Tokens) of
                 {error, Error}  -> error:format({parser_error, Error}, {sourcemap, Path});
                 {ok, Parsed}    ->
-                    case preener:preen(Parsed) of
+                    case preener:preen(Path, Parsed) of
                         {error, Errs}   -> {error, Errs};
-                        {ok, Preened}       -> {ok, {Path, Preened}}
+                        {ok, Preened}   -> {ok, {Path, Preened}}
                     end
             end
     end.
 
-import_and_tag(Path, {ast, _, _, ImportClauses, _} = AST, SourceMap, LocalTypes) ->
+import_and_tag(Path, {ast, _, _, ImportClauses, _} = AST, SourceMap, LocalTypes, ModuleMap) ->
     F = fun(Import) -> import:import(Import, SourceMap, LocalTypes) end,
-    case error:collect(lists:map(F, ImportClauses)) of
+    case error:collect([F(Clause) || Clause <- ImportClauses]) of
         {error, Errs} -> {error, Errs};
         {ok, NestedAliases} ->
-            Aliases = lists:flatten(NestedAliases),
+            Aliases = [A || {alias, _, _, _} = A <- lists:flatten(NestedAliases)],
+            Dependencies = [{dependency, Ctx, Path, maps:get(Module, ModuleMap)} || 
+                            {dependency, Ctx, Module} <- lists:flatten(NestedAliases)],
             ErrFun = fun({alias, ErrorCtx1, Alias, _},
                          {alias, ErrorCtx2, _, _}) -> error:format({duplicate_import, Alias},
                                                                    {import, ErrorCtx1, ErrorCtx2}) end,
@@ -145,16 +167,65 @@ import_and_tag(Path, {ast, _, _, ImportClauses, _} = AST, SourceMap, LocalTypes)
                     ImportMap = maps:from_list([{Alias, Term} || {alias, _, Alias, Term} <- Aliases]),
                     case tagger:tag(AST, ImportMap) of
                         {error, Errs}       -> {error, Errs};
-                        {ok, {_, Tagged}}   -> {ok, {Path, Tagged}}
+                        {ok, {_, Tagged}}   -> {ok, {Dependencies, Tagged}}
                     end
             end
     end.
+
+% Adapted from http://rosettacode.org/wiki/Topological_sort#Erlang
+% More info: https://en.wikipedia.org/wiki/Topological_sorting
+topological_sort(Dependencies) ->
+    G = digraph:new(),
+    AddEdge = fun({dependency, _, From, To}) ->
+                      digraph:add_vertex(G, From), % noop if already added
+                      digraph:add_vertex(G, To), % noop if already added
+                      digraph:add_edge(G, To, From)
+              end,
+    lists:foreach(AddEdge, Dependencies),
+    case digraph_utils:topsort(G) of
+        false   -> cycles(G, digraph:vertices(G), []);
+        Sorted  -> {ok, Sorted}
+    end.
+
+cycles(_, [], CycleErrs) -> error:collect(CycleErrs);
+cycles(G, [Vertex | Rest], CycleErrs) ->
+    case digraph:get_short_cycle(G, Vertex) of
+        false   -> cycles(G, Rest, CycleErrs);
+        Cycle   -> 
+            CycleMap = maps:from_list(lists:zip(Cycle, Cycle)),
+            RemaindingVertices = [V || V <- Rest, not(maps:is_key(V, CycleMap))],
+            Err = error:format({cyclical_dependencies, Cycle}, {parser}),
+            cycles(G, RemaindingVertices, [Err | CycleErrs])
+    end.
+
+
+% Any source without any dependencies isn't included in the module order
+% It needs to get added to the front of the path order
+reorder_asts(PathOrder, TaggedSources) ->
+    SourceMap = maps:from_list(TaggedSources),
+    Roots = [maps:get(Path, SourceMap) || {Path, _} <- TaggedSources, not(lists:member(Path, PathOrder))],
+    Roots ++ [maps:get(Path, SourceMap) || Path <- PathOrder].
 
 
 -ifdef(TEST).
 
 traverse_test_() -> 
     {timeout,3600, [?_assertMatch({ok, _}, parse([{path, "test/dir"}]))]}.
+
+topo_sort_cycle_test_() -> Actual = topological_sort([{dependency, #{}, 'A', 'B'},
+                                                      {dependency, #{}, 'B', 'C'},
+                                                      {dependency, #{}, 'B', 'D'},
+                                                      {dependency, #{}, 'C', 'A'}]),
+                          ?testError({cyclical_dependencies, ['C', 'B', 'A', 'C']}, Actual).
+
+topo_sort_test_() -> Actual = topological_sort([{dependency, #{}, 'A', 'B'},
+                                                {dependency, #{}, 'A', 'D'},
+                                                {dependency, #{}, 'B', 'C'},
+                                                {dependency, #{}, 'B', 'E'},
+                                                {dependency, #{}, 'C', 'D'},
+                                                {dependency, #{}, 'D', 'E'},
+                                                {dependency, #{}, 'Q', 'B'}]),
+                     ?test({ok, ['E', 'D', 'C', 'B', 'A', 'Q']}, Actual).
 
 
 -endif.

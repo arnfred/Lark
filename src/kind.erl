@@ -1,6 +1,6 @@
 -module(kind).
 -export([load/1]).
--import(lists, [zip/2, unzip/1]).
+-import(lists, [zip/2, zip3/3, unzip/1]).
 -include_lib("eunit/include/eunit.hrl").
 
 load(CodeRaw) ->
@@ -9,17 +9,24 @@ load(CodeRaw) ->
         {error, Errs}   -> {error, Errs};
         {ok, ASTs}     ->
             io:format("Tagged AST is ~p~n", [ASTs]),
-            case error:collect([typer:type(AST) || {_, AST} <- ASTs]) of
-                {error, Errs}           -> {error, Errs};
-                {ok, ScannedAndLoaded}  ->
-                    {TypeModuleList, _} = lists:unzip(ScannedAndLoaded),
-                    TypeModules = lists:flatten(TypeModuleList),
-                    Forms = lists:flatten([codegen:gen(AST) || {_, AST} <- ASTs]),
-                    io:format("Erlang Core Forms are ~p~n", [Forms]),
-                    case compile(Forms) of
-                        {error, Errs}       -> {error, Errs};
-                        {ok, ModuleNames}   -> {ok, ModuleNames ++ TypeModules}
-                    end
+            case error:collect([type_and_compile(AST) || AST <- ASTs]) of
+                {error, Errs}       -> {error, Errs};
+                {ok, Modules}       -> {ok, lists:flatten(Modules)}
+            end
+    end.
+
+% Current problem: As we run typegen and codegen, we call out to compiled type
+% definitions from other modules that might or might not be compiled yet. To
+% ensure that types are compiled as we need them, we have to order the sources
+% by their dependencies
+type_and_compile(AST) ->
+    case typer:type(AST) of
+        {error, Errs}                               -> {error, Errs};
+        {ok, {_, Types, TypeModules, DomainDef}} ->
+            {ok, Forms} = codegen:gen(AST, DomainDef, Types),
+            case compile(Forms) of
+                {error, Errs}       -> {error, Errs};
+                {ok, ModuleNames}   -> {ok, ModuleNames ++ TypeModules}
             end
     end.
 

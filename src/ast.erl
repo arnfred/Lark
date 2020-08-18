@@ -2,6 +2,7 @@
 -export([traverse/2, traverse/3, traverse/4, traverse_term/5, 
          term_type/1, context/1, tag/2, tag/3, tag/4, get_tag/2, get_tag/3]).
 -import(maps, [merge/2]).
+-import(utils, [merge/1]).
 -include_lib("eunit/include/eunit.hrl").
 
 traverse(Pre, Post, Scope, ASTs) when is_list(ASTs) -> map_asts(Pre, Post, Scope, ASTs);
@@ -185,6 +186,11 @@ step(Meta, expr, Scope, {seq, Context, First, Then}) ->
             end
     end;
 
+step(Meta, Type, Scope, {sum, Elements}) ->
+    case map(Meta, Type, Scope, ordsets:to_list(Elements)) of
+        {error, Errs}           -> {error, Errs};
+        {ok, {Envs, TElements}} -> {ok, {merge(Envs), {sum, TElements}}}
+    end;
 
 step(Meta, Type, Scope, {dict, Context, Expressions}) when is_list(Expressions) ->
     case map(Meta, Type, Scope, Expressions) of
@@ -205,12 +211,16 @@ step(Meta, Type, Scope, {TermType, Ctx, Key, Val}) when TermType =:= pair;
                        {merge(KeyEnv, ValEnv), {TermType, Ctx, TKey, TVal}} end);
 
 
-step(_, _, _, {symbol, _, _, _} = Term)           -> {ok, {#{}, Term}};
-step(_, _, _, {variable, _, _, _} = Term)         -> {ok, {#{}, Term}};
-step(_, _, _, {type, _, _, _} = Term)             -> {ok, {#{}, Term}};
-step(_, _, _, {qualified_type, _, _} = Term)      -> {ok, {#{}, Term}};
-step(_, _, _, {qualified_variable, _, _} = Term)  -> {ok, {#{}, Term}};
-step(_, _, _, {key, _, _} = Term)                 -> {ok, {#{}, Term}};
+step(_, _, _, {symbol, _, _, _} = Term)             -> {ok, {#{}, Term}};
+step(_, _, _, {variable, _, _, _} = Term)           -> {ok, {#{}, Term}};
+step(_, _, _, {type, _, _, _} = Term)               -> {ok, {#{}, Term}};
+step(_, _, _, {qualified_type, _, _} = Term)        -> {ok, {#{}, Term}};
+step(_, _, _, {qualified_type, _, _, _} = Term)     -> {ok, {#{}, Term}};
+step(_, _, _, {qualified_variable, _, _} = Term)    -> {ok, {#{}, Term}};
+step(_, _, _, {qualified_variable, _, _, _} = Term) -> {ok, {#{}, Term}};
+step(_, _, _, {key, _, _} = Term)                   -> {ok, {#{}, Term}};
+
+step(_, _, _, Atom) when is_atom(Atom)              -> {ok, {#{}, Atom}};
 
 step(_, Type, _, Term) ->
     error:format({unrecognized_term, term_type(Term), Type}, {ast, Term}).
@@ -229,9 +239,6 @@ map_asts(Pre, Post, Scope, ASTs) ->
             {Envs, Outs} = lists:unzip(Res),
             {ok, {merge(Envs), Outs}}
     end.
-
-merge(Maps) when is_list(Maps) ->
-    lists:foldl(fun maps:merge/2, #{}, Maps).
 
 term_type(Elem) when is_tuple(Elem) -> element(1, Elem).
 context(Elem) when is_tuple(Elem) -> element(2, Elem).

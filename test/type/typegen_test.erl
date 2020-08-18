@@ -1,24 +1,16 @@
 -module(typegen_test).
 
 -include_lib("eunit/include/eunit.hrl").
--include("src/error.hrl").
-
--define(TIMEOUT, 3600).
-
--define(test(Expected, Actual),
-        begin
-            {timeout, ?TIMEOUT,
-             [?_assertMatch(Expected, Actual)]}
-        end).
+-include("test/macros.hrl").
 
 -define(setup(Code, Tests), {setup, loadFun(Code), fun unload/1, Tests}).
 
 loadFun(Code) ->
-    {ok, ASTs} = parser:parse([{text, Code}]),
-    io:format("~p~n", [ASTs]),
-    fun() -> case error:collect([typer:load(AST) || {_, AST} <- ASTs]) of
-                 {error, Errs}      -> {error, Errs};
-                 {ok, ModuleNames}  -> {ok, lists:flatten(ModuleNames)}
+    {ok, [AST]} = parser:parse([{text, Code}]),
+    fun() -> case typer:load(AST) of
+                 {error, Errs}                      -> {error, Errs};
+                 {ok, {_, ScannerMod, TypeMods, _}} -> 
+                     {ok, [ScannerMod | TypeMods]}
              end
     end.
 
@@ -30,21 +22,16 @@ unload({ok, ModuleNames}) ->
     [Remove(ModuleName) || ModuleName <- ModuleNames].
 
 run(Code, RunAsserts) ->
-    {ok, ASTs} = parser:parse([{text, Code}]),
-    F = fun(AST) -> 
-                case typer:load(AST) of
-                    {error, Errs} -> 
-                        RunAsserts({error, Errs});
-                    {ok, TypeMods} ->
-                        [ScannerModule | _] = TypeMods,
-                        RunAsserts(ScannerModule),
-                        Remove = fun(TypeMod) ->
-                                         true = code:soft_purge(TypeMod),
-                                         true = code:delete(TypeMod) end,
-                        [Remove(ModuleName) || ModuleName <- TypeMods]
-                end
-        end,
-    [F(AST) || {_, AST} <- ASTs].
+    {ok, [AST]} = parser:parse([{text, Code}]),
+    case typer:load(AST) of
+        {error, Errs}                       -> RunAsserts({error, Errs});
+        {ok, {_, ScannerMod, TypeMods, _}}  ->
+            RunAsserts(ScannerMod),
+            Remove = fun(TypeMod) ->
+                             true = code:soft_purge(TypeMod),
+                             true = code:delete(TypeMod) end,
+            [Remove(ModuleName) || ModuleName <- [ScannerMod | TypeMods]]
+    end.
 
 sum_type_boolean_test() ->
     Code = "type Boolean -> True | False",
@@ -167,15 +154,15 @@ var_order_test() ->
                  end,
     run(Code, RunAsserts).
 
-application_top_level_f_test() ->
-    Code = "type Option a -> a | None\n"
-           "type BlahOption -> Option(Blah)",
-    RunAsserts = fun(Mod) ->
-                         Expected = {sum, ordsets:from_list(['BlahOption/Blah', 'Option/None'])},
-                         Actual = Mod:domain('BlahOption'),
-                         ?assertEqual(none, domain:diff(Expected, Actual))
-                 end,
-    run(Code, RunAsserts).
+application_top_level_f_test_() ->
+    {"Call type function",
+     ?setup("type Option a -> a | None\n"
+            "type BlahOption -> Option(Blah)",
+            fun({ok, [Mod | _]}) ->
+                    Expected = {sum, ordsets:from_list(['BlahOption/Blah', 'Option/None'])},
+                    Actual = Mod:domain('BlahOption'),
+                    ?test(none, domain:diff(Expected, Actual))
+            end)}.
 
 application_wrong_number_of_args_test() ->
     Code = "type Option a -> a | None\n"

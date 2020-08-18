@@ -1,19 +1,20 @@
 -module(preener).
--export([preen/1]).
+-export([preen/2]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("src/error.hrl").
 
-%preen(ASTs) when is_list(ASTs) -> error:collect([preen(AST) || AST <- ASTs]);
-preen(AST) -> case expand_tuples(AST) of
-                  {error, Errs}         -> {error, Errs};
-                  {ok, {_, DetupledAST}}  ->
-                      case dict_keys(DetupledAST) of
-                          {error, Errs}         -> {error, Errs};
-                          {ok, {_, KeyedAst}}   -> {ok, {_, Ret}} = add_ids(KeyedAst),
-                                                   {ok, Ret}
-                      end
-              end.
+preen(Path, AST) -> 
+    case expand_tuples(AST) of
+        {error, Errs}         -> {error, Errs};
+        {ok, {_, DetupledAST}}  ->
+            case dict_keys(DetupledAST) of
+                {error, Errs}         -> {error, Errs};
+                {ok, {_, KeyedAst}}   -> {ok, {_, IdAST}} = add_ids(KeyedAst),
+                                         {ok, {_, PathAST}} = add_path(list_to_atom(Path), IdAST),
+                                         {ok, PathAST}
+            end
+    end.
 
 expand_tuples(AST) -> ast:traverse(fun tuple_pre/3, fun tuple_post/3, AST).
 
@@ -67,6 +68,11 @@ add_ids(AST) ->
     Skip = fun(_, _, _) -> ok end,
     ast:traverse(TagId, Skip, AST).
 
+add_path(Path, AST) ->
+    TagId = fun(_, _, Term) -> {ok, ast:tag(source_path, Term, Path)} end,
+    Skip = fun(_, _, _) -> ok end,
+    ast:traverse(TagId, Skip, AST).
+
 -ifdef(TEST).
 
 do_preen(Code) ->
@@ -74,7 +80,7 @@ do_preen(Code) ->
     io:format("Tokens are ~p~n", [Tokens]),
     {ok, Parsed} = grammar:parse(Tokens),
     io:format("Parsed is ~p~n", [Parsed]),
-    preener:preen(Parsed).
+    preener:preen("some_path", Parsed).
 
 illegal_end_of_tuple_test_() ->
     Code = "def test a b -> (val a = b, val b = a)",
