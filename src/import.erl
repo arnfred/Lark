@@ -38,7 +38,7 @@ import({import, _, ImportPath} = Import, SourceMap, LocalTypes) ->
             error:map(error:collect([F(Elem) || Elem <- Elements]), fun lists:flatten/1);
 
         Other                               ->
-            error:format({unrecognized_import, Other}, {import, Import})
+            error:format({unrecognized_import, ImportPath}, {import, Import})
     end.
 
 import_module(ModuleName, ImportPath, SourceMap, LocalTypes, ErrorCtx) ->
@@ -57,7 +57,6 @@ import_def(Name, Alias, ImportPath, SourceMap, LocalTypes, ErrorCtx) ->
         _                                       ->
             ModulePath = [P || {symbol, _, _, P} <- ImportPath],
             ModuleName = module:beam_name(ModulePath),
-            io:format("SourceMap for ~p: ~p~n", [ModuleName, SourceMap]),
             case maps:get(ModuleName, SourceMap, undefined) of
                 % 2a. check if it's a compiled kind module and look up if it is
                 undefined    -> beam_function(ModulePath, Name, Alias, ErrorCtx);
@@ -111,7 +110,6 @@ beam_function(ModulePath, Name, Alias, ErrorCtx) ->
 
 loaded_module_function(ModulePath, '_', _, ErrorCtx) ->
     Module = module:beam_name(ModulePath),
-    io:format("Loaded Module: ~p~n", [Module]),
     ExportList = erlang:apply(Module, module_info, [exports]),
     Exports = lists:delete(module_info, utils:unique([Name || {Name, _Arity} <- ExportList])),
     lists:flatten([loaded_module_function(ModulePath, Name, Name, ErrorCtx) 

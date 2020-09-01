@@ -26,7 +26,7 @@ Nonterminals
 
 Rootsymbol all.
 
-Right 300 slash.
+Left 300 slash.
 Right 200 colon.
 Left 100 newline.
 Unary 100 expression.

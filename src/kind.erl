@@ -3,9 +3,8 @@
 -import(lists, [zip/2, zip3/3, unzip/1]).
 -include_lib("eunit/include/eunit.hrl").
 
-load(CodeRaw) ->
-    Code = "import kind/prelude/_\n" ++ CodeRaw,
-    case parser:parse([{path, "src/lib/"}, {text, Code}]) of
+load(Code) ->
+    case parser:parse([{text, Code}]) of
         {error, Errs}   -> {error, Errs};
         {ok, ASTs}     ->
             io:format("Tagged AST is ~p~n", [ASTs]),

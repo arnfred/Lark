@@ -1,11 +1,19 @@
 -module(parser).
--export([parse/1]).
+-export([parse/1, parse/2]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
-parse(Inputs) ->
-    InputPaths = [Path || {path, Path} <- Inputs],
+parse(Inputs) -> parse(Inputs, #{}).
+parse(Inputs, Options) ->
+
+    % Add in the kind libraries as input paths unless options says no
+    GivenPaths = [Path || {path, Path} <- Inputs],
+    InputPaths = case maps:get(add_kind_libraries, Options, true) of
+                     true   -> ["src/lib" | GivenPaths];
+                     false  -> GivenPaths
+                 end,
+
     Tag = fun() -> atom_to_list(symbol:id(no_file)) end,
     InlineTexts = [{Tag(), Text} || {text, Text} <- Inputs],
 
@@ -16,7 +24,9 @@ parse(Inputs) ->
             case error:collect([to_ast(Id, T) || {Id, T} <- Texts]) of
                 {error, Errs}   -> {error, Errs};
                 {ok, Sources}      ->
-                    case format(Sources) of
+                    ImportPrelude = maps:get(import_prelude, Options, true)
+                                    andalso maps:get(add_kind_libraries, Options, true),
+                    case format(Sources, ImportPrelude) of
                         {error, Errs}   -> {error, Errs};
                         {ok, Formatted} ->
                             {DepList, TaggedASTs} = lists:unzip(Formatted),
@@ -37,7 +47,7 @@ load(Path) ->
         {ok, Files}     -> error:collect([load_source(F) || F <- Files])
     end.
 
-format(Sources) ->
+format(Sources, ImportPrelude) ->
     CollectedTypes = [types(AST) || {_, AST} <- Sources],
     case error:collect(CollectedTypes) of
         {error, Errs}   -> {error, Errs};
@@ -66,7 +76,7 @@ format(Sources) ->
                     ModuleMap = maps:merge(DefModuleMap, TypeModuleMap),
 
 
-                    error:collect([import_and_tag(Path, AST, SourceMap, Ts, ModuleMap) ||
+                    error:collect([import_and_tag(Path, AST, SourceMap, Ts, ModuleMap, ImportPrelude) ||
                                    {{Path, AST}, Ts} <- lists:zip(ParsedSources, Types)])
             end
     end.
@@ -149,14 +159,24 @@ to_ast(Path, Text) ->
             end
     end.
 
-import_and_tag(Path, {ast, _, _, ImportClauses, _} = AST, SourceMap, LocalTypes, ModuleMap) ->
+import_and_tag(Path, {ast, _, Modules, ImportClauses, _} = AST, SourceMap, LocalTypes, ModuleMap, ImportPrelude) ->
+
+    % Make sure not to import prelude if this is the prelude
+    PreludePath = [{symbol, #{}, variable, kind}, {symbol, #{}, variable, prelude}, {symbol, #{}, variable, '_'}],
+    PreludeImports = case {ImportPrelude, Modules} of
+                         {false, _} -> [];
+                         {_, [{module, _, [kind, prelude], _}]} -> [];
+                         {_, _} -> import:import({import, #{}, PreludePath}, SourceMap, LocalTypes)
+                     end,
+
     F = fun(Import) -> import:import(Import, SourceMap, LocalTypes) end,
-    case error:collect([F(Clause) || Clause <- ImportClauses]) of
+    case error:collect([F(Clause) || Clause <- ImportClauses] ++ [PreludeImports]) of
         {error, Errs} -> {error, Errs};
-        {ok, NestedAliases} ->
-            Aliases = [A || {alias, _, _, _} = A <- lists:flatten(NestedAliases)],
+        {ok, NestedImports} ->
+            Imports = lists:flatten(NestedImports),
+            Aliases = [A || {alias, _, _, _} = A <- Imports],
             Dependencies = [{dependency, Ctx, Path, maps:get(Module, ModuleMap)} || 
-                            {dependency, Ctx, Module} <- lists:flatten(NestedAliases)],
+                            {dependency, Ctx, Module} <- Imports],
             ErrFun = fun({alias, ErrorCtx1, Alias, _},
                          {alias, ErrorCtx2, _, _}) -> error:format({duplicate_import, Alias},
                                                                    {import, ErrorCtx1, ErrorCtx2}) end,
@@ -210,7 +230,7 @@ reorder_asts(PathOrder, TaggedSources) ->
 -ifdef(TEST).
 
 traverse_test_() -> 
-    {timeout,3600, [?_assertMatch({ok, _}, parse([{path, "test/dir"}]))]}.
+    {timeout,3600, [?_assertMatch({ok, _}, parse([{path, "test/dir"}], #{import_prelude => false}))]}.
 
 topo_sort_cycle_test_() -> Actual = topological_sort([{dependency, #{}, 'A', 'B'},
                                                       {dependency, #{}, 'B', 'C'},

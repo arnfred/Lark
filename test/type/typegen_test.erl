@@ -6,7 +6,7 @@
 -define(setup(Code, Tests), {setup, loadFun(Code), fun unload/1, Tests}).
 
 loadFun(Code) ->
-    {ok, [AST]} = parser:parse([{text, Code}]),
+    {ok, [AST]} = parser:parse([{text, Code}], #{add_kind_libraries => false}),
     fun() -> case typer:load(AST) of
                  {error, Errs}                      -> {error, Errs};
                  {ok, {_, ScannerMod, TypeMods, _}} -> 
@@ -22,7 +22,7 @@ unload({ok, ModuleNames}) ->
     [Remove(ModuleName) || ModuleName <- ModuleNames].
 
 run(Code, RunAsserts) ->
-    {ok, [AST]} = parser:parse([{text, Code}]),
+    {ok, [AST]} = parser:parse([{text, Code}], #{add_kind_libraries => false}),
     case typer:load(AST) of
         {error, Errs}                       -> RunAsserts({error, Errs});
         {ok, {_, ScannerMod, TypeMods, _}}  ->

@@ -4,7 +4,7 @@
 -include("src/error.hrl").
 
 get_AST(Code) ->
-    case parser:parse([{text, Code}]) of
+    case parser:parse([{text, Code}], #{add_kind_libraries => false}) of
         {error, Errs} -> {error, Errs};
         {ok, [{ast, _, _, _, Defs} | _]} -> {ok, maps:values(Defs)}
     end.
