@@ -483,6 +483,42 @@ module_tagged_type_test_() ->
                     [?test({tagged, 'T/F', {product, #{a := 'Input'}}}, 'test_T':'F'('Input'))]
             end)}.
 
+unused_type_parameter_test_() ->
+    {"In a type application, the number of arguments should be compared with the number of type "
+     "arguments. We normally count type arguments as the number of variables present in the type "
+     "body, but for type definitions, we want to make sure we count the number of type parameters"
+     "instead",
+     ?setup("module test { BlahOption }\n"
+            "type Option a b -> a | None\n"
+            "type BlahOption -> Option(Option/None, Option/None)",
+            fun({ok, [Mod | _]}) ->
+                    [?test('Option/None', Mod:'BlahOption'())]
+            end)}.
+
+type_redefinition_test_() ->
+    {"When we redefine one type as another type, the new type returns the function domain: "
+     "`{f, Option, F(args)}` where `F(args)` is the function of the original type", 
+     ?setup("module test { RedefOption }\n"
+            "type Option a -> a | None\n"
+            "type RedefOption -> Option",
+            fun({ok, [Mod | _]}) ->
+                    {f, _, RedefOption} = Mod:'RedefOption'(),
+                    [?test('Option/None', RedefOption('Option/None'))]
+            end)}.
+
+type_redefinition_args_test_() ->
+    {"If we redefine a type and then later call the original type, we want to check that the "
+     "number of arguments it expects hasn't changed because of the redefinition",
+     ?setup("module test { BlahOption }\n"
+            "type BlipOption -> Option\n"
+            "type Option a -> a | None\n"
+            "type BlupOption -> Option\n"
+            "type BlahOption -> Option(Option/None)",
+            fun({ok, [Mod | _]}) ->
+                    [?test('Option/None', Mod:'BlahOption'())]
+            end)}.
+
+
 %multiple_tagged_pair_in_pattern_test() ->
 %     Code = "type Test a\n"
 %            " | {value} -> Blop: {key: value}\n"

@@ -115,7 +115,9 @@ gen_type_def(Name, Tag, Args) ->
     FName = cerl:c_fname(Name, length(Args)),
     {FName, cerl:c_fun(ArgForms, Body)}.
 
-collect_args(AST) -> ast:traverse(fun args_pre/3, fun args_post/3, AST).
+collect_args({ast, _, _, _, Defs} = AST) ->
+    TopLevelTypes = maps:from_list([{Name, []} || Name <- maps:keys(Defs)]),
+    ast:traverse(fun args_pre/3, fun args_post/3, TopLevelTypes, AST).
 collect_types({ast, _, _, _, Defs} = AST) -> 
     Scope = maps:from_list([{[Name], Args} || {type_def, _, Name, Args, _} <- maps:values(Defs)]),
     ast:traverse(fun types_pre/3, fun types_post/3, Scope, AST).
@@ -133,14 +135,20 @@ args_pre(_, _, _) -> ok.
 % the term itself or its children. For each term we map the list of free
 % variables to the term id in the returned environemnt
 args_post(expr, _, {variable, _, _, Tag}) -> {ok, [{var, Tag}]};
-args_post(expr, _, {type, _, _, _} = T) -> {ok, symbol:tag(T), []};
+args_post(expr, Scope, {type, _, _, _} = T) ->
+    Tag = symbol:tag(T),
+    case maps:is_key(Tag, Scope) of
+        true    -> {ok, []};
+        false   -> {ok, Tag, []}
+    end;
 args_post(expr, _, {key, _, _}) -> {ok, []};
 args_post(expr, _, {pair, _, _, Val} = Term) -> 
     case ast:get_tag(tag, Term, undefined) of
         undefined -> {ok, get_vars(Term)};
         Tag -> {ok, Tag, Val}
     end;
-args_post(top_level, _, {type_def, _, Name, _, Expr}) -> {ok, Name, Expr};
+args_post(_, _, {type_def, _, Name, Args, Expr}) -> 
+    {ok, Name, [{var, symbol:tag(S)} || S <- Args]};
 args_post(pattern, _, _) -> skip;
 args_post(_, _, Term) when is_tuple(Term) -> 
     {ok, get_vars(Term)}.
