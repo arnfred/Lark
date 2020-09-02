@@ -1,7 +1,27 @@
 -module(kind).
--export([load/1]).
+-export([load/1, run/2]).
 -import(lists, [zip/2, zip3/3, unzip/1]).
+
 -include_lib("eunit/include/eunit.hrl").
+-include("test/macros.hrl").
+
+run(Code, Args) ->
+    case load(Code) of
+        {error, Errs}   -> {error, Errs};
+        {ok, Mods} -> 
+            case [M || M <- Mods, erlang:function_exported(M, main, length(Args))] of
+                []          -> error:format({no_main_function_for_arity, length(Args)}, {kind});
+                [Module]    ->
+                    Out = case catch erlang:apply(Module, main, Args) of
+                              {'EXIT', Err}   -> error:format({main_throw, Err}, {kind});
+                              Res             -> {ok, Res}
+                          end,
+                    clean(Mods),
+                    Out;
+               Modules      -> error:format({multiple_main_functions_for_arity, length(Args), Modules}, {kind})
+            end
+    end.
+
 
 load(Code) ->
     case parser:parse([{text, Code}]) of
@@ -53,3 +73,52 @@ load_binary(ModuleName, Bin) ->
         {error, Err}            -> error:format({loading_error, Err}, {kind, ModuleName})
     end.
 
+clean(Modules) ->
+    F = fun(M) -> true = code:soft_purge(M),
+                  true = code:delete(M)
+        end,
+    [F(M) || M <- Modules].
+
+-ifdef(TEST).
+
+-define(setup(Code, Args, Tests), {setup, fun() -> kind:run(Code, Args) end, fun(_) -> none end, Tests}).
+
+happy_path_test_() ->
+    {"run code and see that it executed correctly",
+     ?setup("def main -> False",
+            [],
+            fun(Res) -> 
+                    [?test({ok, 'Boolean/False'}, Res)]
+            end)}.
+
+happy_path_arg_test_() ->
+    {"run code and see that it executed correctly",
+     ?setup("def main arg -> arg",
+            ['test'],
+            fun(Res) -> 
+                    [?test({ok, 'test'}, Res)]
+            end)}.
+
+no_main_function_test_() ->
+    {"calling run should result in error if the code has no main function",
+     ?setup("def blup -> True",
+            [],
+            fun(Res) -> [?testError({no_main_function_for_arity, 0}, Res)] end)}.
+
+main_throw_test_() ->
+    {"when the main function throws, it should be caught and wrapped in an error",
+     ?setup("def main arg\n"
+            " | True -> False\n"
+            " | False -> True",
+            ['hello'],
+            fun(Res) -> [?testError({main_throw, {if_clause, _}}, Res)] end)}.
+    
+multiple_main_error_test_() ->
+    {"When calling kind:run, the code can't contain or export more than one single main function",
+     ?setup("module test { main }\n"
+            "def main -> False",
+            [],
+            fun(Res) -> [?testError({multiple_main_functions_for_arity, 0, _}, Res)] end)}.
+
+
+-endif.

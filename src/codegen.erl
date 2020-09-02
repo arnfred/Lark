@@ -8,7 +8,9 @@
 gen({ast, _, Modules, _, Defs}, DomainDef, Types) ->
     io:format("---> Defs: ~p~n", [Defs]),
     Compiled = [gen_expr(D) || D <- maps:values(Defs)],
-    {ok, [gen_module(M, Defs, Compiled, Types, DomainDef) || M <- Modules]}.
+    MainModule = gen_main_module(Defs, Compiled, Types, DomainDef),
+    CompiledModules = MainModule ++ [gen_module(M, Defs, Compiled, Types, DomainDef) || M <- Modules],
+    {ok, CompiledModules}.
 
 gen_module({module, _, Path, Exports}, Defs, Compiled, Types, DomainDef) ->
     CompiledTypes = [DomainDef | Types],
@@ -19,7 +21,12 @@ gen_module({module, _, Path, Exports}, Defs, Compiled, Types, DomainDef) ->
     ModuleName = module:beam_name(Path),
     {ModuleName, cerl:c_module(cerl:c_atom(ModuleName), ModuleExports, [], Compiled ++ CompiledTypes)}.
 
-
+gen_main_module(Defs, Compiled, Types, DomainDef) ->
+    case maps:is_key(main, Defs) of
+        false   -> [];
+        true    -> [gen_module({module, #{}, [symbol:id(main)], #{main => true}},
+                               Defs, Compiled, Types, DomainDef)]
+    end.
 
 gen_expr({def, _, Name, Args, Expr}) ->
     FName = cerl:c_fname(Name, length(Args)),
