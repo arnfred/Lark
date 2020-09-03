@@ -5,7 +5,8 @@
   {mod, {cli, []}},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    compiler
    ]},
   {env,[]},
   {modules, []},
