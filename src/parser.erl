@@ -4,11 +4,11 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
-% I'd rather not hardcode this string, but I'm not sure how to refer to the
-% rebar3 profile from within erlang. I've raised a question on stack overflow
-% about it:
-% https://stackoverflow.com/questions/63722670/rebar3-how-do-i-refer-to-source-artifacts-of-a-library-from-erlang
--define(KIND_SRC_LIB, "_build/default/lib/kind/src/lib").
+% Kind library files are added to priv according to Erlang tradition [2]
+% The use of code:priv_dir came from the answer of the following stackoverflow question: [1]
+% [1]: https://stackoverflow.com/questions/63722670/rebar3-how-do-i-refer-to-source-artifacts-of-a-library-from-erlang
+% [2]: https://stackoverflow.com/questions/36231976/how-can-i-include-a-mustache-file-in-erlang-release
+-define(KIND_SRC_LIB, code:priv_dir(kind) ++ "/lib").
 
 parse(Inputs) -> parse(Inputs, #{}).
 parse(Inputs, Options) ->
