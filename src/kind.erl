@@ -1,12 +1,13 @@
 -module(kind).
--export([load/1, run/2]).
+-export([load/1, load/2, run/2, run/3]).
 -import(lists, [zip/2, zip3/3, unzip/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
-run(Code, Args) ->
-    case load(Code) of
+run(Code, Args) -> run(Code, Args, #{sandboxed => true}).
+run(Code, Args, Options) ->
+    case load(Code, Options) of
         {error, Errs}   -> {error, Errs};
         {ok, Mods} -> 
             case [M || M <- Mods, erlang:function_exported(M, main, length(Args))] of
@@ -23,8 +24,9 @@ run(Code, Args) ->
     end.
 
 
-load(Code) ->
-    case parser:parse([{text, Code}]) of
+load(Code) -> load(Code, #{}).
+load(Code, Options) ->
+    case parser:parse([{text, Code}], Options) of
         {error, Errs}   -> {error, Errs};
         {ok, ASTs}     ->
             io:format("Tagged AST is ~p~n", [ASTs]),

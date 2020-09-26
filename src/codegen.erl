@@ -95,7 +95,7 @@ gen_clause(Patterns, Expr) ->
 
 -ifdef(TEST).
 
--define(setup(Code, Tests), {setup, fun() -> kind:load(Code) end, fun clean/1, Tests}).
+-define(setup(Code, Tests), {setup, fun() -> kind:load(Code, #{sandboxed => false}) end, fun clean/1, Tests}).
 
 clean({error, _}) -> noop;
 clean({ok, Modules}) ->

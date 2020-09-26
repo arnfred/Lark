@@ -1,11 +1,12 @@
 -module(import_test).
 
 -include_lib("eunit/include/eunit.hrl").
--include("src/error.hrl").
+-include("test/macros.hrl").
 
-test_import(Symbols, SourceMap) -> 
-    import:import({import, #{}, [{symbol, #{}, variable, S} || S <- Symbols]}, SourceMap, #{}).
+path(Symbols) -> [{symbol, #{}, variable, S} || S <- Symbols].
 
+test_import(Symbols, SourceMap) ->
+	import:import({import, #{}, path(Symbols)}, SourceMap, #{}).
 test_import(Symbols, Mappings, SourceMap) -> test_import(Symbols, Mappings, SourceMap, #{}).
 
 test_import(Symbols, Mappings, SourceMap, LocalTypes) -> 
@@ -117,3 +118,11 @@ errors_test_() ->
                   test_import([random, blip], #{})),
      ?_errorMatch({nonexistent_import, source, 'blap/blip'},
                   test_import([blap, blip], SourceMap))].
+
+sandbox_test_() ->
+	[?testError({function_not_whitelisted, timer, exit_after},
+				import:import({import, #{}, path(['timer', 'exit_after'])}, #{}, #{}, true)),
+	 ?testError({function_not_whitelisted, filelib, is_dir},
+				import:import({import, #{}, path([filelib, is_dir])}, #{}, #{}, true)),
+	 ?test({ok, _},
+		   import:import({import, #{}, path([lists, reverse])}, #{}, #{}, true))].

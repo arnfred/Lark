@@ -32,7 +32,7 @@ parse(Inputs, Options) ->
                 {ok, Sources}      ->
                     ImportPrelude = maps:get(import_prelude, Options, true)
                                     andalso maps:get(add_kind_libraries, Options, true),
-                    case format(Sources, ImportPrelude) of
+                    case format(Sources, ImportPrelude, Options) of
                         {error, Errs}   -> {error, Errs};
                         {ok, Formatted} ->
                             {DepList, TaggedASTs} = lists:unzip(Formatted),
@@ -53,7 +53,7 @@ load(Path) ->
         {ok, Files}     -> error:collect([load_source(F) || F <- Files])
     end.
 
-format(Sources, ImportPrelude) ->
+format(Sources, ImportPrelude, Options) ->
     CollectedTypes = [types(AST) || {_, AST} <- Sources],
     case error:collect(CollectedTypes) of
         {error, Errs}   -> {error, Errs};
@@ -82,7 +82,7 @@ format(Sources, ImportPrelude) ->
                     ModuleMap = maps:merge(DefModuleMap, TypeModuleMap),
 
 
-                    error:collect([import_and_tag(Path, AST, SourceMap, Ts, ModuleMap, ImportPrelude) ||
+                    error:collect([import_and_tag(Path, AST, SourceMap, Ts, ModuleMap, ImportPrelude, Options) ||
                                    {{Path, AST}, Ts} <- lists:zip(ParsedSources, Types)])
             end
     end.
@@ -165,17 +165,21 @@ to_ast(Path, Text) ->
             end
     end.
 
-import_and_tag(Path, {ast, _, Modules, ImportClauses, _} = AST, SourceMap, LocalTypes, ModuleMap, ImportPrelude) ->
+import_and_tag(Path, {ast, _, Modules, ImportClauses, _} = AST, SourceMap, LocalTypes, ModuleMap, ImportPrelude, Options) ->
+
+	% make sure to include if we're running imports in sandboxed mode where
+	% only some erlang functions are allowed
+	Sandboxed = maps:get(sandboxed, Options, false),
 
     % Make sure not to import prelude if this is the prelude
     PreludePath = [{symbol, #{}, variable, kind}, {symbol, #{}, variable, prelude}, {symbol, #{}, variable, '_'}],
     PreludeImports = case {ImportPrelude, Modules} of
                          {false, _} -> [];
                          {_, [{module, _, [kind, prelude], _}]} -> [];
-                         {_, _} -> import:import({import, #{}, PreludePath}, SourceMap, LocalTypes)
+                         {_, _} -> import:import({import, #{}, PreludePath}, SourceMap, LocalTypes, Sandboxed)
                      end,
 
-    F = fun(Import) -> import:import(Import, SourceMap, LocalTypes) end,
+    F = fun(Import) -> import:import(Import, SourceMap, LocalTypes, Sandboxed) end,
     case error:collect([F(Clause) || Clause <- ImportClauses] ++ [PreludeImports]) of
         {error, Errs} -> {error, Errs};
         {ok, NestedImports} ->

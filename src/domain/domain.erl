@@ -29,12 +29,12 @@ unroll_(0, _) -> {error, [{{possibly_infinite_recursion}, {domain}}]};
 unroll_(N, {recur, D}) -> unroll_(N-1, D());
 unroll_(_, D) -> D.
 
-expand(N, D) -> expand_(N, unroll(D));
-expand(0, D) -> D.
+expand(N, D) -> expand_(N, unroll(D)).
+expand_(0, D) -> D;
 expand_(N, {Type, D}) -> {Type, expand_(N-1, D)};
 expand_(N, {tagged, Tag, D}) -> {tagged, Tag, expand_(N-1, D)};
 expand_(N, Ds) when is_list(Ds) -> lists:map(fun(D) -> expand_(N-1, D) end, Ds);
-expand_(N, M) when is_map(M) -> maps:map(fun(K, D) -> expand_(N-1, D) end, M);
+expand_(N, M) when is_map(M) -> maps:map(fun(_K, D) -> expand_(N-1, D) end, M);
 expand_(N, S) -> case ordsets:is_set(S) of
                      true -> ordsets:map(fun(D) -> expand_(N-1, D) end, S);
                      false -> S
