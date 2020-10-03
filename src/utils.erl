@@ -45,7 +45,7 @@ merge(Maps) when is_list(Maps) ->
 
 % Convert between domains and their AST terms
 domain_to_term({sum, Elems}, Ctx) -> 
-    {tuple, Ctx, [domain_to_term(E, Ctx) || E <- ordsets:to_list(Elems)]};
+    {sum, Ctx, [domain_to_term(E, Ctx) || E <- ordsets:to_list(Elems)]};
 domain_to_term(A, Ctx) when is_atom(A) -> {type, Ctx, A, [A]};
 domain_to_term({product, Elems}, Ctx) -> 
     {dict, Ctx, [{dict_pair, Ctx, K, domain_to_term(V, Ctx)} || {K, V} <- maps:to_list(Elems)]};

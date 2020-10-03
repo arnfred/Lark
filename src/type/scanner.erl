@@ -99,8 +99,6 @@ scan(Env, Stack, TypeMod, {seq, _, Expr1, Expr2}) ->
     {Expr2Env, Expr2Domain} = scan(NewEnv, Stack, TypeMod, Expr2),
     {intersection(Expr1Env, Expr2Env), Expr2Domain};
 
-scan(Env, Stack, TypeMod, {tuple, _, Elems}) -> fold(Env, Stack, TypeMod, Elems);
-
 scan(Env, _, _, {variable, _, _, Tag}) -> 
     io:format("variable Env for ~p: ~p~n", [Tag, Env]),
     D = maps:get(Tag, Env, any),
@@ -204,11 +202,11 @@ scan_pattern(Domain, TypeMod, Stack, {dict, _, Keys} = Dict) ->
     end;
 
 % Pattern of: `(Pattern)`
-scan_pattern(Domain, TypeMod, Stack, {tuple, _, [Elem]}) ->
+scan_pattern(Domain, TypeMod, Stack, {sum, _, [Elem]}) ->
     scan_pattern(Domain, TypeMod, Stack, Elem);
 
 % Pattern of: `(Pattern | Pattern)`, e.g. a sum of types
-scan_pattern(Domain, TypeMod, Stack, {tuple, _, Elements}) ->
+scan_pattern(Domain, TypeMod, Stack, {sum, _, Elements}) ->
     {TupleEnvs, TupleDomains} = unzip([scan_pattern(Domain, TypeMod, Stack, E) || E <- Elements]),
     {union(TupleEnvs), union(TupleDomains)};
 

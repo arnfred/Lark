@@ -190,11 +190,11 @@ clause -> patterns implies expression               : {clause, ctx('$2'), '$1', 
 type_clause -> patterns implies sum_or_expression   : {clause, ctx('$2'), '$1', '$3'}.
 
 def_clauses -> clause                              : ['$1'].
-def_clauses -> clause newlines                              : ['$1'].
+def_clauses -> clause newlines                     : ['$1'].
 def_clauses -> clause clause_separator def_clauses : ['$1' | '$3'].
 
 type_clauses -> type_clause                                 : ['$1'].
-type_clauses -> type_clause newlines                                 : ['$1'].
+type_clauses -> type_clause newlines                        : ['$1'].
 type_clauses -> type_clause clause_separator type_clauses   : ['$1' | '$3'].
 
 lambda_clauses -> type_clause                           : ['$1'].
@@ -213,6 +213,7 @@ patterns -> pattern                     : ['$1'].
 patterns -> pattern patterns            : ['$1' | '$2'].
 
 pattern -> collection              : '$1'.   % {a, b: T}
+pattern -> sum_list                : '$1'.   % (A | B)
 pattern -> symbol                  : '$1'.   % a
 pattern -> qualified_symbol        : '$1'.   % a/b/T
 pattern -> literal                 : '$1'.   % 2
@@ -269,13 +270,13 @@ element -> function             : '$1'.
 % Sum or Expression
 % -----------------
 
-sum_or_expression -> flat_sum_list : unpack_tuple('$1').
+sum_or_expression -> flat_sum_list : unpack_sum('$1').
 sum_or_expression -> sum_list : '$1'.
 flat_sum_list -> sum_elem : ['$1'].
 flat_sum_list -> sum_elem pipe flat_sum_list : ['$1' | '$3'].
 
-sum_list -> open sum_terms close                    : {tuple, ctx('$1'), '$2'}.
-sum_list -> open newlines sum_terms close           : {tuple, ctx('$1'), '$3'}.
+sum_list -> open sum_terms close                    : {sum, ctx('$1'), '$2'}.
+sum_list -> open newlines sum_terms close           : {sum, ctx('$1'), '$3'}.
 
 sum_terms -> sum_elem : ['$1'].
 sum_terms -> sum_elem newlines : ['$1'].
@@ -299,6 +300,8 @@ Erlang code.
 
 unpack_tuple([T]) -> T;
 unpack_tuple([T | _] = Terms) -> {tuple, ctx(T), Terms}.
+unpack_sum([T]) -> T;
+unpack_sum([T | _] = Terms) -> {sum, ctx(T), Terms}.
 
 name([{symbol, _, _, S} | _]) -> S.
 args([_ | Args]) -> Args.

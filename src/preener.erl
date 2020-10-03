@@ -22,6 +22,7 @@ tuple_pre(_, _, {type_def, _, _, _, _})   -> skip;
 tuple_pre(_, _, Term)                     -> {ok, Term}.
 
 tuple_post(_, _, {tuple, _, [Elem]}) -> {ok, Elem};
+tuple_post(_, _, {sum, _, [Elem]}) -> {ok, Elem};
 tuple_post(expr, _, {tuple, _, Elems}) -> clean_tuple_elements(Elems);
 tuple_post(_, _, _)                 -> ok.
 
@@ -124,7 +125,7 @@ translate_typedefs_to_let_type_statements_test_() ->
                          {let_type, _,
                           {type_def, _, 'T',
                            [{symbol, _, _, b}],
-                           {tuple, _,
+                           {sum, _,
                             [{symbol, _, _, 'A'},
                              {symbol, _, _, b}]}},
                           {pair, _,

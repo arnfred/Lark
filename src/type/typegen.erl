@@ -240,7 +240,7 @@ gen_term(_, ArgsEnv, expr, _, {tagged, _, _, Val} = Term) ->
                end,
     {ok, Tag, TypeForm, CoreForm};
 
-gen_term(_, _, expr, _, {tuple, _, Elements}) ->
+gen_term(_, _, expr, _, {sum, _, Elements}) ->
     SumElements = cerl:make_list(Elements),
     DomainSet = cerl:c_call(cerl:c_atom(ordsets), cerl:c_atom(from_list), [SumElements]),
     {ok, cerl:c_tuple([cerl:c_atom(sum), DomainSet])};

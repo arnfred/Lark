@@ -52,7 +52,7 @@ gen_pattern(_, _, {tagged, _, _, Vals} = Term) ->
     {ok, [cerl:c_tuple([cerl:c_atom(tagged), cerl:c_atom(Tag), V]) || V <- Vals]};
 
 % Pattern of shape: 'A | B'
-gen_pattern(_, _, {tuple, _, ElemList}) ->
+gen_pattern(_, _, {sum, _, ElemList}) ->
     {ok, [E || Elems <- utils:combinations(ElemList), E <- Elems]};
 
 % Pattern of shape: module/T(a, b)
