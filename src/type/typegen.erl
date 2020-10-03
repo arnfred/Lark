@@ -14,7 +14,7 @@ gen(AST) ->
 
 gen_types(TypesEnv, ArgsEnv, AST) -> 
     Post = fun(Type, Scope, Term) -> gen_term(TypesEnv, ArgsEnv, Type, Scope, Term) end,
-    ast:traverse(fun pre_gen_term/3, Post, AST).
+    ast:traverse(pre_gen(TypesEnv, ArgsEnv), Post, AST).
 
 gen_modules(Types, TypesEnv, ArgsEnv, {ast, _, Modules, _, _} = AST) ->
     % Create a map from types to type members
@@ -147,7 +147,7 @@ args_post(expr, _, {pair, _, _, Val} = Term) ->
         undefined -> {ok, get_vars(Term)};
         Tag -> {ok, Tag, Val}
     end;
-args_post(_, _, {type_def, _, Name, Args, Expr}) -> 
+args_post(_, _, {type_def, _, Name, Args, _Expr}) -> 
     {ok, Name, [{var, symbol:tag(S)} || S <- Args]};
 args_post(pattern, _, _) -> skip;
 args_post(_, _, Term) when is_tuple(Term) -> 
@@ -197,14 +197,21 @@ types_post(expr, Scope, {type, _, _, Path} = Term)          ->
 types_post(_, _, _)                                         -> ok.
 
 
-pre_gen_term(top_level, _, {def, _, _, _, _}) -> skip;
-pre_gen_term(_, _, _) -> ok.
+pre_gen(TypesEnv, ArgsEnv) -> fun(Type, Scope, Term) -> pre_gen_term(TypesEnv, ArgsEnv, Type, Scope, Term) end.
+pre_gen_term(_, _, top_level, _, {def, _, _, _, _}) -> skip;
+pre_gen_term(_, ArgsEnv, expr, _, {type_application, _, Tag, Args} = Term) ->
+    Vars = maps:get(Tag, ArgsEnv),
+    case length(Vars) =:= length(Args) of
+        true    -> ok;
+        false   -> error:format({wrong_number_of_arguments, Tag, length(Args), length(Vars)}, {typegen, expr, Term})
+    end;
+pre_gen_term(TypesEnv, _, pattern, _, Term)         -> {change, pattern_gen:gen(TypesEnv), Term};
+pre_gen_term(_, _, _, _, _)                         -> ok.
 
 
 
 % gen_term translates types from kind AST to erlang core AST
 gen_term(_, _, _, _, {ast, _, _, _, _}) -> ok;
-gen_term(_, _, pattern, _, {type_def, _, _, [], Expr}) -> {ok, Expr};
 
 gen_term(TypesEnv, ArgsEnv, Type, Scope, {type_def, Ctx, Name, ArgList, Clauses}) when is_list(Clauses) ->
     Args = [A || As <- ArgList, A <- As],
@@ -219,9 +226,9 @@ gen_term(TypesEnv, ArgsEnv, Type, Scope, {type_def, Ctx, Name, ArgList, Clauses}
 gen_term(_, _, _, _, {type_def, _, Name, ArgList, Expr}) ->
     Args = [A || As <- ArgList, A <- As],
     Form = case lists:flatten(Args) of
-                   []	-> Expr;
-                   _	-> gen_f(cerl:c_atom(Name), Args, Expr)
-               end,
+               []	-> Expr;
+               _	-> gen_f(cerl:c_atom(Name), Args, Expr)
+           end,
     {ok, Name, Form};
 
 gen_term(_, ArgsEnv, expr, _, {tagged, _, _, Val} = Term) ->
@@ -232,11 +239,6 @@ gen_term(_, ArgsEnv, expr, _, {tagged, _, _, Val} = Term) ->
                    Args     -> gen_f(cerl:c_atom(Tag), [cerl:c_var(A) || {var, A} <- Args], CoreForm)
                end,
     {ok, Tag, TypeForm, CoreForm};
-
-gen_term(_, _, expr, _, {sum, Elements}) ->
-    SumElements = cerl:make_list(ordsets:to_list(Elements)),
-    DomainSet = cerl:c_call(cerl:c_atom(ordsets), cerl:c_atom(from_list), [SumElements]),
-    {ok, cerl:c_tuple([cerl:c_atom(sum), DomainSet])};
 
 gen_term(_, _, expr, _, {tuple, _, Elements}) ->
     SumElements = cerl:make_list(Elements),
@@ -251,49 +253,50 @@ gen_term(_, _, expr, _, {dict, _, Elements}) ->
 gen_term(_, _, expr, _, {application, _, Expr, Args}) -> 
     {ok, unsafe_call_form(Expr, Args)};
 
-gen_term(_, ArgsEnv, expr, _, {type_application, _, Tag, Args} = Term) -> 
+gen_term(_, _, expr, _, {type_application, _, Tag, Args} = Term) -> 
     IsRecursive = lists:member(Tag, ast:get_tag(path, Term)),
-    Vars = maps:get(Tag, ArgsEnv),
     case IsRecursive of
 
         % Normal type function with no recursion
-        false when length(Vars) =:= length(Args) -> 
-            {ok, unsafe_call_form(cerl:c_atom(Tag), Args)};
+        false -> {ok, unsafe_call_form(cerl:c_atom(Tag), Args)};
 
         % type recursion e.g.: List a -> Nil | Cons: { head: a, tail: List(a) }
-        true when length(Vars) =:= length(Args) -> 
+        true  -> 
             BranchFun = cerl:c_fun([], unsafe_call_form(cerl:c_atom(Tag), Args)),
-            {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
-
-        % The number of variables looks off
-        _ ->                     
-            error:format({wrong_number_of_arguments, Tag, length(Args), length(Vars)}, {typegen, expr, Term})
+            {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])}
     end;
 
 gen_term(TypesEnv, ArgsEnv, expr, _, {type, _, _, Path} = Term) ->
     Tag = symbol:tag(Term),
-    IsRecursive = lists:member(Tag, Path),
+    IsRecursive = lists:member(Tag, ast:get_tag(path, Term)),
     IsDefined = maps:is_key(Path, TypesEnv),
     case {IsRecursive, IsDefined} of
-        {true, _}   -> BranchFun = cerl:c_fun([], cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)])),
-                       {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
-        {_, true}   -> 
+        {true, _}       -> BranchFun = cerl:c_fun([], cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)])),
+                           {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
+        {_, true}       -> 
             GenTermF = fun(Type, Scope, T) -> gen_term(TypesEnv, ArgsEnv, Type, Scope, T) end,
-            TraverseF = fun(T) -> error:map(ast:traverse_term(expr, fun pre_gen_term/3, GenTermF, #{}, T),
+            TraverseF = fun(T) -> error:map(ast:traverse_term(expr, pre_gen(TypesEnv, ArgsEnv), GenTermF, #{}, T),
                                             fun({_, Forms}) -> Forms end) end,
             case maps:get(Path, TypesEnv) of
                 {tagged, _, _, T}          -> TraverseF(T);
                 {type_def, _, _, _, _} = T -> TraverseF(T);
                 {type, _, _, _} = T        -> {ok, symbol:tag(T), cerl:c_atom(symbol:tag(T))}
-            end
+            end;
+
+        % type constant from different module
+        {false, false}  -> {ok, cerl:c_atom(Tag)}
     end;
 
-gen_term(TypesEnv, ArgsEnv, Type, Scope, {qualified_type, _, ModulePath, Name}) ->
+gen_term(TypesEnv, ArgsEnv, expr, Scope, {qualified_type, Ctx, ModulePath, Name}) ->
     ModuleName = module:beam_name(ModulePath),
-    Domain = ModuleName:Name(),
-    GenTermF = fun(Type, Scope, T) -> gen_term(TypesEnv, ArgsEnv, Type, Scope, T) end,
-    error:map(ast:traverse_term(Type, fun pre_gen_term/3, GenTermF, Scope, Domain),
-              fun({_, Forms}) -> Forms end);
+    case erlang:function_exported(ModuleName, Name, 0) of
+        false   -> error:format({undefined_type_in_pattern, Name}, {typegen, Ctx});
+        true    ->
+            Domain = utils:domain_to_term(ModuleName:Name(), Ctx),
+            GenTermF = fun(Type, LocalScope, T) -> gen_term(TypesEnv, ArgsEnv, Type, LocalScope, T) end,
+            error:map(ast:traverse_term(expr, pre_gen(TypesEnv, ArgsEnv), GenTermF, Scope, Domain),
+                      fun({_, Forms}) -> Forms end)
+    end;
 
 gen_term(_, _, expr, _, {key, _, _} = Term) -> {ok, cerl:c_atom(symbol:tag(Term))};
 
@@ -303,52 +306,8 @@ gen_term(_, _, expr, _, {variable, _, _, _} = Term) -> {ok, cerl:c_var(symbol:ta
 gen_term(_, _, expr, _, Atom) when is_atom(Atom) -> {ok, cerl:c_atom(Atom)};
 
 gen_term(_, _, expr, _, {clause, _, Patterns, Expr}) ->
-    {ok, [cerl:c_clause(Ps, Expr) || Ps <- combinations(Patterns)]};
-
-% Pattern of shape: a
-gen_term(_, _, pattern, _, {variable, _, _, _} = Term) -> {ok, [cerl:c_var(symbol:tag(Term))]};
-
-% Pattern of shape: T
-gen_term(TypesEnv, ArgsEnv, pattern, _, {type, _, _, Path} = Term) ->
-    Tag = symbol:tag(Term),
-    NewEnv = maps:remove(Tag, TypesEnv),
-    GenTermF = fun(Type, Scope, T) -> gen_term(NewEnv, ArgsEnv, Type, Scope, T) end,
-    TraverseF = fun(T) -> error:map(ast:traverse_term(pattern, fun pre_gen_term/3, GenTermF, #{}, T),
-                                    fun({_, Forms}) -> Forms end) end,
-    case maps:get(Path, TypesEnv, undefined) of
-        undefined                  -> {ok, [cerl:c_atom(Tag)]};
-        {type, _, _, _}            -> {ok, [cerl:c_atom(Tag)]};
-        {tagged, _, _, T}          -> TraverseF(T);
-        {type_def, _, _, _, _} = T -> TraverseF(T)
-    end;
-
-% Key like 'k' in '{k: a}'
-gen_term(_, _, pattern, _, {key, _, _} = Term) -> {ok, [cerl:c_atom(symbol:tag(Term))]};
-
-% Pattern like '{a, k: b}'
-gen_term(_, _, pattern, _, {dict, _, ElemList}) ->
-    {ok, [cerl:c_tuple([cerl:c_atom(product), cerl:c_map_pattern(Elems)]) || 
-          Elems <- combinations(ElemList)]};
-
-% Pattern of variable or pair inside product
-gen_term(_, _, pattern, _, {dict_pair, _, Keys, Vals}) ->
-    {ok, [cerl:c_map_pair_exact(K, V) || K <- Keys, V <- Vals]};
-
-% Pattern of shape: 'a: T' or 'T {a, B: T}'
-% (the latter is a lookup, but get translated to a pair before reaching this
-% state of the typegen
-gen_term(_, _, pattern, _, {pair, _, Keys, Vals}) ->
-    {ok, [cerl:c_alias(K, V) || K <- Keys, V <- Vals]};
-
-% Pattern of shape: 'T: S'
-gen_term(_, _, pattern, _, {tagged, _, _, Vals} = Term) ->
-    Tag = symbol:tag(Term),
-    {ok, [cerl:c_tuple([cerl:c_atom(tagged), cerl:c_atom(Tag), V]) || V <- Vals]};
-
-% Pattern of shape: 'A | B'
-gen_term(_, _, pattern, _, {tuple, _, ElemList}) ->
-    {ok, [E || Elems <- combinations(ElemList), E <- Elems]}.
-
+    io:format("Patterns: ~p~n", [Patterns]),
+    {ok, [cerl:c_clause(Ps, Expr) || Ps <- utils:combinations(Patterns)]}.
 
 gen_f(Tag, Args, Expr) -> cerl:c_tuple([cerl:c_atom(f), Tag, cerl:c_fun(Args, Expr)]).
 
@@ -357,10 +316,6 @@ unsafe_call_form(NameForm, ArgForms) ->
       cerl:c_call(cerl:c_atom(erlang), cerl:c_atom(element), 
                   [cerl:c_int(3), cerl:c_apply(cerl:c_fname(domain, 1), [NameForm])]),
       ArgForms).
-
-combinations(L) -> 
-    Rs = lists:foldl(fun(Es, Accs) -> [[E | Acc] || E <- Es, Acc <- Accs] end, [[]], L),
-    [lists:reverse(R) || R <- Rs].
 
 catchall(Args) ->
     Error = cerl:c_tuple([cerl:c_atom(error),

@@ -552,6 +552,13 @@ qualified_type_pattern_sum_test_() ->
                      ?test('T/Truthy', Mod:'T'('T/Falsy'))]
             end)}.
 
+qualified_type_undefined_arity_pattern_test_() ->
+    {"type constructors that take one or more arguments can't be used as patterns on their own",
+     ?setup("type T a\n"
+            " | Option -> Falsy\n"
+            " | _ -> Truthy",
+            #{add_kind_libraries => true},
+            fun(Err) -> [?testError({undefined_type_in_pattern, 'Option'}, Err)] end)}.
 
 %multiple_tagged_pair_in_pattern_test_() ->
 %     Code = "type Test a\n"

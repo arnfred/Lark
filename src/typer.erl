@@ -1,14 +1,20 @@
 -module(typer).
--export([type/1, load/1]).
+-export([type/2, load/1]).
 
-type(AST) -> 
+type(AST, Options) -> 
+    PurgeScannerMod = maps:get(purge_scanner_module, Options, true),
     case load(AST) of
         {error, Errs}                                       -> {error, Errs};
         {ok, {Exported, ScannerMod, TypeMods, DomainDef}}   ->
             Envs = scanner:scan(ScannerMod, AST),
-            true = code:soft_purge(ScannerMod),
-            true = code:delete(ScannerMod),
-            {ok, {Envs, Exported, TypeMods, DomainDef}}
+            case PurgeScannerMod of
+                true    ->
+                    true = code:soft_purge(ScannerMod),
+                    true = code:delete(ScannerMod),
+                    {ok, {Envs, Exported, TypeMods, DomainDef}};
+                false   ->
+                    {ok, {Envs, Exported, [ScannerMod | TypeMods], DomainDef}}
+            end
     end.
 
 load(AST) ->

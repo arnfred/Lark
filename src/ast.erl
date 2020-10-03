@@ -12,7 +12,7 @@ traverse(Pre, Post, AST)                            -> traverse_ast(Pre, Post, #
 traverse(Post, ASTs) when is_list(ASTs)             -> map_asts(fun(_,_,T) -> T end, Post, #{}, ASTs);
 traverse(Post, AST)                                 -> traverse_ast(fun(_, _, T) -> T end, Post, #{}, AST).
 
-traverse_term(Type, Pre, Post, Scope, AST)          -> climb({Pre, Post}, Type, Scope, AST).
+traverse_term(Type, Pre, Post, Scope, Term)         -> climb({Pre, Post}, Type, Scope, Term).
 
 traverse_ast(Pre, Post, Scope, {ast, Ctx, Modules, Imports, Defs}) ->
     case map({Pre, Post}, top_level, Scope, maps:values(Defs)) of
@@ -184,12 +184,6 @@ step(Meta, expr, Scope, {seq, Context, First, Then}) ->
                 {ok, {ThenEnv, TThen}}   -> 
                     {ok, {merge(FirstEnv, ThenEnv), {seq, Context, TFirst, TThen}}}
             end
-    end;
-
-step(Meta, Type, Scope, {sum, Elements}) ->
-    case map(Meta, Type, Scope, ordsets:to_list(Elements)) of
-        {error, Errs}           -> {error, Errs};
-        {ok, {Envs, TElements}} -> {ok, {merge(Envs), {sum, TElements}}}
     end;
 
 step(Meta, Type, Scope, {dict, Context, Expressions}) when is_list(Expressions) ->

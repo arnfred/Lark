@@ -30,20 +30,16 @@ load(Code, Options) ->
         {error, Errs}   -> {error, Errs};
         {ok, ASTs}     ->
             io:format("Tagged AST is ~p~n", [ASTs]),
-            case error:collect([type_and_compile(AST) || AST <- ASTs]) of
+            case error:collect([type_and_compile(AST, Options) || AST <- ASTs]) of
                 {error, Errs}       -> {error, Errs};
                 {ok, Modules}       -> {ok, lists:flatten(Modules)}
             end
     end.
 
-% Current problem: As we run typegen and codegen, we call out to compiled type
-% definitions from other modules that might or might not be compiled yet. To
-% ensure that types are compiled as we need them, we have to order the sources
-% by their dependencies
-type_and_compile(AST) ->
-    case typer:type(AST) of
+type_and_compile(AST, Options) ->
+    case typer:type(AST, Options) of
         {error, Errs}                               -> {error, Errs};
-        {ok, {_, Types, TypeModules, DomainDef}} ->
+        {ok, {_, Types, TypeModules, DomainDef}}    ->
             {ok, Forms} = codegen:gen(AST, DomainDef, Types),
             case compile(Forms) of
                 {error, Errs}       -> {error, Errs};
