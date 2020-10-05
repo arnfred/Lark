@@ -201,10 +201,26 @@ application_first_order_type_test_() ->
             "type Option a -> None | a\n"
             "type AnyOption f a -> f(a)",
             fun({ok, [Mod | _]}) ->
-                    {f, 'AnyOption', DomainFun} = Mod:domain('AnyOption'),
-                    Actual = DomainFun('Option', 'Args/Arg1'),
+                    Actual = Mod:'AnyOption'(Mod:domain('Option'), 'Args/Arg1'),
                     Expected = {sum, ordsets:from_list(['Option/None', 'Args/Arg1'])},
                     [?test(none, domain:diff(Expected, Actual))]
+            end)}.
+
+application_first_order_called_by_type_test_() ->
+    {"Call type with another type constructor as function and have that applied to third type"
+     "Mostly applications to do with Types are of term type
+     'type_application', but when a type variable containing a type
+     constructor is used, it's a normal application with the domain of a type
+     function, namely `{f, Tag, Function}` and so I want to make sure that it
+     works",
+     ?setup("type Args -> Arg1 | Arg2\n"
+    	    "type Switch a\n"
+    	    " | Args/Arg1 -> Args/Arg2\n"
+    	    " | Args/Arg2 -> Args/Arg1\n"
+    	    "type Apply f a -> f(a)\n"
+    	    "type Test -> Apply(Switch, Args/Arg1)",
+    	    fun({ok, [Mod | _]}) ->
+                [?test('Args/Arg2', Mod:domain('Test'))]
             end)}.
 
 application_product_test_() ->

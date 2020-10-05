@@ -251,7 +251,7 @@ gen_term(_, _, expr, _, {dict, _, Elements}) ->
     {ok, cerl:c_tuple([cerl:c_atom(product), cerl:c_map(Elements)])};
 
 gen_term(_, _, expr, _, {application, _, Expr, Args}) -> 
-    {ok, unsafe_call_form(Expr, Args)};
+    {ok, call_expr(Expr, Args)};
 
 gen_term(_, _, expr, _, {type_application, _, Tag, Args} = Term) -> 
     IsRecursive = lists:member(Tag, ast:get_tag(path, Term)),
@@ -310,6 +310,12 @@ gen_term(_, _, expr, _, {clause, _, Patterns, Expr}) ->
     {ok, [cerl:c_clause(Ps, Expr) || Ps <- utils:combinations(Patterns)]}.
 
 gen_f(Tag, Args, Expr) -> cerl:c_tuple([cerl:c_atom(f), Tag, cerl:c_fun(Args, Expr)]).
+
+call_expr(ExprForm, ArgForms) ->
+    cerl:c_apply(
+      cerl:c_call(cerl:c_atom(erlang), cerl:c_atom(element), 
+                  [cerl:c_int(3), ExprForm]),
+      ArgForms).
 
 unsafe_call_form(NameForm, ArgForms) ->
     cerl:c_apply(
