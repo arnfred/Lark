@@ -576,6 +576,19 @@ qualified_type_undefined_arity_pattern_test_() ->
             #{add_kind_libraries => true},
             fun(Err) -> [?testError({undefined_type_in_pattern, 'Option'}, Err)] end)}.
 
+call_qualified_type_with_args_test_() ->
+    {"A qualified type can be evaluated alone and as part of a type
+     application. When evaluated as part of a type application, the underlying
+     domain function of the types should be called with the arguments",
+     ?setup("import kind/prelude\n"
+            "type Test -> kind/prelude/Option(Boolean/True)",
+            #{add_kind_libraries => true},
+            fun({ok, Mods}) ->
+                    Mod = lists:last(Mods),
+                    Actual = Mod:'Test'(),
+                    [?test(none, domain:diff({sum, ordsets:from_list(['Boolean/True', 'Option/Nil'])}, Actual))]
+            end)}.
+
 %multiple_tagged_pair_in_pattern_test_() ->
 %     Code = "type Test a\n"
 %            " | {value} -> Blop: {key: value}\n"

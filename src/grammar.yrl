@@ -78,6 +78,7 @@ qualified_symbol -> qualified_variable  : {qualified_variable, ctx('$1'), '$1'}.
 
 qualified_type -> var_symbol slash type_symbol                  : [make_symbol('$1'), make_symbol('$3')].
 qualified_type -> var_symbol slash qualified_type_type          : [make_symbol('$1') | '$3'].
+qualified_type -> qualified_variable slash type_symbol          : '$1' ++ [make_symbol('$3')].
 qualified_type -> qualified_variable slash qualified_type_type  : '$1' ++ '$3'.
 qualified_type -> qualified_type_type                           : '$1'.
 qualified_type_type -> type_symbol slash type_symbol            : [make_symbol('$1'), make_symbol('$3')].

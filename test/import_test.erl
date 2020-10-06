@@ -126,3 +126,10 @@ sandbox_test_() ->
 				import:import({import, #{}, path([filelib, is_dir])}, #{}, #{}, true)),
 	 ?test({ok, _},
 		   import:import({import, #{}, path([lists, reverse])}, #{}, #{}, true))].
+
+import_qualified_module_name_test_() ->
+    SourceMap = #{kind_prelude => {module, #{}, [kind, prelude], #{'Option' => 'Option'}}},
+    Actual = test_import([kind, prelude], SourceMap),
+    [?test({ok, [{alias, _,
+                      [kind, prelude, 'Option'],
+                      {qualified_type, _, [kind, prelude], 'Option'}}]}, Actual)].

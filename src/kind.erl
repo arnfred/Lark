@@ -39,8 +39,8 @@ load(Code, Options) ->
 type_and_compile(AST, Options) ->
     case typer:type(AST, Options) of
         {error, Errs}                               -> {error, Errs};
-        {ok, {_, Types, TypeModules, DomainDef}}    ->
-            {ok, Forms} = codegen:gen(AST, DomainDef, Types),
+        {ok, {_, Types, TypeModules}}    ->
+            {ok, Forms} = codegen:gen(AST, Types),
             case compile(Forms) of
                 {error, Errs}       -> {error, Errs};
                 {ok, ModuleNames}   -> {ok, ModuleNames ++ TypeModules}

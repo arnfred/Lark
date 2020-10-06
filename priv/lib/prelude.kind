@@ -2,14 +2,13 @@ module kind/prelude {
     Boolean
     Boolean/True
     Boolean/False
-    Nil
     Option
+    Option/Nil
     match
 }
 
 type Boolean -> True | False
 
-type Nil -> Nil
 type Option a -> a | Nil
 
 def match a f -> f(a)

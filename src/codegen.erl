@@ -1,31 +1,30 @@
 -module(codegen).
--export([gen/3]).
+-export([gen/2]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
 
-gen({ast, _, Modules, _, Defs}, DomainDef, Types) ->
+gen({ast, _, Modules, _, Defs}, Types) ->
     io:format("---> Defs: ~p~n", [Defs]),
     Compiled = [gen_expr(D) || D <- maps:values(Defs)],
-    MainModule = gen_main_module(Defs, Compiled, Types, DomainDef),
-    CompiledModules = MainModule ++ [gen_module(M, Defs, Compiled, Types, DomainDef) || M <- Modules],
+    MainModule = gen_main_module(Defs, Compiled, Types),
+    CompiledModules = MainModule ++ [gen_module(M, Defs, Compiled, Types) || M <- Modules],
     {ok, CompiledModules}.
 
-gen_module({module, _, Path, Exports}, Defs, Compiled, Types, DomainDef) ->
-    CompiledTypes = [DomainDef | Types],
+gen_module({module, _, Path, Exports}, Defs, Compiled, Types) ->
     {TypeExports, _} = lists:unzip(Types), 
     CompiledExports = [cerl:c_fname(Name, length(Args)) || {def, _, Name, Args, _} <- maps:values(Defs), 
                                                            maps:is_key(Name, Exports)],
     ModuleExports = TypeExports ++ CompiledExports,
     ModuleName = module:beam_name(Path),
-    {ModuleName, cerl:c_module(cerl:c_atom(ModuleName), ModuleExports, [], Compiled ++ CompiledTypes)}.
+    {ModuleName, cerl:c_module(cerl:c_atom(ModuleName), ModuleExports, [], Compiled ++ Types)}.
 
-gen_main_module(Defs, Compiled, Types, DomainDef) ->
+gen_main_module(Defs, Compiled, Types) ->
     case maps:is_key(main, Defs) of
         false   -> [];
         true    -> [gen_module({module, #{}, [symbol:id(main)], #{main => true}},
-                               Defs, Compiled, Types, DomainDef)]
+                               Defs, Compiled, Types)]
     end.
 
 gen_expr({def, _, Name, Args, Expr}) ->
