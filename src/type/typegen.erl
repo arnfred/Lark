@@ -281,13 +281,10 @@ gen_term(TypesEnv, ArgsEnv, expr, _, {type, _, _, Path} = Term) ->
         {true, _}       -> BranchFun = cerl:c_fun([], cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)])),
                            {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
         {_, true}       ->
-            GenTermF = fun(Type, Scope, T) -> gen_term(TypesEnv, ArgsEnv, Type, Scope, T) end,
-            TraverseF = fun(T) -> error:map(ast:traverse_term(expr, pre_gen(TypesEnv, ArgsEnv), GenTermF, #{}, T),
-                                            fun({_, Forms}) -> Forms end) end,
             case maps:get(Path, TypesEnv) of
-                {tagged, _, _, T}          -> TraverseF(T);
-                {type_def, _, _, _, _} = T -> TraverseF(T);
-                {type, _, _, _} = T        -> {ok, symbol:tag(T), cerl:c_atom(symbol:tag(T))}
+                {tagged, _, _, _}       -> {ok, cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)])};
+                {type_def, _, _, _, _}  -> {ok, cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)])};
+                {type, _, _, _}         -> {ok, Tag, cerl:c_atom(Tag)}
             end;
 
         % type constant from different module
