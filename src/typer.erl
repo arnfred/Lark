@@ -14,9 +14,9 @@ type(AST, Options) ->
                         true    ->
                             true = code:soft_purge(ScannerMod),
                             true = code:delete(ScannerMod),
-                            {ok, {Envs, Exported, TypeMods}};
+                            {ok, {TypedAST, TypesEnv, Exported, TypeMods}};
                         false   ->
-                            {ok, {Envs, Exported, [ScannerMod | TypeMods]}}
+                            {ok, {TypedAST, TypesEnv, Exported, [ScannerMod | TypeMods]}}
                     end
             end
     end.

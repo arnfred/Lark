@@ -191,7 +191,7 @@ is_whitelisted(Module, Name) ->
                   'atomics' => [],
                   'counters' => [],
                   'erlang' => [apply, delete_module, put, erase, check_old_code,
-                               check_process_code, disconnect_node, error, exit,
+                               check_process_cod, disconnect_node, error, exit,
                                halt, load_module, load_nif, open_port, port_call,
                                port_close, port_command, port_connect, port_control,
                                purge_module, put, self],

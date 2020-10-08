@@ -14,8 +14,9 @@ run(Code, Args, Options) ->
                 []          -> error:format({no_main_function_for_arity, length(Args)}, {kind});
                 [Module]    ->
                     Out = case catch erlang:apply(Module, main, Args) of
-                              {'EXIT', Err}   -> error:format({main_throw, Err}, {kind});
-                              Res             -> {ok, Res}
+                              {'EXIT', Err}     -> error:format({main_throw, Err}, {kind});
+                              {error, Errs}     -> {error, Errs};
+                              Res               -> {ok, Res}
                           end,
                     clean(Mods),
                     Out;
@@ -38,12 +39,15 @@ load(Code, Options) ->
 
 type_and_compile(AST, Options) ->
     case typer:type(AST, Options) of
-        {error, Errs}                               -> {error, Errs};
-        {ok, {_, Types, TypeModules}}    ->
-            {ok, Forms} = codegen:gen(AST, Types),
-            case compile(Forms) of
+        {error, Errs}                                   -> {error, Errs};
+        {ok, {TypedAST, TypesEnv, Types, TypeModules}}  ->
+            case def_gen:gen(TypesEnv, Types, TypedAST) of
                 {error, Errs}       -> {error, Errs};
-                {ok, ModuleNames}   -> {ok, ModuleNames ++ TypeModules}
+                {ok, Forms}         ->
+                    case compile(Forms) of
+                        {error, Errs}       -> {error, Errs};
+                        {ok, ModuleNames}   -> {ok, ModuleNames ++ TypeModules}
+                    end
             end
     end.
 
@@ -103,13 +107,19 @@ no_main_function_test_() ->
             [],
             fun(Res) -> [?testError({no_main_function_for_arity, 0}, Res)] end)}.
 
-main_throw_test_() ->
-    {"when the main function throws, it should be caught and wrapped in an error",
+main_error_test_() ->
+    {"when the main function returns an error, it be returned as an error",
      ?setup("def main arg\n"
             " | True -> False\n"
             " | False -> True",
             ['hello'],
-            fun(Res) -> [?testError({main_throw, {if_clause, _}}, Res)] end)}.
+            fun(Res) -> [?testError({no_matching_pattern, [hello]}, Res)] end)}.
+main_throw_test_() ->
+    {"when the main function throws, it should be caught and wrapped in an error",
+     ?setup("import erlang/throw\n"
+            "def main arg -> throw()\n",
+            ['hello'],
+            fun(Res) -> [?testError({main_throw, {undef, _}}, Res)] end)}.
     
 multiple_main_error_test_() ->
     {"When calling kind:run, the code can't contain or export more than one single main function",

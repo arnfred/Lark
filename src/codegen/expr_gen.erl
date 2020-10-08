@@ -1,9 +1,23 @@
 -module(expr_gen).
 -export([gen/1, call_type_tag/2]).
--include_lib("eunit/include/eunit.hrl").
 
 gen(TypesEnv) ->
 	fun(_Type, _Scope, Term) -> gen_expr(TypesEnv, Term) end.
+
+gen_expr(TypesEnv, {def, Ctx, Name, ArgList, Clauses}) when is_list(Clauses) ->
+    Args = [A || As <- ArgList, A <- As],
+    ClauseList = lists:flatten(Clauses),
+    AllClauses = case cerl_clauses:any_catchall(ClauseList) of
+                     true -> ClauseList;
+                     false -> ClauseList ++ [catchall(Args)]
+                 end,
+    Expr = cerl:c_case(cerl:c_values(Args), AllClauses),
+    gen_expr(TypesEnv, {def, Ctx, Name, ArgList, Expr});
+
+gen_expr(TypesEnv, {def, _, Name, ArgList, Expr}) ->
+    Args = [A || As <- ArgList, A <- As],
+    FName = cerl:c_fname(Name, length(Args)),
+    {ok, Name, {FName, cerl:c_fun(Args, Expr)}};
 
 gen_expr(TypesEnv, {type_def, Ctx, Name, ArgList, Clauses}) when is_list(Clauses) ->
     Args = [A || As <- ArgList, A <- As],
@@ -101,6 +115,10 @@ gen_expr(_, {qualified_type, _, ModulePath, Name}) ->
     ModuleName = module:beam_name(ModulePath),
     {ok, cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(domain), [cerl:c_atom(Name)])};
 
+gen_expr(_, {qualified_variable, _, ModulePath, Name}) ->
+    ModuleName = module:beam_name(ModulePath),
+    cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(Name), []);
+
 % expr of form `T` where T is recursive like `type T -> {a: Boolean, b: T}` 
 gen_expr(_, {recursive_type, _, _, _} = Term) ->
     Tag = symbol:tag(Term),
@@ -116,9 +134,22 @@ gen_expr(_, {variable, _, _, _} = Term) -> {ok, cerl:c_var(symbol:tag(Term))};
 % type atom
 gen_expr(_, Atom) when is_atom(Atom) -> {ok, cerl:c_atom(Atom)};
 
-% expr of form: | (t: T) -> Q(t) (or similar)
+% expr of form: ` | <Pattern> -> <Expr>`
 gen_expr(_, {clause, _, Patterns, Expr}) ->
-    {ok, [cerl:c_clause(Ps, Expr) || Ps <- utils:combinations(Patterns)]}.
+    {ok, [cerl:c_clause(Ps, Expr) || Ps <- utils:combinations(Patterns)]};
+
+% expr of form `(<Pattern> -> <Expr>)` which encodes an anonymous function
+gen_expr(_, {lambda, Ctx, ClauseList}) ->
+    Clauses = lists:flatten(ClauseList),
+    case Clauses of
+        []              -> error:format({empty_pattern}, {expr_gen, Ctx});
+        [Clause | _]    -> Args = [cerl:c_var(S) || N <- lists:seq(1, cerl:clause_arity(Clause)),
+                                                     S <- [symbol:id('')]],
+                           {ok, cerl:c_fun(Args, cerl:c_case(cerl:c_values(Args), Clauses))}
+    end;
+
+% expr of form: `(<Expr>)`
+gen_expr(TypesEnv, {tuple, _, [Expr]}) -> gen_expr(TypesEnv, Expr).
 
 gen_f(Tag, Args, Expr) -> cerl:c_tuple([cerl:c_atom(f), Tag, cerl:c_fun(Args, Expr)]).
 

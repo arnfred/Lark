@@ -589,6 +589,19 @@ call_qualified_type_with_args_test_() ->
                     [?test(none, domain:diff({sum, ordsets:from_list(['Boolean/True', 'Option/Nil'])}, Actual))]
             end)}.
 
+var_application_in_type_def_test_() ->
+    {"A type constructor can call non-type functions to construct types",
+     ?setup("import erlang\n"
+            "type Test a -> a.match(True -> False\n"
+            "                       False -> True)",
+            #{add_kind_libraries => true},
+            fun({ok, Mods}) ->
+                    Mod = lists:last(Mods),
+                    Actual = 
+                    [?test('Boolean/False', Mod:'Test'('Boolean/True'))]
+            end)}.
+             
+
 %multiple_tagged_pair_in_pattern_test_() ->
 %     Code = "type Test a\n"
 %            " | {value} -> Blop: {key: value}\n"
