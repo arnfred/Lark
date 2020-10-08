@@ -22,9 +22,15 @@ type(AST, Options) ->
     end.
 
 prepare(AST) ->
-    error:flatmap2(collect_args(AST),
-                   collect_types(AST),
-                   fun({ArgsEnv, _}, {TypesEnv, TypedAST}) -> {ok, {ArgsEnv, TypesEnv, TypedAST}} end).
+    case collect_args(AST) of
+        {error, Errs}               -> {error, Errs};
+        {ok, {ArgsEnv, _}}          ->
+            case collect_types(ArgsEnv, AST) of
+                {error, Errs}               -> {error, Errs};
+                {ok, {TypesEnv, TypesAST}}  ->
+                    {ok, {ArgsEnv, TypesEnv, TypesAST}}
+            end
+    end.
 
 gen(AST, TypesEnv, ArgsEnv) ->
     case type_gen:gen(TypesEnv, ArgsEnv, AST) of
@@ -49,9 +55,9 @@ load_type_module(Name, ModuleForm) ->
 collect_args({ast, _, _, _, Defs} = AST) ->
     TopLevelTypes = maps:from_list([{Name, []} || Name <- maps:keys(Defs)]),
     ast:traverse(fun args_pre/3, fun args_post/3, TopLevelTypes, AST).
-collect_types({ast, _, _, _, Defs} = AST) ->
+collect_types(ArgsEnv, {ast, _, _, _, Defs} = AST) ->
     Scope = maps:from_list([{[Name], Args} || {type_def, _, Name, Args, _} <- maps:values(Defs)]),
-    ast:traverse(fun types_pre/3, fun types_post/3, Scope, AST).
+    ast:traverse(make_types_pre(ArgsEnv), make_types_post(ArgsEnv), Scope, AST).
 
 % args_pre only tags the pair key to make sure we know its tag after the key
 % has been converted to an empty list of args
@@ -92,34 +98,47 @@ get_vars(Term) when is_list(Term) -> utils:unique([V || T <- Term, V <- get_vars
 % types_pre adds a `path` tag to the term contexts and checks a few
 % assumptions about the type tree. It also renames `pairs` inside of a
 % dict to `dict_pair` to make it easier to generate erlang core afterwards
-types_pre(top_level, _, {ast, _, _, _, _})  -> ok;
-types_pre(top_level, _, {def, _, _, _, _})  -> skip;
-types_pre(top_level, _, {type_def, _, Name, _, _} = Term) -> {ok, ast:tag(path, Term, [Name])};
-types_pre(_, _, {pair, Ctx, {type, _, _, Path} = T, Val}) ->
+make_types_pre(ArgsEnv) -> fun(Type, Scope, Term) -> types_pre(ArgsEnv, Type, Scope, Term) end.
+make_types_post(ArgsEnv) -> fun(Type, Scope, Term) -> types_post(ArgsEnv, Type, Scope, Term) end.
+
+types_pre(_, top_level, _, {ast, _, _, _, _})  -> ok;
+types_pre(_, top_level, _, {def, _, _, _, _})  -> ok;
+types_pre(_, _, _, {type_def, _, Name, _, _} = Term) -> {ok, ast:tag(path, Term, [Name])};
+types_pre(ArgsEnv, _, _, {pair, Ctx, {type, _, _, Path} = T, Val}) ->
     F = fun(Tag) -> [symbol:tag(T) | Tag] end,
     Tagged = ast:tag(path, Val, F, []),
-    {ok, {tagged, Ctx, Path, Tagged}};
-types_pre(Type, _, {dict, Ctx, Elements} = Term) ->
+    NewCtx = maps:put(args, maps:get(symbol:tag(Path), ArgsEnv, []), Ctx),
+    {ok, {tagged, NewCtx, Path, Tagged}};
+types_pre(_, Type, _, {dict, Ctx, Elements} = Term) ->
     F = fun({pair, X, {key, _, _} = K, V})  -> {ok, {dict_pair, X, K, V}};
            ({variable, X, Name, _} = Val)   -> {ok, {dict_pair, X, {key, X, Name}, Val}};
            ({pair, _, K, _})                -> error:format({unrecognized_tag_type, K}, {typegen, Type, Term});
            (Elem)                           -> error:format({unrecognized_product_elem, Elem}, {typegen, Type, Term}) end,
     error:map(error:collect([F(Elem) || Elem <- Elements]),
               fun(TaggedElements) -> ast:tag(path, {dict, Ctx, TaggedElements}) end);
-types_pre(pattern, _, {application, _, Expr, Args} = Term) ->
+types_pre(_, pattern, _, {application, _, Expr, Args} = Term) ->
     error:format({pattern_application, Expr, Args}, {typegen, pattern, Term});
-types_pre(_, _, {application, Ctx, {type, _, _, _} = T, Args}) ->
-    {ok, ast:tag(path, {type_application, Ctx, symbol:tag(T), Args})};
-types_pre(_, _, Term) -> {ok, ast:tag(path, Term)}.
+types_pre(ArgsEnv, _, _, {application, Ctx, {qualified_type, _, ModulePath, Name}, Args}) ->
+    {ok, ast:tag(path, {qualified_application, Ctx, ModulePath, Name, Args})};
+types_pre(ArgsEnv, _, _, {application, Ctx, {qualified_variable, _, ModulePath, Name}, Args}) ->
+    {ok, ast:tag(path, {qualified_application, Ctx, ModulePath, Name, Args})};
+types_pre(ArgsEnv, _, _, {application, Ctx, {type, _, _, _} = T, Args} = Term) ->
+    Tag = symbol:tag(T),
+    Vars = maps:get(Tag, ArgsEnv),
+    case length(Vars) =:= length(Args) of
+        true    -> {ok, ast:tag(path, {type_application, Ctx, symbol:tag(T), Args})};
+        false   -> error:format({wrong_number_of_arguments, Tag, length(Args), length(Vars)}, {typegen, expr, Term})
+    end;
+types_pre(_, _, _, Term) -> {ok, ast:tag(path, Term)}.
 
 
 % types_post collects all types defined by the type definitions in the AST.
 % This includes the type defs and any tags
-types_post(top_level, _, {type_def, _, Name, _, _} = Term)  -> {ok, [Name], Term};
-types_post(expr, _, {tagged, _, Path, _} = Term)            -> {ok, Path, Term};
-types_post(expr, Scope, {type, _, _, Path} = Term)          ->
+types_post(_, top_level, _, {type_def, _, Name, _, _} = Term)  -> {ok, [Name], Term};
+types_post(_, expr, _, {tagged, _, Path, _} = Term)            -> {ok, Path, Term};
+types_post(_, expr, Scope, {type, _, _, Path} = Term)          ->
     case maps:is_key(Path, Scope) of
         true    -> {ok, Term};
         false   -> {ok, Path, Term}
     end;
-types_post(_, _, _)                                         -> ok.
+types_post(_, _, _, _)                                         -> ok.

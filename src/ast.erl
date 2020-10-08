@@ -132,6 +132,11 @@ step(Meta, Type, Scope, {application, Context, Expr, Args}) ->
                fun({ArgsEnvs, TArgs}, {ExprEnv, TExpr}) -> 
                        {merge([ExprEnv | ArgsEnvs]), {application, Context, TExpr, TArgs}} end);
 
+step(Meta, Type, Scope, {qualified_application, Context, ModulePath, Name, Args}) ->
+    error:map(map(Meta, Type, Scope, Args),
+              fun({ArgsEnvs, TArgs}) -> 
+                      {merge(ArgsEnvs), {qualified_application, Context, ModulePath, Name, TArgs}} end);
+
 step(Meta, Type, Scope, {type_application, Context, Tag, Args}) ->
     error:map(map(Meta, Type, Scope, Args),
 	      fun({ArgsEnvs, TArgs}) -> 

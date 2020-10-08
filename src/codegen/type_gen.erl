@@ -1,29 +1,22 @@
 -module(type_gen).
--export([gen/3, call_type_domain/2, call_type_tag/2]).
+-export([gen/3]).
 
 gen(TypesEnv, ArgsEnv, AST) ->
-    case gen_types(TypesEnv, ArgsEnv, AST) of
+    case gen_types(TypesEnv, AST) of
         {error, Errs}    -> {error, Errs};
         {ok, {Types, _}} -> gen_modules(Types, TypesEnv, ArgsEnv, AST)
     end.
 
-gen_types(TypesEnv, ArgsEnv, AST) ->
-    Pre = fun(Type, Scope, Term) -> pre_gen_term(TypesEnv, ArgsEnv, Type, Scope, Term) end,
+gen_types(TypesEnv, AST) ->
+    Pre = fun(Type, Scope, Term) -> pre_gen_term(TypesEnv, Type, Scope, Term) end,
     Post = fun(_, _, _) -> ok end,
     ast:traverse(Pre, Post, AST).
 
-pre_gen_term(_, _, top_level, _, {def, _, _, _, _}) -> skip;
-pre_gen_term(TypesEnv, ArgsEnv, top_level, _, {type_def, _, _, _, _} = Term) ->
-    {change, expr_gen:gen(TypesEnv, ArgsEnv), Term};
-pre_gen_term(TypesEnv, ArgsEnv, expr, _, {type_application, _, Tag, Args} = Term) ->
-    Vars = maps:get(Tag, ArgsEnv),
-    case length(Vars) =:= length(Args) of
-        true    -> {change, expr_gen:gen(TypesEnv, ArgsEnv), Term};
-        false   -> error:format({wrong_number_of_arguments, Tag, length(Args), length(Vars)}, {typegen, expr, Term})
-    end;
-pre_gen_term(TypesEnv, _, pattern, _, Term)         -> {change, pattern_gen:gen(TypesEnv), Term};
-pre_gen_term(TypesEnv, ArgsEnv, expr, _, Term)      -> {change, expr_gen:gen(TypesEnv, ArgsEnv), Term};
-pre_gen_term(_, _, _, _, _)                         -> ok.
+pre_gen_term(_, top_level, _, {def, _, _, _, _}) -> skip;
+pre_gen_term(TypesEnv, top_level, _, Term)       -> {change, expr_gen:gen(TypesEnv), Term};
+pre_gen_term(TypesEnv, pattern, _, Term)         -> {change, pattern_gen:gen(TypesEnv), Term};
+pre_gen_term(TypesEnv, expr, _, Term)            -> {change, expr_gen:gen(TypesEnv), Term};
+pre_gen_term(_, _, _, _)                         -> ok.
 
 
 gen_modules(Types, TypesEnv, ArgsEnv, {ast, _, Modules, _, _} = AST) ->
@@ -128,15 +121,6 @@ gen_type_def(Name, Tag, []) ->
     {FName, cerl:c_fun([], Body)};
 gen_type_def(Name, Tag, Args) ->
     ArgForms = [cerl:c_var(A) || {var, A} <- Args],
-    Body = call_type_tag(Tag, ArgForms),
+    Body = expr_gen:call_type_tag(Tag, ArgForms),
     FName = cerl:c_fname(Name, length(Args)),
     {FName, cerl:c_fun(ArgForms, Body)}.
-
-call_type_domain(ExprForm, ArgForms) ->
-    cerl:c_apply(
-      cerl:c_call(cerl:c_atom(erlang), cerl:c_atom(element), 
-                  [cerl:c_int(3), ExprForm]),
-      ArgForms).
-
-call_type_tag(Tag, ArgForms) ->
-    call_type_domain(cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)]), ArgForms).
