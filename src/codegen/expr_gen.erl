@@ -1,5 +1,6 @@
 -module(expr_gen).
 -export([gen/1, call_type_tag/2]).
+-include_lib("eunit/include/eunit.hrl").
 
 gen(TypesEnv) ->
 	fun(_Type, _Scope, Term) -> gen_expr(TypesEnv, Term) end.
@@ -60,7 +61,15 @@ gen_expr(_, {dict, _, Elements}) ->
 % If we knew the domain, we could separate the two out a compile time, but for now,
 % we're assuming all applications is for types
 gen_expr(_, {application, _, Expr, Args}) -> 
-    {ok, call_type_domain(Expr, Args)};
+    case cerl:is_c_fun(Expr) orelse cerl:is_c_fname(Expr) of
+        true    -> {ok, cerl:c_apply(Expr, Args)};
+        false   -> 
+            Var = cerl:c_var(symbol:id('')),
+            F = cerl:c_var(symbol:id('F')),
+            TypeClause = cerl:c_clause([cerl:c_tuple([cerl:c_atom('f'), cerl:c_var('_'), F])], cerl:c_apply(F, Args)),
+            VarClause = cerl:c_clause([F], cerl:c_apply(F, Args)),
+            {ok, cerl:c_let([Var], Expr, cerl:c_case(Var, [TypeClause, VarClause]))}
+    end;
 
 % expr of form: `T(a)` where `T` is a recursive type (and so we want to not
 % call the domain function in an infinite loop
