@@ -15,6 +15,8 @@ gen_expr(TypesEnv, {type_def, Ctx, Name, ArgList, Clauses}) when is_list(Clauses
     gen_expr(TypesEnv, {type_def, Ctx, Name, ArgList, Expr});
 
 gen_expr(_, {type_def, _, Name, ArgList, Expr}) ->
+    % Double expansion of args because the Arglist is treated as a pattern and
+    % returned wrapped in a list
     Args = [A || As <- ArgList, A <- As],
     Form = case lists:flatten(Args) of
                []	-> Expr;
@@ -53,52 +55,48 @@ gen_expr(_, {dict_pair, _, K, V}) -> {ok, cerl:c_map_pair(K, V)};
 gen_expr(_, {dict, _, Elements}) ->
     {ok, cerl:c_tuple([cerl:c_atom(product), cerl:c_map(Elements)])};
 
-% expr of form: `f(a)` or `kind/prelude/Boolean(a)`
+% expr of form: `f(a)` or `T(a)`
 % f can either be a type (encoded as {f, Tag, Function}) or a Function.
 % If we knew the domain, we could separate the two out a compile time, but for now,
 % we're assuming all applications is for types
 gen_expr(_, {application, _, Expr, Args}) -> 
     {ok, call_type_domain(Expr, Args)};
 
+% expr of form: `T(a)` where `T` is a recursive type (and so we want to not
+% call the domain function in an infinite loop
+gen_expr(_, {recursive_type_application, _, Tag, Args}) -> 
+    BranchFun = cerl:c_fun([], call_type_tag(Tag, Args)),
+    {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
+
 % expr of Form: kind/prelude/Option(a)
-gen_expr(_, {qualified_application, _, ModulePath, Name, Args} = Term) -> 
+gen_expr(_, {qualified_type_application, _, ModulePath, Name, Args}) -> 
     {ok, call_type_tag(ModulePath, Name, Args)};
 
-% expr of Form: T(a)
-gen_expr(_, {type_application, _, Tag, Args} = Term) -> 
-    IsRecursive = lists:member(Tag, ast:get_tag(path, Term)),
-    case IsRecursive of
-
-        % Normal type function with no recursion
-        false -> {ok, call_type_tag(Tag, Args)};
-
-        % type recursion e.g.: List a -> Nil | Cons: { head: a, tail: List(a) }
-        true  -> 
-            BranchFun = cerl:c_fun([], call_type_tag(Tag, Args)),
-            {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])}
-    end;
+% expr of Form: kind/prelude/match(a)
+gen_expr(_, {qualified_variable_application, _, ModulePath, Name, Args}) -> 
+    ModuleName = module:beam_name(ModulePath),
+    {ok, cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(Name), Args)};
 
 % expr of form: T
 gen_expr(TypesEnv, {type, _, _, Path} = Term) ->
     Tag = symbol:tag(Term),
-    IsRecursive = lists:member(Tag, ast:get_tag(path, Term)),
-    IsDefined = maps:is_key(Path, TypesEnv),
     DomainForm = cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)]),
-    case {IsRecursive, IsDefined} of
-        {true, _}       -> BranchFun = cerl:c_fun([], DomainForm),
-                           {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
-        {_, true}       ->
-            case maps:get(Path, TypesEnv) of
-                {tagged, _, _, _}       -> {ok, DomainForm};
-                {type_def, _, _, _, _}  -> {ok, DomainForm};
-                {type, _, _, _}         -> {ok, Tag, cerl:c_atom(Tag)}
-            end
+    case maps:get(Path, TypesEnv) of
+        {tagged, _, _, _}       -> {ok, DomainForm};
+        {type_def, _, _, _, _}  -> {ok, DomainForm};
+        {type, _, _, _}         -> {ok, Tag, cerl:c_atom(Tag)}
     end;
 
 % expr of form: kind/prelude/Boolean
 gen_expr(_, {qualified_type, _, ModulePath, Name}) ->
     ModuleName = module:beam_name(ModulePath),
     {ok, cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(domain), [cerl:c_atom(Name)])};
+
+% expr of form `T` where T is recursive like `type T -> {a: Boolean, b: T}` 
+gen_expr(_, {recursive_type, _, _, _} = Term) ->
+    Tag = symbol:tag(Term),
+    BranchFun = cerl:c_fun([], domain(Tag)),
+    {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
 
 % expr of form: `k` in {k: val}
 gen_expr(_, {key, _, _} = Term) -> {ok, cerl:c_atom(symbol:tag(Term))};
@@ -131,8 +129,11 @@ call_type_domain(ExprForm, ArgForms) ->
                   [cerl:c_int(3), ExprForm]),
       ArgForms).
 
-call_type_tag(ModuleName, Tag, ArgForms) ->
-    Module = module:beam_name(ModuleName),
-    call_type_domain(cerl:c_call(cerl:c_atom(Module), cerl:c_atom(domain), [cerl:c_atom(Tag)]), ArgForms).
+domain(Tag) -> cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)]).
+domain(Module, Tag) -> cerl:c_call(cerl:c_atom(Module), cerl:c_atom(domain), [cerl:c_atom(Tag)]).
+
+call_type_tag(ModulePath, Tag, ArgForms) ->
+    Module = module:beam_name(ModulePath),
+    call_type_domain(domain(Module, Tag), ArgForms).
 call_type_tag(Tag, ArgForms) ->
-    call_type_domain(cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)]), ArgForms).
+    call_type_domain(domain(Tag), ArgForms).

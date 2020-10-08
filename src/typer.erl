@@ -98,12 +98,22 @@ get_vars(Term) when is_list(Term) -> utils:unique([V || T <- Term, V <- get_vars
 % types_pre adds a `path` tag to the term contexts and checks a few
 % assumptions about the type tree. It also renames `pairs` inside of a
 % dict to `dict_pair` to make it easier to generate erlang core afterwards
-make_types_pre(ArgsEnv) -> fun(Type, Scope, Term) -> types_pre(ArgsEnv, Type, Scope, Term) end.
+make_types_pre(ArgsEnv) -> fun(Type, Scope, Term) -> tag(types_pre(ArgsEnv, Type, Scope, Term)) end.
 make_types_post(ArgsEnv) -> fun(Type, Scope, Term) -> types_post(ArgsEnv, Type, Scope, Term) end.
 
+tag({error, Errs})      -> {error, Errs};
+tag({ok, Term})         -> {ok, ast:tag(path, Term)}.
+
+
 types_pre(_, top_level, _, {ast, _, _, _, _})  -> ok;
-types_pre(_, top_level, _, {def, _, _, _, _})  -> ok;
-types_pre(_, _, _, {type_def, _, Name, _, _} = Term) -> {ok, ast:tag(path, Term, [Name])};
+types_pre(_, _, _, {def, _, Name, _, _} = Term)  ->
+    F = fun(Path) -> [Name | Path] end,
+    Tagged = ast:tag(path, Term, F, []),
+    {ok, Tagged};
+types_pre(_, _, _, {type_def, _, Name, _, _} = Term) -> 
+    F = fun(Path) -> [Name | Path] end,
+    Tagged = ast:tag(path, Term, F, []),
+    {ok, Tagged};
 types_pre(ArgsEnv, _, _, {pair, Ctx, {type, _, _, Path} = T, Val}) ->
     F = fun(Tag) -> [symbol:tag(T) | Tag] end,
     Tagged = ast:tag(path, Val, F, []),
@@ -115,21 +125,42 @@ types_pre(_, Type, _, {dict, Ctx, Elements} = Term) ->
            ({pair, _, K, _})                -> error:format({unrecognized_tag_type, K}, {typegen, Type, Term});
            (Elem)                           -> error:format({unrecognized_product_elem, Elem}, {typegen, Type, Term}) end,
     error:map(error:collect([F(Elem) || Elem <- Elements]),
-              fun(TaggedElements) -> ast:tag(path, {dict, Ctx, TaggedElements}) end);
+              fun(TaggedElements) -> {dict, Ctx, TaggedElements} end);
+
 types_pre(_, pattern, _, {application, _, Expr, Args} = Term) ->
     error:format({pattern_application, Expr, Args}, {typegen, pattern, Term});
-types_pre(ArgsEnv, _, _, {application, Ctx, {qualified_type, _, ModulePath, Name}, Args}) ->
-    {ok, ast:tag(path, {qualified_application, Ctx, ModulePath, Name, Args})};
-types_pre(ArgsEnv, _, _, {application, Ctx, {qualified_variable, _, ModulePath, Name}, Args}) ->
-    {ok, ast:tag(path, {qualified_application, Ctx, ModulePath, Name, Args})};
+
+types_pre(_, _, _, {application, Ctx, {qualified_type, _, ModulePath, Name}, Args}) ->
+    {ok, {qualified_type_application, Ctx, ModulePath, Name, Args}};
+
+types_pre(_, _, _, {application, Ctx, {qualified_variable, _, ModulePath, Name}, Args}) ->
+    {ok, {qualified_variable_application, Ctx, ModulePath, Name, Args}};
+
+types_pre(_, _, _, {type, Ctx, Name, Path} = Term) ->
+    Tag = symbol:tag(Term),
+    PathTag = ast:get_tag(path, Term),
+    IsRecursive = lists:member(Tag, lists:droplast(PathTag)),
+    case IsRecursive of
+        true    -> {ok, {recursive_type, Ctx, Name, Path}};
+        false   -> {ok, Term}
+    end;
+
 types_pre(ArgsEnv, _, _, {application, Ctx, {type, _, _, _} = T, Args} = Term) ->
     Tag = symbol:tag(T),
     Vars = maps:get(Tag, ArgsEnv),
     case length(Vars) =:= length(Args) of
-        true    -> {ok, ast:tag(path, {type_application, Ctx, symbol:tag(T), Args})};
-        false   -> error:format({wrong_number_of_arguments, Tag, length(Args), length(Vars)}, {typegen, expr, Term})
+        false   -> error:format({wrong_number_of_arguments, Tag, length(Args), length(Vars)},
+                                {typegen, expr, Term});
+        true    -> 
+            PathTag = ast:get_tag(path, Term),
+            IsRecursive = lists:member(Tag, lists:droplast(PathTag)),
+            case IsRecursive of
+                true    -> {ok, {recursive_type_application, Ctx, Tag, Args}};
+                false   -> {ok, {application, Ctx, T, Args}}
+            end
     end;
-types_pre(_, _, _, Term) -> {ok, ast:tag(path, Term)}.
+
+types_pre(_, _, _, Term) -> {ok, Term}.
 
 
 % types_post collects all types defined by the type definitions in the AST.
