@@ -1,4 +1,4 @@
--module(typegen_test).
+-module(type_gen_test).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").

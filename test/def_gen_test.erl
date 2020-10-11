@@ -92,6 +92,18 @@ pattern_match3_test_() ->
                    ?test('Boolean/True', kind_test:blah('Boolean/True'))
            end).
 
+pattern_match_type_test_() ->
+    ?setup("module kind/test{ blah }\n"
+           "type T -> {key1: Boolean, key2: Option(Boolean)}\n"
+           "def blah a\n"
+           " | {key1: True, key2: k2} -> k2\n"
+           " | {key1: False, key2: Nil} -> Nil\n",
+           fun({ok, _}) ->
+                   [?test('Boolean/False', kind_test:blah({product, #{key1 => 'Boolean/True', key2 => 'Boolean/False'}})),
+                    ?test('Option/Nil', kind_test:blah({product, #{key1 => 'Boolean/False', key2 => 'Option/Nil'}}))]
+           end).
+
+
 underscore_arg_test_() ->
     ?setup("module kind/test { blip }\n"
            "def blip _ _ c -> c",
