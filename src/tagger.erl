@@ -90,10 +90,13 @@ tag_symbols(Type, Scope, {symbol, _, type, T} = Term) ->
 tag_symbols(Type, Scope, {symbol, Ctx, variable, S} = Term) ->
     io:format("Path of ~p: ~p~n", [S, path(Term)]),
     case {Type, maps:is_key(S, Scope)} of
-        {pattern, true}  -> error:format({symbol_in_pattern_already_defined, S}, {tagger, Type, Term});
-        {pattern, false} -> {ok, S, {variable, Ctx, S, symbol:id(path(Term))}};
         {expr, false}    -> error:format({undefined_variable, S}, {tagger, Type, Term});
-        {expr, true}     -> {ok, replace(Scope, S, Term)}
+        {expr, true}     -> {ok, replace(Scope, S, Term)};
+        {pattern, false} -> {ok, S, {variable, Ctx, S, symbol:id(path(Term))}};
+        {pattern, true}  -> case atom_to_list(S) of
+                                "_" -> {ok, S, {variable, Ctx, S, symbol:id(path(Term))}};
+                                _   -> error:format({symbol_in_pattern_already_defined, S}, {tagger, Type, Term})
+                            end
     end;
 tag_symbols(Type, Scope, {qualified_type, _, Symbols} = Term) ->
     Path = [S || {_, _, _, S} <- Symbols],

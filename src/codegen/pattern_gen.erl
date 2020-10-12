@@ -69,7 +69,15 @@ gen_pattern(_, _, {type_def, _, _, [], Expr}) -> {ok, Expr};
 
 % Pattern of shape: 'T' when 'T' is a type def with arguments
 gen_pattern(_, _, {type_def, Ctx, Name, _Args, _}) -> 
-    error:format({type_function_in_pattern, Name}, {pattern_gen, Ctx}).
+    error:format({type_function_in_pattern, Name}, {pattern_gen, Ctx});
+
+% Pattern of shape: `"string"`, `'atom'` or `3.14`
+gen_pattern(_, _, {value, _, Type, Val}) -> 
+    Bitstr = fun(V) -> cerl:c_bitstr(cerl:abstract(V), cerl:c_atom(undefined), cerl:c_atom(undefined), cerl:c_atom(utf8), cerl:abstract([unsigned, big])) end,
+    case Type of
+        string  -> {ok, [cerl:c_binary([Bitstr(V) || V <- unicode:characters_to_list(Val, utf8)])]};
+        _       -> {ok, [cerl:abstract(Val)]}
+    end.
 
 
 

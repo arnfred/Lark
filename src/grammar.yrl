@@ -1,13 +1,14 @@
 Terminals
     def type val 
     type_symbol var_symbol
-    integer float string
+    value
     open close square_open square_close curly_open curly_close
     apply comma newline assign
     module_keyword import_keyword
     pipe right_arrow slash colon.
 
 Nonterminals
+    literal
     all statements statement
     assignment function newtype module import
     implies
@@ -19,7 +20,7 @@ Nonterminals
     collection list dict sequence
     dict_elements dict_element
     flat_sum_list sum_list sum_terms sum_elem sum_or_expression
-    symbol symbols newlines elements literal element
+    symbol symbols newlines elements element
     pair pair_key pair_val
     qualified_symbol qualified_type qualified_variable qualified_type_type
     separator secondary_separator clause_separator.
@@ -38,6 +39,8 @@ all -> newlines statements : '$2'.
 
 newlines -> newline          : '$1'.
 newlines -> newline newlines : '$1'.
+
+literal -> value : '$1'.
 
 
 
@@ -103,15 +106,6 @@ import -> import_keyword qualified_symbol               : {import, ctx('$1'), un
 
 
 
-% Literals
-% --------
-
-literal -> string   : '$1'.
-literal -> integer  : '$1'.
-literal -> float    : '$1'.
-
-
-
 % Expressions
 % -----------
 
@@ -121,7 +115,7 @@ expression -> pair                  : '$1'.  % a: T
 expression -> collection            : '$1'.  % {a, b: T}
 expression -> symbol                : '$1'.  % a
 expression -> qualified_symbol      : '$1'.  % a/b/T
-expression -> literal               : '$1'.  % 1
+expression -> literal               : '$1'.  % 1 or "string" or 'atom'
 expression -> sequence              : '$1'.  % (val a = 1, a + b)
 
 expressions -> expression                        : ['$1'].
@@ -316,4 +310,4 @@ make_symbol({type_symbol, L, S}) -> {symbol, L, type, S}.
 ctx({_, Ctx})         -> Ctx;
 ctx({_, Ctx, _})      -> Ctx;
 ctx({_, Ctx, _, _})   -> Ctx;
-ctx([Head|_]) 		    -> ctx(Head).
+ctx([Head|_]) 		  -> ctx(Head).

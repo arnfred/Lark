@@ -230,10 +230,10 @@ step(_, _, _, {qualified_variable, _, _} = Term)    -> {ok, {#{}, Term}};
 step(_, _, _, {qualified_variable, _, _, _} = Term) -> {ok, {#{}, Term}};
 step(_, _, _, {key, _, _} = Term)                   -> {ok, {#{}, Term}};
 
-step(_, _, _, Atom) when is_atom(Atom)              -> {ok, {#{}, Atom}};
+step(_, _, _, {value, _, _, _} = Term)              -> {ok, {#{}, Term}};
 
 step(_, Type, _, Term) ->
-    error:format({unrecognized_term, term_type(Term), Type}, {ast, Term}).
+    error:format({unrecognized_term, Term, term_type(Term), Type}, {ast, Term}).
 
 map(Meta, Type, Scope, Elements) ->
     Mapped = [climb(Meta, Type, Scope, Elem) || Elem <- Elements],

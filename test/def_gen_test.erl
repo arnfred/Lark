@@ -193,3 +193,57 @@ sup_level_type_import_test_() ->
             fun({ok, _}) -> 
                     ?testEqual({sum, ordsets:from_list(['Test/Maybe', 'Boolean/True'])}, kind_test:'Test'())
             end)}.
+
+unicode_string_test_() ->
+    {"Support for string expressions in utf8",
+     ?setup("def main _ -> \"strings! ❤️\"",
+            fun({ok, Modules}) ->
+                    Mod = lists:last(Modules),
+                    ?testEqual(<<"strings! ❤️"/utf8>>, Mod:main("_"))
+            end)}.
+
+unicode_string_pattern_test_() ->
+    {"Support for string patterns in utf8",
+     ?setup("def main _\n"
+            " | \"❤️\" -> True\n"
+            " | _ -> False",
+            fun({ok, Modules}) ->
+                    Mod = lists:last(Modules),
+                    ?test('Boolean/True', Mod:main(<<"❤️"/utf8>>))
+            end)}.
+
+number_test_() ->
+    {"Support for number expressions",
+     ?setup("def main _ -> 3.14",
+            fun({ok, Modules}) ->
+                    Mod = lists:last(Modules),
+                    ?test(3.14, Mod:main("_"))
+            end)}.
+
+number_pattern_test_() ->
+    {"Support for numbers in patterns",
+     ?setup("def main _\n"
+            " | 3.14 -> True\n"
+            " | _ -> False",
+            fun({ok, Modules}) ->
+                    Mod = lists:last(Modules),
+                    ?test('Boolean/True', Mod:main(3.14))
+            end)}.
+
+atom_test() ->
+    {"Support for atoms",
+     ?setup("def main _ -> 'atom'",
+            fun({ok, Modules}) ->
+                    Mod = lists:last(Modules),
+                    ?test(atom, Mod:main("_"))
+            end)}.
+
+atom_pattern_test_() ->
+    {"Support for atoms in patterns",
+     ?setup("def main _\n"
+            " | 'atom' -> True\n"
+            " | _ -> False",
+            fun({ok, Modules}) ->
+                    Mod = lists:last(Modules),
+                    ?test('Boolean/True', Mod:main(atom))
+            end)}.

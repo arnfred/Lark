@@ -148,6 +148,9 @@ gen_expr(_, {lambda, Ctx, ClauseList}) ->
                            {ok, cerl:c_fun(Args, cerl:c_case(cerl:c_values(Args), Clauses))}
     end;
 
+% expr of form: `"test string"` or `1.32`
+gen_expr(_, {value, _, _, Val}) -> {ok, cerl:abstract(Val)};
+
 % expr of form: `(<Expr>)`
 gen_expr(TypesEnv, {tuple, _, [Expr]}) -> gen_expr(TypesEnv, Expr).
 
