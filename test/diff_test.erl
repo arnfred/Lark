@@ -1,6 +1,7 @@
 -module(diff_test).
 
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("test/macros.hrl").
 
 diff_sum_product_test_() ->
     Old = {product, #{blah => {values, ordsets:from_list([true, false])} } },
@@ -102,3 +103,10 @@ diff_sum_recur_diff_test_() ->
     Old = fun O() -> {sum, ordsets:from_list([{recur, O}])} end,
     New = fun N() -> {sum, ordsets:from_list([{recur, N}])} end,
     ?_assertEqual(none, domain:diff(Old(), New())).
+
+diff_list_test_() ->
+    [?test(none, domain:diff({list, [1, 2, 3]}, {list, [1, 2, 3]})),
+     ?testEqual({list, [none, #{old => 2, new => b}, none]},
+                domain:diff({list, [1, 2, 3]}, {list, [1, b, 3]})),
+     ?testEqual({list, #{only_in_old => [], only_in_new => [c], diff => [none, #{old => 2, new => b}]}},
+                domain:diff({list, [1, 2]}, {list, [1, b, c]}))].

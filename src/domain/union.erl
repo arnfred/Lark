@@ -29,6 +29,8 @@ union(D, {sum, D1}) -> union({sum, D1}, D);
 union({tagged, Tag, D1}, {tagged, Tag, D2}) -> {tagged, Tag, union(D1, D2)};
 union({product, D1}, {product, D2}) -> 
     {sum, ordsets:from_list([{product, D1}, {product, D2}])};
+union(L1, L2) when is_list(L1) andalso is_list(L2) andalso length(L1) =:= length(L2) -> 
+    [union(E1, E2) || {E1, E2} <- lists:zip(L1, L2)];
 union({f, Name1, F1}, {f, Name2, F2}) -> 
     Name = list_to_atom(lists:flatten([atom_to_list(Name1), "_", atom_to_list(Name2)])), 
     case {domain_util:get_arity(F1), domain_util:get_arity(F2)} of
@@ -36,6 +38,3 @@ union({f, Name1, F1}, {f, Name2, F2}) ->
         _ -> {sum, ordsets:from_list([{f, Name1, F1}, {f, Name2, F2}])}
     end;
 union(D1, D2) -> {sum, ordsets:from_list([D1, D2])}.
-
-get_arity(Fun) ->
-    proplists:get_value(arity, erlang:fun_info(Fun)).

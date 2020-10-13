@@ -22,6 +22,10 @@ diff(Path, Old, {recur, NewF}) ->
         false -> diff([Tag | Path], Old, NewF())
     end;
 diff(_, Same, Same) -> none;
+diff(Path, {sum, Old}, {sum, New}) -> case diff_set(Path, Old, New) of
+                                          none  -> none;
+                                          Diff  -> {sum, Diff}
+                                      end;
 diff(Path, {Type, Old}, {Type, New}) -> 
     case diff(Path, Old, New) of
         none -> none;
@@ -52,12 +56,28 @@ diff(Path, Old, New) when is_map(Old), is_map(New) ->
                diff => DiffDomains}
     end;
 
-diff(Path, Old, New) -> 
-    case ordsets:is_set(Old) andalso ordsets:is_set(New) of
-        true -> diff_set(Path, Old, New);
-        false -> #{old => Old,
-                   new => New}
-    end.
+diff(Path, L1, L2) when is_list(L1), is_list(L2) ->
+    case length(L1) =:= length(L2) of
+        true    ->
+            Diffs = [diff(Path, E1, E2) || {E1, E2} <- lists:zip(L1, L2)],
+            case lists:all(fun(E) -> E =:= none end, Diffs) of
+                true    -> none;
+                false   -> Diffs
+            end;
+        false   ->
+            MinLength = min(length(L1), length(L2)),
+            MaxLength = max(length(L1), length(L2)),
+            L1Init = lists:sublist(L1, MinLength),
+            L2Init = lists:sublist(L2, MinLength),
+            L1Tail = lists:sublist(L1, MinLength + 1, MaxLength - MinLength),
+            L2Tail = lists:sublist(L2, MinLength + 1, MaxLength - MinLength),
+            #{only_in_old => L1Tail,
+              only_in_new => L2Tail,
+              diff => diff(Path, L1Init, L2Init)}
+    end;
+
+diff(_, Old, New) -> #{old => Old,
+                       new => New}.
 
 diff_set(Path, Old, New) ->
     InOld = ordsets:subtract(Old, New),

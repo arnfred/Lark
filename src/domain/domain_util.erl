@@ -1,8 +1,10 @@
 -module(domain_util).
--export([get_arity/1, mapfun/2, mapfun/3]).
+-export([get_arity/1, set/1, mapfun/2, mapfun/3]).
 
 get_arity(Fun) ->
     proplists:get_value(arity, erlang:fun_info(Fun)).
+
+set(Elems) -> lists:foldl(fun ordsets:add_element/2, ordsets:new(), Elems).
 
 mapfun(Mapper, Fun) -> 
     case get_arity(Fun) of

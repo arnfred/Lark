@@ -117,6 +117,7 @@ expression -> symbol                : '$1'.  % a
 expression -> qualified_symbol      : '$1'.  % a/b/T
 expression -> literal               : '$1'.  % 1 or "string" or 'atom'
 expression -> sequence              : '$1'.  % (val a = 1, a + b)
+expression -> sum_list              : '$1'.  % (A | B)
 
 expressions -> expression                        : ['$1'].
 expressions -> expression newlines               : ['$1'].
@@ -225,8 +226,8 @@ collection -> list : '$1'.
 collection -> dict : '$1'.
 
 list -> square_open square_close                             : {list, ctx('$1'), []}.
-list -> square_open expressions square_close               : {list, ctx('$1'), '$2'}.
-list -> square_open newlines expressions square_close      : {list, ctx('$1'), '$3'}.
+list -> square_open expressions square_close                 : {list, ctx('$1'), '$2'}.
+list -> square_open newlines expressions square_close        : {list, ctx('$1'), '$3'}.
 dict -> curly_open curly_close                               : {dict, ctx('$1'), []}.
 dict -> curly_open dict_elements curly_close                 : {dict, ctx('$1'), '$2'}.
 dict -> curly_open newlines dict_elements curly_close        : {dict, ctx('$1'), '$3'}.

@@ -1,6 +1,7 @@
 -module(intersection_test).
 
 -include_lib("eunit/include/eunit.hrl").
+-include("test/macros.hrl").
 
 intersection_array_test_() ->
     D = blip,
@@ -150,3 +151,15 @@ intersection_infinite_recur_test_() ->
     Actual = domain:compact(Inf1()),
     Expected = {error, [{{possibly_infinite_recursion}, {domain}}]},
     ?_assertEqual(Expected, Actual).
+
+list_equal_length_test_() ->
+    L1 = [{sum, ordsets:from_list([a, b])}, {sum, ordsets:from_list([1, 2])}],
+    L2 = [{sum, ordsets:from_list([b, c])}, {sum, ordsets:from_list([2, 3])}],
+    Expected = [b, 2],
+    ?testEqual(Expected, domain:intersection(L1, L2)).
+
+list_unqeual_length_test_() ->
+    L1 = [a, b],
+    L2 = [1, 2, 3],
+    Expected = none,
+    ?testEqual(Expected, domain:intersection(L1, L2)).

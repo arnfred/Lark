@@ -6,6 +6,7 @@
 compact({sum, S}) -> compact_sum({sum, S});
 compact({product, Map}) -> compact_product({product, Map});
 compact({tagged, Tag, Domain}) -> {tagged, Tag, compact(Domain)};
+compact(L) when is_list(L) -> [compact(E) || E <- L];
 compact({f, Name, F}) -> {f, Name, domain_util:mapfun(fun(D) -> compact(D) end, F)};
 compact({recur, D}) -> {recur, fun() -> compact(D()) end};
 compact(T) -> T.
@@ -27,8 +28,8 @@ compact_product({product, ProductMap}) ->
 
 compact_sum({sum, SumSet}) ->
     Elements = [compact(E) || E <- ordsets:to_list(SumSet)],
-    IsRecur = fun({recur, _}) -> true;
-                 (_) -> false end,
+    IsRecur = fun({recur, _})   -> true;
+                 (_)            -> false end,
     case lists:partition(IsRecur, Elements) of
         {[], []}        -> none;
         {[], _}         -> list_to_sum(compact_sum_groups(Elements));
@@ -60,7 +61,7 @@ compact_sum_groups(Elements) ->
                      ({_, Others})         -> Others
                   end, Keyed),
 
-    lists:flatten(L).
+    [E || Es <- L, E <- Es].
 
 list_to_sum([]) -> none;
 list_to_sum([D]) -> D;

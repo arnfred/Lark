@@ -45,6 +45,9 @@ intersection({sum, D1}, D) ->
     {sum, ordsets:from_list([intersection(D, Di) || Di <- D1])};
 intersection(D, {sum, D1}) -> intersection({sum, D1}, D);
 
+intersection(L1, L2) when is_list(L1) andalso is_list(L2) andalso length(L1) =:= length(L2) ->
+    [intersection(E1, E2) || {E1, E2} <- lists:zip(L1, L2)];
+
 intersection({tagged, Tag, D1}, {tagged, Tag, D2}) -> 
     propagate_none({tagged, Tag, intersection(D1, D2)});
 intersection({product, D1}, {product, D2}) -> propagate_none({product, intersection(D1, D2)});

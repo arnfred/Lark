@@ -165,6 +165,12 @@ step(Meta, Type, Scope, {sum, Context, Expressions}) when is_list(Expressions) -
         {ok, {Envs, TExprs}}   -> {ok, {merge(Envs), {sum, Context, TExprs}}}
     end;
 
+step(Meta, Type, Scope, {list, Context, Expressions}) when is_list(Expressions) ->
+    case map(Meta, Type, Scope, Expressions) of
+        {error, Errs}          -> {error, Errs};
+        {ok, {Envs, TExprs}}   -> {ok, {merge(Envs), {list, Context, TExprs}}}
+    end;
+
 step(Meta, expr, Scope, {'let', Context, Pattern, Expr, Term}) ->
     error:flatmap2(climb(Meta, pattern, Scope, Pattern),
                    climb(Meta, expr, Scope, Expr),

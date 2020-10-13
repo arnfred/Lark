@@ -55,6 +55,10 @@ gen_expr(_, {sum, _, Elements}) ->
     DomainSet = cerl:c_call(cerl:c_atom(ordsets), cerl:c_atom(from_list), [SumElements]),
     {ok, cerl:c_tuple([cerl:c_atom(sum), DomainSet])};
 
+% expr of form: [1, 2, 3]
+gen_expr(_, {list, _, Elements}) ->
+    {ok, cerl:make_list(Elements)};
+
 % the pair of `k: a` in the form {k: a, ...}
 gen_expr(_, {dict_pair, _, K, V}) -> {ok, cerl:c_map_pair(K, V)};
 

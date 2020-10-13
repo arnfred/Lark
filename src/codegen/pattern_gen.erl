@@ -55,6 +55,11 @@ gen_pattern(_, _, {tagged, _, _, Vals} = Term) ->
 gen_pattern(_, _, {sum, _, ElemList}) ->
     {ok, [E || Elems <- utils:combinations(ElemList), E <- Elems]};
 
+% Pattern of shape: '[1, 2]'
+gen_pattern(_, _, {list, _, ElemList}) ->
+    Elements = lists:flatten(ElemList),
+    {ok, [cerl:make_list(Elements)]};
+
 % Pattern of shape: module/T(a, b)
 % TODO: To call arguments we need to compile the arguments from terms to domains
 % Simple type T         : symbol:tag(Term)

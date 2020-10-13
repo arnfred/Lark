@@ -1,6 +1,7 @@
 -module(union_test).
 
 -include_lib("eunit/include/eunit.hrl").
+-include("test/macros.hrl").
 
 union_array_test_() ->
     D = blip,
@@ -160,3 +161,16 @@ union_merge_recur_products_with_single_key_test() ->
     io:format("Actual: ~p~n", domain:expand(10, [Actual])),
     Expected = {product, #{r => {sum, ordsets:from_list([{recur, P1}, {recur, P2}])}}},
     ?assertEqual(none, domain:diff(Expected, Actual)).
+
+list_equal_length_test_() ->
+    L1 = [a, b],
+    L2 = [1, 2],
+    Expected = [domain:union(a, 1), domain:union(b, 2)],
+    ?testEqual(Expected, domain:union(L1, L2)).
+
+list_unqeual_length_test_() ->
+    L1 = [a, b],
+    L2 = [1, 2, 3],
+    Expected = {sum, ordsets:from_list([L1, L2])},
+    ?testEqual(Expected, domain:union(L1, L2)).
+

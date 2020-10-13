@@ -247,3 +247,21 @@ atom_pattern_test_() ->
                     Mod = lists:last(Modules),
                     ?test('Boolean/True', Mod:main(atom))
             end)}.
+
+list_test_() ->
+    {"Support for lists",
+     ?setup("def main _ -> [1, 2, 3]",
+            fun({ok, Modules}) ->
+                    Mod = lists:last(Modules),
+                    ?test([1, 2, 3], Mod:main('_'))
+            end)}.
+
+list_pattern_test_() ->
+    {"Support for lists in patterns",
+     ?setup("def main a\n"
+            " | [1, 2, b] -> b\n"
+            " | _         -> a",
+            fun({ok, Modules}) ->
+                    Mod = lists:last(Modules),
+                    ?test(3, Mod:main([1, 2, 3]))
+            end)}.

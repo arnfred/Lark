@@ -1,5 +1,6 @@
 -module(compact_test).
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("test/macros.hrl").
 
 compact_sum_sum_test_() ->
     Expected = {sum, ordsets:from_list([a, b, c])},
@@ -48,7 +49,7 @@ compact_recur_flatten_test_() ->
     [?_assertMatch({product, _}, Actual),
      ?_assertMatch([{recurse, {recur, _}}], maps:to_list(Map))].
 
-compact_list_test_() ->
+compact_recursive_linked_list_test_() ->
     List = fun List() -> {sum, ordsets:from_list(['List/Nil',
                                                   {tagged, 'List/Cons', 
                                                    #{head => 'List/Nil',
@@ -56,3 +57,13 @@ compact_list_test_() ->
     Input = List(),
     Actual = domain:compact(Input),
     ?_assertEqual(none, domain:diff(Input, Actual)).
+
+list_compact_test_() ->
+    L = [{sum, ordsets:from_list([b, none])}, {sum, ordsets:from_list([2, none])}],
+    Expected = [b, 2],
+    ?testEqual(Expected, domain:compact(L)).
+
+sum_list_compact_test_() ->
+    L = {sum, ordsets:from_list([a, [1, 2]])},
+    Expected = {sum, ordsets:from_list([a, [1, 2]])},
+    ?testEqual(Expected, L).
