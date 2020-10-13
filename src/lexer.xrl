@@ -1,10 +1,10 @@
 Definitions.
 
-Symbol            = [a-z_][a-zA-Z0-9_-]*
-Type_Symbol       = [A-Z][a-zA-Z0-9_-]*
+Symbol            = [a-z_\<=>*^+$-][a-zA-Z0-9_\<=>*^+$-]*
+Type_Symbol       = [A-Z][a-zA-Z0-9_<=>-]*
 Number            = [0-9]
 String            = "(\\\^.|\\.|[^\"])*"
-Atom              = '(\\\^.|\\.|[^\"])*'
+Atom              = '(\\\^.|\\.|[^\'])*'
 RightArrow        = ->
 LeftArrow         = <-
 
@@ -37,7 +37,7 @@ module                  : {token, {module_keyword,  #{line => TokenLine}, list_t
 {String}                : {token, {value,           #{line => TokenLine}, string, build_string(TokenChars, TokenLen)}}.
 {Atom}                  : {token, {value,           #{line => TokenLine}, atom, build_atom(TokenChars, TokenLen)}}.
 [\s]+                   : skip_token.
-%.*                     : skip_token.
+//.*                    : skip_token.
 
 Erlang code.
 

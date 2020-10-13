@@ -83,6 +83,14 @@ pattern_match_expr_syntax2_test_() ->
                    ?test('Boolean/True', kind_test:test3('Boolean/False'))
            end).
 
+pattern_match_expr_syntax3_test_() ->
+    ?setup("module kind/test { test4 }\n"
+           "def test4 a -> a.match(\n"
+           "    False -> True\n"
+           "    True -> False)",
+           fun({ok, _}) ->
+                   ?test('Boolean/True', kind_test:test4('Boolean/False'))
+           end).
 
 pattern_match3_test_() ->
     ?setup("module kind/test { blah }\n"
@@ -230,9 +238,10 @@ number_pattern_test_() ->
                     ?test('Boolean/True', Mod:main(3.14))
             end)}.
 
-atom_test() ->
+atom_test_() ->
     {"Support for atoms",
-     ?setup("def main _ -> 'atom'",
+     ?setup("def main _ -> 'atom'.match(\n"
+            "    atom -> atom)",
             fun({ok, Modules}) ->
                     Mod = lists:last(Modules),
                     ?test(atom, Mod:main("_"))

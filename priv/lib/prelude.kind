@@ -1,3 +1,5 @@
+import erlang/{<, >}
+
 module kind/prelude {
     Boolean
     Boolean/True
@@ -5,6 +7,8 @@ module kind/prelude {
     Option
     Option/Nil
     match
+    compare
+    Compare
 }
 
 type Boolean -> True | False
@@ -12,3 +16,13 @@ type Boolean -> True | False
 type Option a -> a | Nil
 
 def match a f -> f(a)
+
+type Compare -> GT | LT | EQ
+import Compare/_
+
+// No inline functions yet, so it's a bit clunky
+def compare a b -> >(a, b).match(
+    'true'  -> GT
+    'false' -> <(a, b).match(
+        'false' -> EQ
+        'true'  -> LT))

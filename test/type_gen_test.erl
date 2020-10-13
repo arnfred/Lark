@@ -597,7 +597,6 @@ var_application_in_type_def_test_() ->
             #{add_kind_libraries => true},
             fun({ok, Mods}) ->
                     Mod = lists:last(Mods),
-                    Actual = 
                     [?test('Boolean/False', Mod:'Test'('Boolean/True'))]
             end)}.
              
