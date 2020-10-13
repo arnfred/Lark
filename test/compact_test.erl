@@ -8,8 +8,8 @@ compact_sum_sum_test_() ->
     ?_assertEqual(Expected, Actual).
 
 compact_product_sum_sum_test_() ->
-    Expected = {product, #{a => {sum, ordsets:from_list([a, b, c])}}},
-    Actual = domain:compact({product, #{a => {sum, ordsets:from_list([a,{sum, ordsets:from_list([b,c])}])}}}),
+    Expected = #{a => {sum, ordsets:from_list([a, b, c])}},
+    Actual = domain:compact(#{a => {sum, ordsets:from_list([a,{sum, ordsets:from_list([b,c])}])}}),
     ?_assertEqual(Expected, Actual).
 
 compact_tagged_sum_sum_test_() ->
@@ -35,19 +35,18 @@ compact_f_test_() ->
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 compact_recur_test_() ->
-    R = fun R() -> {sum, ordsets:from_list([a, {product, #{recurse => {recur, R}}}])} end,
+    R = fun R() -> {sum, ordsets:from_list([a, #{recurse => {recur, R}}])} end,
     Input = {recur, R},
     Expected = {recur, R},
     ?_assertEqual(none, domain:diff(Expected, domain:compact(Input))).
 
 compact_recur_flatten_test_() ->
     % Sum with one item will be compacted: _____________________________________
-    R = fun R() -> {sum, ordsets:from_list([{product, #{recurse => {recur, R}}}])} end,
+    R = fun R() -> {sum, ordsets:from_list([#{recurse => {recur, R}}])} end,
     Input = {recur, R},
     Actual = domain:compact(Input),
-    {product, Map} = Actual,
-    [?_assertMatch({product, _}, Actual),
-     ?_assertMatch([{recurse, {recur, _}}], maps:to_list(Map))].
+    [?_assertMatch(_, Actual),
+     ?_assertMatch([{recurse, {recur, _}}], maps:to_list(Actual))].
 
 compact_recursive_linked_list_test_() ->
     List = fun List() -> {sum, ordsets:from_list(['List/Nil',
@@ -66,4 +65,9 @@ list_compact_test_() ->
 sum_list_compact_test_() ->
     L = {sum, ordsets:from_list([a, [1, 2]])},
     Expected = {sum, ordsets:from_list([a, [1, 2]])},
-    ?testEqual(Expected, L).
+    ?testEqual(Expected, domain:compact(L)).
+
+sum_list_sum_compact_test_() ->
+    L = {sum, ordsets:from_list([[{sum, ordsets:from_list([a, 1])}, {sum, ordsets:from_list([b, 2])}], [1, 2]])},
+    Expected = [{sum, ordsets:from_list([a, 1])}, {sum, ordsets:from_list([b, 2])}],
+    ?testEqual(Expected, domain:compact(L)).

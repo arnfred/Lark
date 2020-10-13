@@ -72,7 +72,7 @@ gen_expr(_, {dict_pair, _, K, V}) -> {ok, cerl:c_map_pair(K, V)};
 
 % literal of form: { ... }
 gen_expr(_, {dict, _, Elements}) ->
-    {ok, cerl:c_tuple([cerl:c_atom(product), cerl:c_map(Elements)])};
+    {ok, cerl:c_map(Elements)};
 
 % expr of form: `f(a)` or `T(a)`
 % f can either be a type (encoded as {f, Tag, Function}) or a Function.

@@ -42,7 +42,7 @@ product_type_test_() ->
      said type",
     ?setup("type P -> {a: A, b: B}",
            fun({ok, [Mod | _]}) ->
-                   Expected = {product, #{a => 'P/A', b => 'P/B'}},
+                   Expected = #{a => 'P/A', b => 'P/B'},
                    Actual = Mod:domain('P'),
                    Actual2 = Mod:'P'(),
                    [?test(none, domain:diff(Expected, Actual)),
@@ -54,7 +54,7 @@ tagged_type_test_() ->
      "said type",
      ?setup("type P -> K: {a: A, b: B}",
             fun({ok, [Mod | _]}) ->
-                    Expected = {tagged, 'P/K', {product, #{a => 'P/A', b => 'P/B'}}},
+                    Expected = {tagged, 'P/K', #{a => 'P/A', b => 'P/B'}},
                     Actual = Mod:domain('P'),
                     Actual2 = Mod:'P'(),
                     [?test(none, domain:diff(Expected, Actual)),
@@ -128,7 +128,7 @@ product_sum_test_() ->
             "type Elems -> {elem: Args}",
             fun({ok, [Mod | _]}) ->
                     Actual = Mod:domain('Elems'),
-                    Expected = {product, #{elem => {sum, ['Args/A', 'Args/B', 'Args/C']}}},
+                    Expected = #{elem => {sum, ['Args/A', 'Args/B', 'Args/C']}},
                     [?test(none, domain:diff(Expected, Actual))]
             end)}.
 
@@ -139,7 +139,7 @@ buried_var_test_() ->
             "type Hidden -> Treasure",
             fun({ok, [Mod | _]}) ->
                     Expected = {tagged, 'Buried/Bottom', 
-                                {product, #{var => 'Hidden/Treasure'}}},
+                                #{var => 'Hidden/Treasure'}},
                     {f, 'Buried/Bottom', DomainFun} = Mod:domain('Buried/Bottom'),
                     Actual = DomainFun('Hidden/Treasure'),
                     [?test(none, domain:diff(Expected, Actual))]
@@ -188,10 +188,10 @@ application_inner_level_f_test_() ->
                     Actual = DomainFun('Option/None'),
                     Expected = {sum, ordsets:from_list(['Option/None',
                                                         {tagged, 'Option/P',
-                                                         {product, #{a => 'Option/None'}}},
+                                                         #{a => 'Option/None'}},
                                                         {tagged, 'Option/O',
                                                          {tagged, 'Option/P',
-                                                          {product, #{a => 'Option/None'}}}}])},
+                                                          #{a => 'Option/None'}}}])},
                     [?test(none, domain:diff(Expected, Actual))]
             end)}.
 
@@ -228,7 +228,7 @@ application_product_test_() ->
      ?setup("type P a b -> {a: a, b: b}\n"
             "type Test -> P(A, B)",
             fun({ok, [Mod | _]}) ->
-                    Expected = {product, #{a => 'Test/A', b => 'Test/B'}},
+                    Expected = #{a => 'Test/A', b => 'Test/B'},
                     [?test(Expected, Mod:domain('Test'))]
             end)}.
 
@@ -243,9 +243,9 @@ recursion_top_level_f_test_() ->
                     {f, 'List', DomainFun} = Mod:domain('List'),
                     Actual = DomainFun('List/Nil'),
                     {_, [_, {_, _, {recur, RecurFun}}]} = Actual,
-                    {product, ProductMap} = RecurFun(),
+                    ProductMap = RecurFun(),
                     [?test({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, Actual),
-                     ?test({product, _}, RecurFun()),
+                     ?test(_, RecurFun()),
                      ?test('List/Nil', maps:get(head, ProductMap)),
                      ?test({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, maps:get(tail, ProductMap))]
             end)}.
@@ -257,9 +257,9 @@ recursion_top_level_non_function_test_() ->
            fun({ok, [Mod | _]}) ->
                    Actual = Mod:domain('List'),
                    {_, [_, {_, _, {recur, RecurFun}}]} = Actual,
-                   {product, ProductMap} = RecurFun(),
+                   ProductMap = RecurFun(),
                    [?test({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, Actual),
-                    ?test({product, _}, RecurFun()),
+                    ?test(_, RecurFun()),
                     ?test({sum, ['Args/A', 'Args/B', 'Args/C']}, maps:get(elem, ProductMap)),
                     ?test({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, maps:get(tail, ProductMap))]
            end)}.
@@ -293,7 +293,7 @@ pattern_variable1_test_() ->
             fun({ok, [Mod | _]}) ->
                     {f, 'X', DomainFun} = Mod:domain('X'),
                     [?test('X/T', DomainFun('X/T')),
-                     ?test(none, domain:diff({product, #{t => 'S'}}, DomainFun('S')))]
+                     ?test(none, domain:diff(#{t => 'S'}, DomainFun('S')))]
             end)}.
 
 pattern_variable2_test_() ->
@@ -315,12 +315,12 @@ pattern_dict_test_() ->
             " | {a, b} -> a | b",
             fun({ok, [Mod | _]}) ->
                     {f, 'Test', DomainFun} = Mod:domain('Test'),
-                    Input1 = {product, #{a => 'Args/A', b => 'Args/B'}},
+                    Input1 = #{a => 'Args/A', b => 'Args/B'},
                     Actual1 = DomainFun(Input1),
                     Expected1 = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
 
                     % Test behavior with unused key
-                    Input2 = {product, #{a => 'Args/A', b => 'Args/B', c => 'Args/C'}},
+                    Input2 = #{a => 'Args/A', b => 'Args/B', c => 'Args/C'},
                     Actual2 = DomainFun(Input2),
                     Expected2 = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
                     [?test(none, domain:diff(Expected1, Actual1)),
@@ -338,7 +338,7 @@ pattern_dict_pair_test_() ->
             " | {a: s, b} -> s | b",
             fun({ok, [Mod | _]}) ->
                     {f, 'Test', DomainFun} = Mod:domain('Test'),
-                    Input = {product, #{a => 'Args/A', b => 'Args/B', c => 'Args/C'}},
+                    Input = #{a => 'Args/A', b => 'Args/B', c => 'Args/C'},
                     Actual = DomainFun(Input),
                     Expected = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
                     [?test(none, domain:diff(Expected, Actual))]
@@ -352,14 +352,14 @@ pattern_dict_dict_test_() ->
             " | {a: {a}, b} -> a | b",
             fun({ok, [Mod | _]}) ->
                     {f, 'Test', DomainFun} = Mod:domain('Test'),
-                    Input1 = {product, #{a => {product, #{a => 'Args/A'}}, 
-                                         b => 'Args/B', 
-                                         c => 'Args/C'}},
+                    Input1 = #{a => #{a => 'Args/A'}, 
+                                        b => 'Args/B', 
+                                        c => 'Args/C'},
                     Actual1 = DomainFun(Input1),
                     Expected1 = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
 
-                    Input2 = {product, #{a => 'Args/A', 
-                                         b => 'Args/C'}},
+                    Input2 = #{a => 'Args/A', 
+                                        b => 'Args/C'},
                     [?test(none, domain:diff(Expected1, Actual1)),
                      ?test('Args/A', DomainFun(Input2))]
             end)}.
@@ -374,13 +374,13 @@ pattern_dict_sum_test_() ->
             " | {a, b: Args} -> t",
             fun({ok, [Mod | _]}) ->
                     {f, 'Test', DomainFun} = Mod:domain('Test'),
-                    Input1 = {product, #{a => 'Args/A', 
-                                         b => 'Args/B'}},
+                    Input1 = #{a => 'Args/A', 
+                                        b => 'Args/B'},
                     Actual1 = DomainFun(Input1),
                     Expected1 = 'Args/A',
 
-                    Input2 = {product, #{a => 'Args/A', 
-                                         b => 'Args/C'}},
+                    Input2 = #{a => 'Args/A', 
+                                        b => 'Args/C'},
                     Expected2 = Input2,%{sum, ordsets:from_list(['Args/A', 'Args/C'])},
                     [?test(none, domain:diff(Expected1, Actual1)),
                      ?test(none, domain:diff(Expected2, DomainFun(Input2)))]
@@ -431,10 +431,10 @@ pattern_sum_tagged_test_() ->
             " | _ -> Unmatched",
             fun({ok, [Mod | _]}) ->
                     {f, 'Test', DomainFun} = Mod:domain('Test'),
-                    [?test('Args/B', DomainFun({tagged, 'Args/A', {product, #{b => 'Args/B'}}})),
-                     ?test('Args/C', DomainFun({tagged, 'Args/A', {product, #{c => 'Args/C'}}})),
-                     ?test('Test/Unmatched', DomainFun({tagged, 'Args/A', {product, #{a => 'Args/A'}}})),
-                     ?test('Test/Unmatched', DomainFun({tagged, 'Args/B', {product, #{b => 'Args/B'}}}))]
+                    [?test('Args/B', DomainFun({tagged, 'Args/A', #{b => 'Args/B'}})),
+                     ?test('Args/C', DomainFun({tagged, 'Args/A', #{c => 'Args/C'}})),
+                     ?test('Test/Unmatched', DomainFun({tagged, 'Args/A', #{a => 'Args/A'}})),
+                     ?test('Test/Unmatched', DomainFun({tagged, 'Args/B', #{b => 'Args/B'}}))]
             end)}.
 
 pattern_product_sum_test_() ->
@@ -446,10 +446,10 @@ pattern_product_sum_test_() ->
             " | _ -> Unmatched",
             fun({ok, [Mod | _]}) ->
                     {f, 'Test', DomainFun} = Mod:domain('Test'),
-                    [?test('Test/Matched', DomainFun({product, #{x => 'X/Y', xx => 'X/Y'}})),
-                     ?test('Test/Matched', DomainFun({product, #{x => 'X/Z', xx => 'X/Y'}})),
-                     ?test('Test/Matched', DomainFun({product, #{x => 'X/Y', xx => 'X/Z'}})),
-                     ?test('Test/Matched', DomainFun({product, #{x => 'X/Z', xx => 'X/Z'}})),
+                    [?test('Test/Matched', DomainFun(#{x => 'X/Y', xx => 'X/Y'})),
+                     ?test('Test/Matched', DomainFun(#{x => 'X/Z', xx => 'X/Y'})),
+                     ?test('Test/Matched', DomainFun(#{x => 'X/Y', xx => 'X/Z'})),
+                     ?test('Test/Matched', DomainFun(#{x => 'X/Z', xx => 'X/Z'})),
                      ?test('Test/Unmatched', DomainFun('Test/Matched'))]
             end)}.
 
@@ -486,7 +486,7 @@ tagged_pair_in_pattern_test_() ->
             " | value -> Blop: {key: value}",
             fun({ok, [Mod | _]}) ->
                     Expected = {tagged, 'Blip/Blop',
-                                {product, #{key => 'Test/T'}}},
+                                #{key => 'Test/T'}},
                     [?test(none, domain:diff(Expected, Mod:domain('Test')))]
             end)}.
 
@@ -504,7 +504,7 @@ module_tagged_type_test_() ->
      ?setup("module test { T }\n"
             "type T a -> F: {a: a}",
             fun({ok, _}) ->
-                    [?test({tagged, 'T/F', {product, #{a := 'Input'}}}, 'test_T':'F'('Input'))]
+                    [?test({tagged, 'T/F', #{a := 'Input'}}, 'test_T':'F'('Input'))]
             end)}.
 
 unused_type_parameter_test_() ->

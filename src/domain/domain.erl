@@ -1,23 +1,7 @@
 -module(domain).
--export([domain/1, diff/2, union/1, union/2, intersection/1, intersection/2, compact/1, subset/2, lookup/2, expand/2]).
+-export([diff/2, union/1, union/2, intersection/1, intersection/2, compact/1, subset/2, lookup/2, expand/2]).
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("test/macros.hrl").
-
-domain(D) when is_record(D, value, 2) -> D;
-domain(D) when is_record(D, list, 2) -> D;
-domain(D) when is_record(D, sum, 2) -> D;
-domain(D) when is_record(D, product, 2) -> D;
-domain(D) when is_record(D, recur, 2) -> D;
-domain(D) when is_record(D, tagged, 3) -> D;
-domain(D) when is_record(D, f, 3) -> D;
-domain(Atom) when is_atom(Atom) -> {value, Atom};
-domain(Number) when is_number(Number) -> {value, Number};
-domain(Binary) when is_binary(Binary) -> {value, Binary};
-domain(Tuple) when is_tuple(Tuple) -> {list, [domain(E) || E <- tuple_to_list(Tuple)]};
-domain(List) when is_list(List) -> {list, [domain(E) || E <- List]};
-domain(Map) when is_map(Map) -> {product, maps:from_list([{Key, domain(Val)} || {Key, Val} <- maps:to_list(Map)])};
-domain(F) when is_function(F) -> NewF = domain_util:mapfun(fun domain/1, F),
-                                 {f, element(2, erlang:fun_info(F, name)), NewF}.
 
 union(Ds) when is_list(Ds) -> 
     Unionized = lists:foldl(fun(D1,D2) -> union:union(D1, D2) end, none, Ds),
@@ -36,9 +20,9 @@ diff(Old, New) -> diff:diff([], Old, New).
 compact(D) -> unroll(compact:compact(D)).
 
 lookup({recur, F}, Elems) -> lookup(unroll(F()), Elems);
-lookup({product, Map}, Elems) -> 
-    compact({product, maps:from_list([{K, intersection(maps:get(K, Map), D)} || 
-                              {K, D} <- maps:to_list(Elems), maps:is_key(K, Map)])});
+lookup(Map, Elems) when is_map(Map) -> 
+    compact(maps:from_list([{K, intersection(maps:get(K, Map), D)} || 
+                            {K, D} <- maps:to_list(Elems), maps:is_key(K, Map)]));
 lookup({tagged, _, D}, Elems) -> lookup(D, Elems).
 
 unroll(D) -> unroll_(100, D).
@@ -70,13 +54,13 @@ subset_non_sum_sum_test_() ->
     ?_assertEqual(false, subset(D1, D2)).
     
 subset_product_product_test_() ->
-    D1 = {product, #{a => 1, b => 2}},
-    D2 = {product, #{a => 1}},
+    D1 = #{a => 1, b => 2},
+    D2 = #{a => 1},
     ?_assertEqual(true, subset(D1, D2)).
 
 subset_non_product_product_test_() ->
-    D1 = {product, #{a => 1, b => 2}},
-    D2 = {product, #{a => 2}},
+    D1 = #{a => 1, b => 2},
+    D2 = #{a => 2},
     ?_assertEqual(false, subset(D1, D2)).
 
 subset_tagged_tagged_test_() ->
@@ -90,49 +74,37 @@ subset_non_tagged_tagged_test_() ->
     ?_assertEqual(false, subset(D1, D2)).
 
 subset_sum_product_test_() ->
-    D1 = {product, #{a => 2, b => 3, c => 4}},
-    D2 = {sum, ordsets:from_list([{product, #{a => 1, b => 2}},
-                               {product, #{a => 2, b => 3}}])},
+    D1 = #{a => 2, b => 3, c => 4},
+    D2 = {sum, ordsets:from_list([#{a => 1, b => 2},
+                               #{a => 2, b => 3}])},
     ?_assertEqual(true, subset(D1, D2)).
 
 lookup_product_test_() ->
-    D = {product, #{a => 'A', b => 'B'}},
+    D = #{a => 'A', b => 'B'},
     Elems = #{a => any},
-    Expected = {product, #{a => 'A'}},
+    Expected = #{a => 'A'},
     Actual = lookup(D, Elems),
     ?_assertEqual(none, diff(Expected, Actual)).
 
 lookup_recur_test_() ->
-    D = {recur, fun() -> {product, #{a => 'A', b => 'B'}} end},
+    D = {recur, fun() -> #{a => 'A', b => 'B'} end},
     Elems = #{a => any},
-    Expected = {product, #{a => 'A'}},
+    Expected = #{a => 'A'},
     Actual = lookup(D, Elems),
     ?_assertEqual(none, diff(Expected, Actual)).
 
 lookup_domain_intersection_test_() ->
-    D = {product, #{a => {sum, ordsets:from_list(['A', 'B'])}}},
+    D = #{a => {sum, ordsets:from_list(['A', 'B'])}},
     Elems = #{a => 'A'},
-    Expected = {product, #{a => 'A'}},
+    Expected = #{a => 'A'},
     Actual = lookup(D, Elems),
     ?_assertEqual(none, diff(Expected, Actual)).
 
 lookup_tagged_test_() -> 
-    D = {tagged, tag, {product, #{a => 'A', b => 'B'}}},
+    D = {tagged, tag, #{a => 'A', b => 'B'}},
     Elems = #{a => any},
-    Expected = {product, #{a => 'A'}},
+    Expected = #{a => 'A'},
     Actual = lookup(D, Elems),
     ?_assertEqual(none, diff(Expected, Actual)).
-
-domain_test_() ->
-    [?testEqual({value, atom}, domain(atom)),
-     ?testEqual({value, 1.2}, domain(1.2)),
-     ?testEqual({value, <<"❤️"/utf8>>}, domain(<<"❤️"/utf8>>)),
-     ?testEqual({list, [{value, a}, {value, b}]}, domain({a, b})),
-     ?testEqual({list, [{value, 1}, {value, 2}]}, domain([1, 2])),
-     ?testEqual({product, #{a => {value, 1}}}, domain(#{a => 1})),
-     ?test({f, _, _F}, domain(fun(_) -> 1 end)),
-     ?test({value, 1}, erlang:apply(element(3, domain(fun(_) -> 1 end)), ['_']))
-    ].
-
 
 -endif.

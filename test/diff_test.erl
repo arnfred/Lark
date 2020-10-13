@@ -4,7 +4,7 @@
 -include_lib("test/macros.hrl").
 
 diff_sum_product_test_() ->
-    Old = {product, #{blah => {values, ordsets:from_list([true, false])} } },
+    Old = #{blah => {values, ordsets:from_list([true, false])} } ,
     New = {sum, ordsets:from_list([true, false])},
     Expected = #{old => Old,
                  new => New},
@@ -20,12 +20,12 @@ diff_sum_sum_test_() ->
     ?_assertEqual(Expected, Actual).
 
 diff_product_product_test_() ->
-    Old = {product, #{blip => true, blap => false, blup => extra_old}},
-    New = {product, #{blip => true, blap => true, blep => extra_new}},
-    Expected = {product, #{only_in_old => [blup], 
-                           only_in_new => [blep], 
-                           diff => [{blap, #{old => false,
-                                             new => true}}]}},
+    Old = #{blip => true, blap => false, blup => extra_old},
+    New = #{blip => true, blap => true, blep => extra_new},
+    Expected = #{only_in_old => [blup], 
+                          only_in_new => [blep], 
+                          diff => [{blap, #{old => false,
+                                            new => true}}]},
     Actual = domain:diff(Old, New),
     ?_assertEqual(Expected, Actual).
 
@@ -37,25 +37,25 @@ diff_equal_sum_sum_test_() ->
     ?_assertEqual(Expected, Actual).
 
 diff_equal_product_product_test_() ->
-    Old = {product, #{blip => true, blap => false, blup => extra_old}},
-    New = {product, #{blip => true, blap => false, blup => extra_old}},
+    Old = #{blip => true, blap => false, blup => extra_old},
+    New = #{blip => true, blap => false, blup => extra_old},
     Expected = none,
     Actual = domain:diff(Old, New),
     ?_assertEqual(Expected, Actual).
 
 diff_nested1_test_() ->
-    Old = {product, #{blah => {sum, ordsets:from_list([true, false])} } },
-    New = {product, #{blah => {sum, ordsets:from_list([true, false, blap])} } },
-    Expected = {product, #{only_in_old => [],
-                           only_in_new => [],
-                           diff => [{blah, {sum, #{only_in_old => [],
-                                                   only_in_new => [blap]}}}]}},
+    Old = #{blah => {sum, ordsets:from_list([true, false])} } ,
+    New = #{blah => {sum, ordsets:from_list([true, false, blap])} } ,
+    Expected = #{only_in_old => [],
+                          only_in_new => [],
+                          diff => [{blah, {sum, #{only_in_old => [],
+                                                  only_in_new => [blap]}}}]},
     Actual = domain:diff(Old, New),
     ?_assertEqual(Expected, Actual).
 
 diff_nested2_test_() ->
-    OldProduct = {product, #{blip => true}},
-    NewProduct = {product, #{blap => false}},
+    OldProduct = #{blip => true},
+    NewProduct = #{blap => false},
     Old = {sum, ordsets:from_list([OldProduct])},
     New = {sum, ordsets:from_list([NewProduct])},
     Expected = {sum, #{only_in_old => [OldProduct],
@@ -64,8 +64,8 @@ diff_nested2_test_() ->
     ?_assertEqual(Expected, Actual).
 
 diff_equal_nested1_test_() ->
-    Old = {sum, ordsets:from_list([{product, #{blip => {sum, ordsets:from_list([c,b,a])}}}])},
-    New = {sum, ordsets:from_list([{product, #{blip => {sum, ordsets:from_list([a,b,c])}}}])},
+    Old = {sum, ordsets:from_list([#{blip => {sum, ordsets:from_list([c,b,a])}}])},
+    New = {sum, ordsets:from_list([#{blip => {sum, ordsets:from_list([a,b,c])}}])},
     Expected = none,
     Actual = domain:diff(Old, New),
     ?_assertEqual(Expected, Actual).
@@ -92,10 +92,10 @@ diff_recur_recur_test_() ->
      ?_assertEqual(Expected, domain:diff({recur, F}, {recur, G}))].
 
 diff_recur_other_test_() ->
-    R = fun R() -> {product, #{recurse => {recur, R}}} end,
+    R = fun R() -> #{recurse => {recur, R}} end,
 
-    S = fun S() -> {product, #{blup => {recur, S}}} end,
-    Expected = {product, #{only_in_old => [recurse], only_in_new => [blup], diff => []}},
+    S = fun S() -> #{blup => {recur, S}} end,
+    Expected = #{only_in_old => [recurse], only_in_new => [blup], diff => []},
     [?_assertEqual(none, domain:diff(R(), {recur, R})),
      ?_assertEqual(Expected, domain:diff(R(), {recur, S}))].
 

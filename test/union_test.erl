@@ -10,46 +10,46 @@ union_array_test_() ->
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 union_product_one_key_test_() ->
-    D1 = {product, #{blip => true}},
-    D2 = {product, #{blip => false}},
-    Expected = {product, #{blip => {sum, ordsets:from_list([true, false])}}},
+    D1 = #{blip => true},
+    D2 = #{blip => false},
+    Expected = #{blip => {sum, ordsets:from_list([true, false])}},
     Actual = domain:union(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 union_product_two_keys_mergeable_test_() ->
-    D1 = {product, #{blap => a, blip => true}},
-    D2 = {product, #{blap => a, blip => false}},
-    Expected = {product, #{blap => a, blip => {sum, ordsets:from_list([true, false])}}},
+    D1 = #{blap => a, blip => true},
+    D2 = #{blap => a, blip => false},
+    Expected = #{blap => a, blip => {sum, ordsets:from_list([true, false])}},
     Actual = domain:union(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 union_product_two_keys_non_mergeable_test_() ->
-    D1 = {product, #{blap => a, blip => true}},
-    D2 = {product, #{blap => b, blip => false}},
-    Expected = {sum, ordsets:from_list([{product, #{blap => a, blip => true}},
-                                     {product, #{blap => b, blip => false}}])},
+    D1 = #{blap => a, blip => true},
+    D2 = #{blap => b, blip => false},
+    Expected = {sum, ordsets:from_list([#{blap => a, blip => true},
+                                     #{blap => b, blip => false}])},
     Actual = domain:union(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 union_product_uneven_keys_mergeable_test_() ->
-    D1 = {product, #{blap => a, blip => true}},
-    D2 = {product, #{blip => true}},
-    Expected = {product, #{blap => any, blip => true}},
+    D1 = #{blap => a, blip => true},
+    D2 = #{blip => true},
+    Expected = #{blap => any, blip => true},
     Actual = domain:union(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 union_product_many_keys_test_() ->
-    D1 = {product, #{blip => true, blap => false, blup => extra_old}},
-    D2 = {product, #{blip => true, blap => true, blep => extra_new}},
-    Expected = {sum, ordsets:from_list([{product, #{blip => true, blap => false, blup => extra_old}},
-                                     {product, #{blip => true, blap => true, blep => extra_new}}])},
+    D1 = #{blip => true, blap => false, blup => extra_old},
+    D2 = #{blip => true, blap => true, blep => extra_new},
+    Expected = {sum, ordsets:from_list([#{blip => true, blap => false, blup => extra_old},
+                                     #{blip => true, blap => true, blep => extra_new}])},
     Actual = domain:union(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 union_product_same_keys_test_() ->
-    D1 = {product, #{blip => true, blap => false}},
-    D2 = {product, #{blip => true, blap => true}},
-    Expected = {product, #{blip => true, blap => {sum, ordsets:from_list([false, true])}}},
+    D1 = #{blip => true, blap => false},
+    D2 = #{blip => true, blap => true},
+    Expected = #{blip => true, blap => {sum, ordsets:from_list([false, true])}},
     Actual = domain:union(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
@@ -68,57 +68,57 @@ union_sum_none_test_() ->
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 union_tagged_same_test_() ->
-    D1 = {tagged, kukkeluk, {product, #{blip => true}}},
-    D2 = {tagged, kukkeluk, {product, #{blip => false}}},
-    Expected = {tagged, kukkeluk, {product, #{blip => {sum, ordsets:from_list([true, false])}}}},
+    D1 = {tagged, kukkeluk, #{blip => true}},
+    D2 = {tagged, kukkeluk, #{blip => false}},
+    Expected = {tagged, kukkeluk, #{blip => {sum, ordsets:from_list([true, false])}}},
     Actual = domain:union(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 union_tagged_diff_test_() ->
-    D1 = {tagged, kukkeluk, {product, #{blip => true, blap => false, blup => extra_old}}},
-    D2 = {tagged, kakkelak, {product, #{blip => true, blap => true, blep => extra_new}}},
-    Expected = {sum, ordsets:from_list([{tagged, kukkeluk, {product, #{blip => true, blap => false, blup => extra_old}}},
-                                     {tagged, kakkelak, {product, #{blip => true, blap => true, blep => extra_new}}}])},
+    D1 = {tagged, kukkeluk, #{blip => true, blap => false, blup => extra_old}},
+    D2 = {tagged, kakkelak, #{blip => true, blap => true, blep => extra_new}},
+    Expected = {sum, ordsets:from_list([{tagged, kukkeluk, #{blip => true, blap => false, blup => extra_old}},
+                                     {tagged, kakkelak, #{blip => true, blap => true, blep => extra_new}}])},
     Actual = domain:union(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 union_sum_of_products_test_() ->
-    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2}}])},
-    D2 = {sum, ordsets:from_list([{product, #{a => 1, c => 3}}])},
-    Expected = {sum, ordsets:from_list([{product, #{a => 1, b => 2}}, {product, #{a => 1, c => 3}}])},
+    D1 = {sum, ordsets:from_list([#{a => 1, b => 2}])},
+    D2 = {sum, ordsets:from_list([#{a => 1, c => 3}])},
+    Expected = {sum, ordsets:from_list([#{a => 1, b => 2}, #{a => 1, c => 3}])},
     Actual = domain:union(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 union_sum_of_many_products_test_() ->
-    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2, c => 1}},
-                                  {product, #{a => 2, b => 2, c => 2}},
-                                  {product, #{a => 1, b => 2, c => 3}},
-                                  {product, #{a => 2, b => 2, c => 4}}])},
-    D2 = {sum, ordsets:from_list([{product, #{a => 1}}])},
-    Expected = {sum, ordsets:from_list([{product, #{a => 1, b => 2, c => {sum, ordsets:from_list([1, 3])}}}, 
-                                        {product, #{a => 2, b => 2, c => {sum, ordsets:from_list([2, 4])}}},
-                                        {product, #{a => 1}}])},
+    D1 = {sum, ordsets:from_list([#{a => 1, b => 2, c => 1},
+                                  #{a => 2, b => 2, c => 2},
+                                  #{a => 1, b => 2, c => 3},
+                                  #{a => 2, b => 2, c => 4}])},
+    D2 = {sum, ordsets:from_list([#{a => 1}])},
+    Expected = {sum, ordsets:from_list([#{a => 1, b => 2, c => {sum, ordsets:from_list([1, 3])}}, 
+                                        #{a => 2, b => 2, c => {sum, ordsets:from_list([2, 4])}},
+                                        #{a => 1}])},
     Actual = domain:union(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 union_sum_with_none_test_() ->
-    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2, c => 1}}, none])},
+    D1 = {sum, ordsets:from_list([#{a => 1, b => 2, c => 1}, none])},
     D2 = {sum, ordsets:from_list([none])},
-    Expected = {product, #{a => 1, b => 2, c => 1}}, 
+    Expected = #{a => 1, b => 2, c => 1}, 
     Actual = domain:union(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 union_sum_with_any_test_() ->
-    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2, c => 1}}, any])},
+    D1 = {sum, ordsets:from_list([#{a => 1, b => 2, c => 1}, any])},
     D2 = {sum, ordsets:from_list([none])},
     Expected = any,
     Actual = domain:union(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 union_sum_of_products_with_same_keys_test_() ->
-    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2}}])},
-    D2 = {sum, ordsets:from_list([{product, #{a => 1, b => 3}}])},
-    Expected = {product, #{a => 1, b => {sum, ordsets:from_list([2,3])}}},
+    D1 = {sum, ordsets:from_list([#{a => 1, b => 2}])},
+    D2 = {sum, ordsets:from_list([#{a => 1, b => 3}])},
+    Expected = #{a => 1, b => {sum, ordsets:from_list([2,3])}},
     Actual = domain:union(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
@@ -147,19 +147,19 @@ union_recur_recur_sum_sum_sum_test_() ->
      ?_assertMatch({sum, [a, b, c, d, {recur, _}]}, Actual)].
 
 union_merge_recur_products_test() ->
-    P1 = fun P1() -> {product, #{c => 2, b => {recur, P1}}} end,
-    P2 = fun P2() -> {product, #{c => 2, b => {recur, P2}}} end,
+    P1 = fun P1() -> #{c => 2, b => {recur, P1}} end,
+    P2 = fun P2() -> #{c => 2, b => {recur, P2}} end,
     Actual = domain:union(P1(), P2()),
     io:format("Actual: ~p~n", domain:expand(10, [Actual])),
-    Expected = {product, #{c => 2, b => {sum, ordsets:from_list([{recur, P1}, {recur, P2}])}}},
+    Expected = #{c => 2, b => {sum, ordsets:from_list([{recur, P1}, {recur, P2}])}},
     ?assertEqual(none, domain:diff(Expected, Actual)).
 
 union_merge_recur_products_with_single_key_test() ->
-    P1 = fun P1() -> {product, #{r => {recur, P1}}} end,
-    P2 = fun P2() -> {product, #{r => {recur, P2}}} end,
+    P1 = fun P1() -> #{r => {recur, P1}} end,
+    P2 = fun P2() -> #{r => {recur, P2}} end,
     Actual = domain:union(P1(), P2()),
     io:format("Actual: ~p~n", domain:expand(10, [Actual])),
-    Expected = {product, #{r => {sum, ordsets:from_list([{recur, P1}, {recur, P2}])}}},
+    Expected = #{r => {sum, ordsets:from_list([{recur, P1}, {recur, P2}])}},
     ?assertEqual(none, domain:diff(Expected, Actual)).
 
 list_equal_length_test_() ->

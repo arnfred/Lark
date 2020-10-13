@@ -33,7 +33,7 @@ gen_pattern(_, _, {key, _, _} = Term) -> {ok, [cerl:c_atom(symbol:tag(Term))]};
 
 % Pattern like '{a, k: b}'
 gen_pattern(_, _, {dict, _, ElemList}) ->
-    {ok, [cerl:c_tuple([cerl:c_atom(product), cerl:c_map_pattern(Elems)]) || 
+    {ok, [cerl:c_map_pattern(Elems) || 
           Elems <- utils:combinations(ElemList)]};
 
 % Pattern of variable or pair inside product
@@ -66,7 +66,7 @@ gen_pattern(_, _, {list, _, ElemList}) ->
 % Type Fun T()          : Domain of Expr of T's type def
 % Type appl m/T(a, b)   : erlang:apply(m, T, [domain(args)])
 % Tagged type           : {tagged, Tag, domain(T)}
-% Product type (dict)   : {product, #{ ... }}
+% Product type (dict)   : #{ ... }
 % Sum type              : {sum, ordsets:from_list([domain(members)])}
 
 % Pattern of shape: 'T' when 'T' is a type def without arguments

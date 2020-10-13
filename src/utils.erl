@@ -47,7 +47,9 @@ merge(Maps) when is_list(Maps) ->
 domain_to_term({sum, Elems}, Ctx) -> 
     {sum, Ctx, [domain_to_term(E, Ctx) || E <- ordsets:to_list(Elems)]};
 domain_to_term(A, Ctx) when is_atom(A) -> {type, Ctx, A, [A]};
-domain_to_term({product, Elems}, Ctx) -> 
+domain_to_term(Elems, Ctx) when is_map(Elems) -> 
     {dict, Ctx, [{dict_pair, Ctx, K, domain_to_term(V, Ctx)} || {K, V} <- maps:to_list(Elems)]};
+domain_to_term(Elems, Ctx) when is_list(Elems) -> 
+    {list, Ctx, [domain_to_term(V, Ctx) || {K, V} <- Elems]};
 domain_to_term({tagged, Tag, Domain}, Ctx) ->
     {tagged, Ctx, Tag, domain_to_term(Domain, Ctx)}.

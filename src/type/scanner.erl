@@ -196,7 +196,7 @@ scan_pattern(Domain, TypeMod, Stack, {dict, _, Keys} = Dict) ->
             case error:collect(KeyDomainList) of
                 {error, Errs} -> {intersection(KeyEnvs), {error, Errs}};
                 _             -> 
-                    RetDomain = intersection({product, Map}, {product, KeyDomain}),
+                    RetDomain = intersection(Map, KeyDomain),
                     {intersection(KeyEnvs), RetDomain}
             end
     end;
@@ -245,12 +245,12 @@ scan_pattern(Domain, TypeMod, Stack, {pair, _, Key, Val}) ->
     {intersection(ValEnv, #{symbol:tag(Key) => ValDomain}), ValDomain}.
 
 
-get_domain_map({product, M}, [], _) -> M;
-get_domain_map({product, M} = P, [K | Keys], ErrContext) -> 
+get_domain_map(M, [], _) when is_map(M) -> M;
+get_domain_map(M, [K | Keys], ErrContext) when is_map(M) -> 
     case maps:is_key(symbol:name(K), M) of
-        true -> get_domain_map(P, Keys, ErrContext);
-        false -> intersection(error:format({nonexistent_key, symbol:name(K), P}, ErrContext), 
-                              get_domain_map(P, Keys, ErrContext))
+        true -> get_domain_map(M, Keys, ErrContext);
+        false -> intersection(error:format({nonexistent_key, symbol:name(K), M}, ErrContext), 
+                              get_domain_map(M, Keys, ErrContext))
     end;
 get_domain_map({tagged, _, D}, Keys, ErrContext) -> get_domain_map(D, Keys, ErrContext);
 get_domain_map({recur, F}, Keys, ErrContext) -> get_domain_map(F(), Keys, ErrContext);

@@ -10,37 +10,37 @@ intersection_array_test_() ->
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 intersection_product_one_key_test_() ->
-    D1 = {product, #{blip => true}},
-    D2 = {product, #{blip => false}},
+    D1 = #{blip => true},
+    D2 = #{blip => false},
     Expected = none,
     Actual = domain:intersection(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 intersection_product_two_keys_mergeable_test_() ->
-    D1 = {product, #{blap => a, blip => {sum, ordsets:from_list([false,true])}}},
-    D2 = {product, #{blap => a, blip => false}},
-    Expected = {product, #{blap => a, blip => false}},
+    D1 = #{blap => a, blip => {sum, ordsets:from_list([false,true])}},
+    D2 = #{blap => a, blip => false},
+    Expected = #{blap => a, blip => false},
     Actual = domain:intersection(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 intersection_product_two_keys_non_mergeable_test_() ->
-    D1 = {product, #{blap => a, blip => true}},
-    D2 = {product, #{blap => a, blip => false}},
+    D1 = #{blap => a, blip => true},
+    D2 = #{blap => a, blip => false},
     Expected = none,
     Actual = domain:intersection(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 intersection_product_subset_test_() ->
-    D1 = {product, #{blap => a, blip => true}},
-    D2 = {product, #{blip => true}},
-    Expected = {product, #{blap => a, blip => true}},
+    D1 = #{blap => a, blip => true},
+    D2 = #{blip => true},
+    Expected = #{blap => a, blip => true},
     Actual = domain:intersection(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 intersection_product_non_subset_test_() ->
-    D1 = {product, #{blap => a, blup => true}},
-    D2 = {product, #{blap => a, blip => false}},
-    Expected = {product, #{blap => a, blip => false, blup => true}},
+    D1 = #{blap => a, blup => true},
+    D2 = #{blap => a, blip => false},
+    Expected = #{blap => a, blip => false, blup => true},
     Actual = domain:intersection(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
@@ -59,37 +59,37 @@ intersection_sum_any_test_() ->
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 intersection_tagged_same_test_() ->
-    D1 = {tagged, kukkeluk, {product, #{blip => {sum, ordsets:from_list([false, true])}}}},
-    D2 = {tagged, kukkeluk, {product, #{blip => false}}},
-    Expected = {tagged, kukkeluk, {product, #{blip => false}}},
+    D1 = {tagged, kukkeluk, #{blip => {sum, ordsets:from_list([false, true])}}},
+    D2 = {tagged, kukkeluk, #{blip => false}},
+    Expected = {tagged, kukkeluk, #{blip => false}},
     Actual = domain:intersection(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 intersection_tagged_diff_test_() ->
-    D1 = {tagged, kukkeluk, {product, #{blip => true, blap => false, blup => extra_old}}},
-    D2 = {tagged, kakkelak, {product, #{blip => true, blap => true, blep => extra_new}}},
+    D1 = {tagged, kukkeluk, #{blip => true, blap => false, blup => extra_old}},
+    D2 = {tagged, kakkelak, #{blip => true, blap => true, blep => extra_new}},
     Expected = none,
     Actual = domain:intersection(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 intersection_sum_of_products_test_() ->
-    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2}}])},
-    D2 = {sum, ordsets:from_list([{product, #{a => 1, b => {sum, ordsets:from_list([2,3])}}}])},
-    Expected = {product, #{a => 1, b => 2}},
+    D1 = {sum, ordsets:from_list([#{a => 1, b => 2}])},
+    D2 = {sum, ordsets:from_list([#{a => 1, b => {sum, ordsets:from_list([2,3])}}])},
+    Expected = #{a => 1, b => 2},
     Actual = domain:intersection(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 intersection_sum_with_none_test_() ->
-    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2, c => 1}}, none])},
+    D1 = {sum, ordsets:from_list([#{a => 1, b => 2, c => 1}, none])},
     D2 = {sum, ordsets:from_list([none])},
     Expected = none,
     Actual = domain:intersection(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 intersection_sum_with_any_test_() ->
-    D1 = {sum, ordsets:from_list([{product, #{a => 1, b => 2, c => 1}}])},
+    D1 = {sum, ordsets:from_list([#{a => 1, b => 2, c => 1}])},
     D2 = {sum, ordsets:from_list([any])},
-    Expected = {product, #{a => 1, b => 2, c => 1}},
+    Expected = #{a => 1, b => 2, c => 1},
     Actual = domain:intersection(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
@@ -104,12 +104,11 @@ intersection_f_test_() ->
 intersection_map_map_test_() ->
     D1 = #{a => any, b => any},
     D2 = #{b => blup, c => none},
-    Expected = #{a => any, b => blup, c => none},
     Actual = domain:intersection(D1, D2),
-    ?_assertEqual(none, domain:diff(Expected, Actual)).
+    ?_assertEqual(none, Actual).
 
 intersection_recur_val_test_() ->
-    R = fun R() -> {sum, ordsets:from_list([{product, #{recurse => {recur, R}}}])} end,
+    R = fun R() -> {sum, ordsets:from_list([#{recurse => {recur, R}}])} end,
     Input = {recur, R},
     ?_assertEqual(none, domain:intersection(Input, val)).
 
@@ -137,12 +136,12 @@ intersection_recur_recur_sum_sum_test_() ->
     ?_assertEqual(none, domain:diff(Expected(), Actual)).
 
 intersection_recur_recur_sum_sum_product_test_() ->
-    P1 = {product, #{a => 1, b => {sum, ordsets:from_list([2,3])}}},
-    P2 = {product, #{a => 1, b => {sum, ordsets:from_list([3,4])}}},
+    P1 = #{a => 1, b => {sum, ordsets:from_list([2,3])}},
+    P2 = #{a => 1, b => {sum, ordsets:from_list([3,4])}},
     R = fun R() -> {sum, ordsets:from_list([P1, {recur, R}])} end,
     S = fun S() -> {sum, ordsets:from_list([P2, {recur, S}])} end,
     Actual = domain:intersection({recur, R}, {recur, S}),
-    E = fun E() -> {sum, ordsets:from_list([{product, #{a => 1, b => 3}}, {recur, E}])} end,
+    E = fun E() -> {sum, ordsets:from_list([#{a => 1, b => 3}, {recur, E}])} end,
     Expected = E(),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 

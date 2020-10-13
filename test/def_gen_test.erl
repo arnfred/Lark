@@ -99,8 +99,8 @@ pattern_match_type_test_() ->
            " | {key1: True, key2: k2} -> k2\n"
            " | {key1: False, key2: Nil} -> Nil\n",
            fun({ok, _}) ->
-                   [?test('Boolean/False', kind_test:blah({product, #{key1 => 'Boolean/True', key2 => 'Boolean/False'}})),
-                    ?test('Option/Nil', kind_test:blah({product, #{key1 => 'Boolean/False', key2 => 'Option/Nil'}}))]
+                   [?test('Boolean/False', kind_test:blah(#{key1 => 'Boolean/True', key2 => 'Boolean/False'})),
+                    ?test('Option/Nil', kind_test:blah(#{key1 => 'Boolean/False', key2 => 'Option/Nil'}))]
            end).
 
 

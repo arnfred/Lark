@@ -4,25 +4,25 @@
 -include_lib("eunit/include/eunit.hrl").
 
 compact({sum, S}) -> compact_sum({sum, S});
-compact({product, Map}) -> compact_product({product, Map});
+compact(Map) when is_map(Map) -> compact_product(Map);
 compact({tagged, Tag, Domain}) -> {tagged, Tag, compact(Domain)};
 compact(L) when is_list(L) -> [compact(E) || E <- L];
 compact({f, Name, F}) -> {f, Name, domain_util:mapfun(fun(D) -> compact(D) end, F)};
 compact({recur, D}) -> {recur, fun() -> compact(D()) end};
 compact(T) -> T.
 
-compact_product({product, ProductMap}) ->
+compact_product(ProductMap) ->
     Elements = [{K, compact(V)} || {K, V} <- maps:to_list(ProductMap)],
     IsRecur = fun({_, {recur, _}}) -> true;
                  (_) -> false end,
     case lists:partition(IsRecur, Elements) of
         {[], []}            -> none;
-        {[], _}             -> {product, maps:from_list(Elements)};
+        {[], _}             -> maps:from_list(Elements);
         {Recurs, Other} ->
             % If one or more recurs elements are present in the product, wrap
             % the entire product in a 'recur' domain
             F = fun() -> Elems = Other ++ [{K, D()} || {K, {_, D}} <- Recurs],
-                         {product, maps:from_list(Elems)} end,
+                         maps:from_list(Elems) end,
             {recur, F}
     end.
 
@@ -46,11 +46,14 @@ compact_sum_groups(Elements) ->
 
     % Filter out `none` and group by domain type
     KeyFun = fun({Type, _}) -> Type;
+                (Map) when is_map(Map) -> product;
+                (List) when is_list(List) -> list;
                 (Other)     -> Other end,
     Keyed = [{K, V} || {K, V} <- utils:group_by(KeyFun, Elements)],
     
     % Based on domain type compact appropriately
-    L = lists:map(fun({product, Products}) -> compact_product_list(Products);
+    L = lists:map(fun({product, Products}) -> compact_maps(Products);
+                     ({list, Lists})       -> compact_lists(Lists);
                      ({sum, Sums})         -> Sets = [Set || {sum, Set} <- Sums],
                                               SumElements = ordsets:to_list(ordsets:union(Sets)),
                                               compact_sum_groups(SumElements);
@@ -73,9 +76,6 @@ list_to_sum(Elems) when is_list(Elems) ->
     end;
 list_to_sum(Domain) -> Domain.
 
-
-compact_product_list(Products) -> 
-    [{product, M} || M <- compact_maps([M || {product, M} <- Products])].
 
 % Why is the union of two products tricky? 
 %
@@ -136,5 +136,12 @@ compact_maps(Maps) ->
 
             % For each group of domains, we remove the pivot key and call this
             % function recursively
-            lists:flatten([Compact(Pivot, Domain, Group) || {Domain, Group} <- Grouped])
+            [Compacted || {Domain, Group} <- Grouped,
+                          Compacted <- Compact(Pivot, Domain, Group)]
     end.
+
+compact_lists([]) -> [];
+compact_lists([L]) -> [L];
+compact_lists(Lists) ->
+    Grouped = utils:group_by(fun(L) -> length(L) end, Lists),
+    [domain:union(Group) || {Domain, Group} <- Grouped].
