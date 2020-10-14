@@ -599,7 +599,7 @@ var_application_in_type_def_test_() ->
                     Mod = lists:last(Mods),
                     [?test('Boolean/False', Mod:'Test'('Boolean/True'))]
             end)}.
-             
+
 
 %multiple_tagged_pair_in_pattern_test_() ->
 %     Code = "type Test a\n"

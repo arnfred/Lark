@@ -26,6 +26,17 @@ compare_test_() ->
                      ?test('Compare/EQ', Mod:main([1, 2], [1, 2]))]
             end)}.
 
+%binary_search_test_() ->
+%    {"Simple binary tree implementation",
+%     ?setup("import Compare/_\n"
+%            "type Tree a -> Leaf | Node: {left: Tree(a), value: a, right: Tree(a)}\n"
+%            "def insert root elem\n"
+%            "  | Leaf _                         -> Leaf\n"
+%            "  | (Node: {left, value, right}) _ -> compare(elem, value).match(\n"
+%            "        EQ -> root\n"
+%            "        LT -> Node.new(left.insert(elem), value, right)\n"
+%            "        GT -> Node.new(left, value, right.insert(elem)))\n",
+
        
 
 

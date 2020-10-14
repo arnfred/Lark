@@ -12,11 +12,11 @@ gen_types(TypesEnv, AST) ->
     Post = fun(_, _, _) -> ok end,
     ast:traverse(Pre, Post, AST).
 
-pre_gen_term(_, top_level, _, {def, _, _, _, _}) -> skip;
-pre_gen_term(TypesEnv, top_level, _, Term)       -> {change, expr_gen:gen(TypesEnv), Term};
-pre_gen_term(TypesEnv, pattern, _, Term)         -> {change, pattern_gen:gen(TypesEnv), Term};
-pre_gen_term(TypesEnv, expr, _, Term)            -> {change, expr_gen:gen(TypesEnv), Term};
-pre_gen_term(_, _, _, _)                         -> ok.
+pre_gen_term(_, top_level, _, {def, _, _, _, _})    -> skip;
+pre_gen_term(TypesEnv, top_level, _, Term)          -> {change, expr_gen:gen(TypesEnv), Term};
+pre_gen_term(TypesEnv, pattern, _, Term)            -> {change, pattern_gen:gen(TypesEnv), Term};
+pre_gen_term(TypesEnv, expr, _, Term)               -> {change, expr_gen:gen(TypesEnv), Term};
+pre_gen_term(_, _, _, _)                            -> ok.
 
 
 gen_modules(Types, TypesEnv, ArgsEnv, {ast, _, Modules, _, _} = AST) ->
@@ -40,8 +40,8 @@ gen_modules(Types, TypesEnv, ArgsEnv, {ast, _, Modules, _, _} = AST) ->
     % simplify the import logic by making it trivial to import type members
     % from compiled beam files. For a bit more context see commit
     % 34ea58050b0200236324e963cd14ceb58ac1a32d
-    TypeModules = [gen_type_modules(Modules, Parent, Children, Types)
-                   || {Parent, Children} <- TypeParents],
+    TypeModules = [Module || {Parent, Children} <- TypeParents,
+                             Module <- gen_type_modules(Modules, Parent, Children, Types)],
 
     % The scanner needs access to call all type functions. For this purpose a
     % temporary type module is created which exports these types.
@@ -50,11 +50,11 @@ gen_modules(Types, TypesEnv, ArgsEnv, {ast, _, Modules, _, _} = AST) ->
     % A normal module must contain the type definitions that it exports. To do
     % so we generate a map of these exports that can be included in codegen
     % when the module is created
-    case error:collect([gen_exported_types(Mod, Types, ArgsEnv) || Mod <- Modules]) of
+    case error:collect([exported_types(Mod, Types) || Mod <- Modules]) of
         {error, Errs}           -> {error, Errs};
-        {ok, ExportedTypeList}  ->
-            ExportedTypes = lists:flatten(ExportedTypeList),
-            {ok, {ExportedTypes, ScannerModule, lists:flatten(TypeModules)}}
+        {ok, Exported}  ->
+            TypeDefs = gen_type_defs(lists:flatten(Exported), Types, ArgsEnv, TypesEnv),
+            {ok, {TypeDefs, ScannerModule, TypeModules}}
     end.
 
 
@@ -73,23 +73,11 @@ gen_type_module(ModuleName, Children, AllTypes) ->
     {Exports, _} = lists:unzip(Defs),
     cerl:c_module(cerl:c_atom(ModuleName), Exports, [], Defs).
 
-gen_exported_types({module, _, _, Exports}, Types, ArgsEnv) ->
-    F = fun({Name, {type_export, Ctx, Key, _}}) ->
-                Tag = symbol:tag(Key),
-                case maps:is_key(Tag, Types) of
-                    false   -> error:format({undefined_type_export, Tag}, {typegen, Ctx});
-                    true    -> {ok, {Name, Tag}}
-                end
-        end,
-    ExportedTypeTags = [F(Entry) || {_, {type_export, _, _, _}} = Entry <- maps:to_list(Exports)],
-    case error:collect(ExportedTypeTags) of
-        {error, Errs}       -> {error, Errs};
-        {ok, Tagged}        ->
-            ExportedTypes = maps:from_list([{Name, maps:get(Tag, Types)} || {Name, Tag} <- Tagged]),
-            DomainDef = gen_domain(maps:merge(Types, ExportedTypes)),
-            Exported = [gen_type_def(Name, Tag, maps:get(Tag, ArgsEnv)) || {Name, Tag} <- Tagged],
-            {ok, [DomainDef | Exported]}
-    end.
+gen_type_defs(Exported, Types, ArgsEnv, TypesEnv) ->
+    ExportedTypes = maps:from_list([{Name, maps:get(Tag, Types)} || {Name, Tag} <- Exported]),
+    DomainDef = gen_domain(maps:merge(Types, ExportedTypes)),
+    Defs = [gen_type_def(Name, Tag, maps:get(Tag, ArgsEnv)) || {Name, Tag} <- Exported],
+    [DomainDef | Defs].
 
 gen_scanner_module(Types, {ast, _, _, _, Defs}) ->
     DomainDef = gen_domain(Types),
@@ -124,3 +112,15 @@ gen_type_def(Name, Tag, Args) ->
     Body = expr_gen:call_type_tag(Tag, ArgForms),
     FName = cerl:c_fname(Name, length(Args)),
     {FName, cerl:c_fun(ArgForms, Body)}.
+
+exported_types({module, _, _, Exports}, Types) ->
+    F = fun({Name, {type_export, Ctx, Key, _}}) ->
+                Tag = symbol:tag(Key),
+                case maps:is_key(Tag, Types) of
+                    false   -> error:format({undefined_type_export, Tag}, {typegen, Ctx});
+                    true    -> {ok, {Name, Tag}}
+                end
+        end,
+    ExportedTypeTags = [F(Entry) || {_, {type_export, _, _, _}} = Entry <- maps:to_list(Exports)],
+    error:collect(ExportedTypeTags).
+

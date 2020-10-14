@@ -1,6 +1,8 @@
 -module(typer).
 -export([type/2]).
 
+-include_lib("eunit/include/eunit.hrl").
+
 type(AST, Options) -> 
     PurgeScannerMod = maps:get(purge_scanner_module, Options, true),
     case prepare(AST) of

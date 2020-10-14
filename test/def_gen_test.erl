@@ -274,3 +274,27 @@ list_pattern_test_() ->
                     Mod = lists:last(Modules),
                     ?test(3, Mod:main([1, 2, 3]))
             end)}.
+
+unexported_type_test_() ->
+    {"A def within a local file can call all types defined in the module",
+     ?setup("type Test -> {a: A, b: B}\n"
+            "def main _ -> Test\n",
+            fun({ok, Modules}) ->
+                    Mod = lists:last(Modules),
+                    [?testEqual(#{a => 'Test/A', b => 'Test/B'}, Mod:main('_'))]
+            end)}.
+             
+type_parameter_pattern_test_() ->
+    {"A def within a local file can call all types defined in the module",
+     ?setup("type Test -> Option(Boolean)\n"
+            "def main _\n"
+            "  | Test -> True\n"
+            "  | _ -> False",
+            fun({ok, Modules}) ->
+                    Mod = lists:last(Modules),
+                    [?test('Boolean/True', Mod:main('Option/Nil')),
+                     ?test('Boolean/True', Mod:main('Boolean/True')),
+                     ?test('Boolean/True', Mod:main('Boolean/False')),
+                     ?test('Boolean/False', Mod:main('_'))]
+            end)}.
+             

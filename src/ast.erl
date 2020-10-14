@@ -29,6 +29,7 @@ climb({Pre, Post}, Type, Scope, Term) ->
     case Pre(Type, Scope, Term) of
         {error, Errs}                   -> {error, Errs};
         skip                            -> {ok, {#{}, Term}};
+        leave_intact                    -> run_post(Post, #{}, Type, Scope, Term);
         ok                              -> chew(Pre, Post, Type, Scope, Term);
         {ok, NewTerm}                   -> chew(Pre, Post, Type, Scope, NewTerm);
         {change, NewPost, NewTerm}      -> chew(Pre, NewPost, Type, Scope, NewTerm);
@@ -39,16 +40,18 @@ climb({Pre, Post}, Type, Scope, Term) ->
 chew(Pre, Post, Type, Scope, Term) ->
     case step({Pre, Post}, Type, Scope, Term) of
         {error, Errs}               -> {error, Errs};
-        {ok, {Env, TraversedTerm}}  -> 
-            case Post(Type, Scope, TraversedTerm) of
-                {error, Errs}               -> {error, Errs};
-                skip                        -> {ok, {#{}, Term}};
-                ok                          -> {ok, {Env, TraversedTerm}};
-                {ok, PostTerm}              -> {ok, {Env, PostTerm}};
-                {ok, Key, PostTerm}         -> {ok, {maps:put(Key, PostTerm, Env), PostTerm}};
-                {ok, Key, Value, PostTerm}  -> {ok, {maps:put(Key, Value, Env), PostTerm}};
-                Other                       -> error:format({unrecognized_post_response, Other}, {ast, Term})
-            end
+        {ok, {Env, TraversedTerm}}  -> run_post(Post, Env, Type, Scope, TraversedTerm)
+    end.
+
+run_post(Post, Env, Type, Scope, Term) ->
+    case Post(Type, Scope, Term) of
+        {error, Errs}               -> {error, Errs};
+        skip                        -> {ok, {#{}, Term}};
+        ok                          -> {ok, {Env, Term}};
+        {ok, PostTerm}              -> {ok, {Env, PostTerm}};
+        {ok, Key, PostTerm}         -> {ok, {maps:put(Key, PostTerm, Env), PostTerm}};
+        {ok, Key, Value, PostTerm}  -> {ok, {maps:put(Key, Value, Env), PostTerm}};
+        Other                       -> error:format({unrecognized_post_response, Other}, {ast, Term})
     end.
 
 step(Meta, top_level, Scope, {ast, Ctx, Modules, Imports, Defs}) ->
@@ -72,7 +75,7 @@ step(Meta, top_level, Scope, {module, Ctx, BeamName, KindName, Exports}) ->
 step(Meta, top_level, Scope, {def, Context, Name, Args, Expr}) when is_list(Args) ->
     step(Meta, expr, Scope, {def, Context, Name, Args, Expr});
 
-step(Meta, Type, Scope, {def, Context, Name, Args, Expr}) when is_list(Args) ->
+step(Meta, Type, Scope, {def, Context, Name, Args, Expr}) ->
     case map(Meta, pattern, Scope, Args) of
         {error, Errs}            -> {error, Errs};
         {ok, {ArgsEnvs, TArgs}}  ->

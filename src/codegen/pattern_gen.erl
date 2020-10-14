@@ -61,13 +61,20 @@ gen_pattern(_, _, {list, _, ElemList}) ->
     {ok, [cerl:make_list(Elements)]};
 
 % Pattern of shape: module/T(a, b)
-% TODO: To call arguments we need to compile the arguments from terms to domains
-% Simple type T         : symbol:tag(Term)
-% Type Fun T()          : Domain of Expr of T's type def
-% Type appl m/T(a, b)   : erlang:apply(m, T, [domain(args)])
-% Tagged type           : {tagged, Tag, domain(T)}
-% Product type (dict)   : #{ ... }
-% Sum type              : {sum, ordsets:from_list([domain(members)])}
+gen_pattern(TypesEnv, Scope, {qualified_type_application, Ctx, ModulePath, Name, Args}) ->
+    case error:collect([to_domain(TypesEnv, A) || A <- Args]) of
+        {error, Errs}       -> {error, Errs};
+        {ok, ArgDomains}    -> 
+            ModuleName = module:beam_name(ModulePath),
+            case erlang:function_exported(ModuleName, Name, length(Args)) of
+                false   -> error:format({undefined_type_in_pattern, ModulePath, {Name, 2}},
+                                        {pattern_gen, Ctx});
+                true    -> ResDomain = erlang:apply(ModuleName, Name, ArgDomains),
+                           Term = utils:domain_to_term(ResDomain, Ctx),
+                           traverse_domain(TypesEnv, Scope, Term)
+            end
+    end;
+
 
 % Pattern of shape: 'T' when 'T' is a type def without arguments
 gen_pattern(_, _, {type_def, _, _, [], Expr}) -> {ok, Expr};
@@ -84,14 +91,49 @@ gen_pattern(_, _, {value, _, Type, Val}) ->
         _       -> {ok, [cerl:abstract(Val)]}
     end.
 
-
-
-% TODO: create separate function for generating type fun using the pattern from qualified type
-%gen_type_fun(TypesEnv, Scope, {qualified_type, _, ModulePath, Name}, Args) ->
-
+pre_gen_term(pattern, _, {qualified_type_application, _, _, _, _}) -> leave_intact;
+pre_gen_term(pattern, _, _) -> ok.
 traverse_domain(TypesEnv, Scope, Domain) -> 
-    case ast:traverse_term(pattern, fun (_, _, _) -> ok end, gen(TypesEnv), Scope, Domain) of
+    case ast:traverse_term(pattern, fun pre_gen_term/3, gen(TypesEnv), Scope, Domain) of
         {error, Errs}       -> {error, Errs};
         {ok, {_Env, Form}}  -> {ok, Form}
     end.
 
+to_domain(TypesEnv, Term) ->
+    case ast:traverse_term(pattern, fun pre_gen_domain/3, fun gen_domain/3, TypesEnv, Term) of
+        {error, Errs}       -> {error, Errs};
+        {ok, {_Env, Form}}  -> {ok, Form}
+    end.
+
+pre_gen_domain(pattern, _, _) -> ok.
+
+% Product domain: { ... }
+gen_domain(pattern, _TypesEnv, {dict, _, ElemList}) -> {ok, maps:from_list(ElemList)};
+% Product key value pair, `k: v` in `{k: v}`
+gen_domain(pattern, _TypesEnv, {dict_pair, _, Key, Val}) -> {ok, {Key, Val}};
+% Type refinement: `a: T` (we're only interested in the domain of `T`)
+gen_domain(pattern, _TypesEnv, {pair, _, _Key, Val}) -> {ok, Val};
+% Type alias
+gen_domain(pattern, _TypesEnv, {tagged, _, Tag, Val}) -> {ok, {tagged, Tag, Val}};
+% Type sum: `A | B`
+gen_domain(pattern, _TypesEnv, {sum, _, ElemList}) -> {ok, {sum, ordsests:from_list(ElemList)}};
+% Type list: `[A, B]`
+gen_domain(pattern, _TypesEnv, {list, _, ElemList}) -> {ok, {list, ElemList}};
+% Qualified type: `a/b/T`
+gen_domain(pattern, _TypesEnv, {qualified_type, Ctx, ModulePath, Name}) ->
+    ModuleName = module:beam_name(ModulePath),
+    case erlang:function_exported(ModuleName, Name, 0) of
+        false   -> error:format({undefined_type_in_pattern, ModulePath, Name}, {pattern_gen, Ctx});
+        true    -> {ok, erlang:apply(ModuleName, Name, [])}
+    end;
+% variable
+gen_domain(pattern, _TypesEnv, {variable, Ctx, _, _} = Term) -> 
+    error:format({variable_in_type_application, symbol:tag(Term)}, {pattern_gen, Ctx});
+% Type domain of shape: T
+gen_domain(pattern, TypesEnv, {type, _, _, Path} = Term) ->
+    Tag = symbol:tag(Term),
+    case maps:get(Path, TypesEnv, undefined) of
+        undefined       -> {ok, [cerl:c_atom(Tag)]};
+        {type, _, _, _} -> {ok, [cerl:c_atom(Tag)]};
+        T               -> {ok, T}
+    end.
