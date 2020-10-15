@@ -26,6 +26,16 @@ compare_test_() ->
                      ?test('Compare/EQ', Mod:main([1, 2], [1, 2]))]
             end)}.
 
+tagged_test_() ->
+    {"extract value from tagged function",
+     ?setup("module test { Test, main }\n"
+            "type Test -> Test: A\n"
+            "def main t -> t.value",
+            fun({ok, _}) ->
+                    [?test('Test/A', test:main(test:'Test'()))]
+            end)}.
+
+
 %binary_search_test_() ->
 %    {"Simple binary tree implementation",
 %     ?setup("import Compare/_\n"

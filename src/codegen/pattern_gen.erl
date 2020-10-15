@@ -56,7 +56,7 @@ gen_pattern(pattern, _, {sum, _, ElemList}) ->
 % Pattern of shape: '[1, 2]'
 gen_pattern(pattern, _, {list, _, ElemList}) ->
     Elements = lists:flatten(ElemList),
-    {ok, [cerl:make_list(Elements)]};
+    {ok, [cerl:make_list(Elements), cerl:c_tuple(Elements)]};
 
 % Pattern of shape: module/T(a, b)
 gen_pattern(pattern, Scope, {qualified_type_application, Ctx, ModulePath, Name, Args}) ->

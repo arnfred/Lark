@@ -7,6 +7,7 @@ module kind/prelude {
     Option
     Option/Nil
     match
+    value
     compare
     Compare
 }
@@ -16,6 +17,9 @@ type Boolean -> True | False
 type Option a -> a | Nil
 
 def match a f -> f(a)
+
+def value tagged
+  | ['tagged', _, domain] -> domain
 
 type Compare -> GT | LT | EQ
 import Compare/_
