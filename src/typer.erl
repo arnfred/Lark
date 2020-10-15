@@ -129,9 +129,6 @@ types_pre(_, Type, _, {dict, Ctx, Elements} = Term) ->
     error:map(error:collect([F(Elem) || Elem <- Elements]),
               fun(TaggedElements) -> {dict, Ctx, TaggedElements} end);
 
-types_pre(_, pattern, _, {application, _, Expr, Args} = Term) ->
-    error:format({pattern_application, Expr, Args}, {typegen, pattern, Term});
-
 types_pre(_, _, _, {application, Ctx, {qualified_type, _, ModulePath, Name}, Args}) ->
     {ok, {qualified_type_application, Ctx, ModulePath, Name, Args}};
 

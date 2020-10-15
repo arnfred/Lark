@@ -12,7 +12,7 @@ Nonterminals
     all statements statement
     assignment function newtype module import
     implies
-    pattern patterns
+    pattern patterns pattern_application pattern_verb
     def_clauses clause lambda_clauses lambda
     type_clauses type_clause
     application arguments
@@ -27,11 +27,12 @@ Nonterminals
 
 Rootsymbol all.
 
-Left 300 slash.
-Right 200 colon.
+Left 900 slash.
+Right 500 colon.
 Left 100 newline.
 Unary 100 expression.
 Unary 200 pattern.
+Unary 300 pattern_verb.
 Nonassoc 300 pair.
 
 all -> statements          : '$1'.
@@ -174,6 +175,7 @@ pair_val -> collection              : '$1'.
 pair_val -> symbol                  : '$1'.
 pair_val -> qualified_symbol        : '$1'.
 pair_val -> literal                 : '$1'.
+pair_val -> open sum_elem close     : '$2'.
 
 
 
@@ -208,13 +210,20 @@ lambda -> open newlines lambda_clauses close     : {lambda, ctx('$1'), '$3'}.
 patterns -> pattern                     : ['$1'].
 patterns -> pattern patterns            : ['$1' | '$2'].
 
+pattern -> pattern_application     : '$1'.   % A(T) or T.A(S)
 pattern -> collection              : '$1'.   % {a, b: T}
-pattern -> sum_list                : '$1'.   % (A | B)
 pattern -> symbol                  : '$1'.   % a
 pattern -> qualified_symbol        : '$1'.   % a/b/T
 pattern -> literal                 : '$1'.   % 2
 pattern -> open pair close         : '$2'.   % (a: T)
+pattern -> sum_list                : '$1'.   % (A | B | C)
 
+%pattern_application -> pattern_verb arguments                : {application, ctx('$1'), '$1', '$2'}.
+pattern_application -> noun apply pattern_verb            : {application, ctx('$1'), '$3', ['$1']}.
+pattern_application -> noun apply pattern_verb arguments  : {application, ctx('$1'), '$3', ['$1' | '$4']}.
+
+pattern_verb -> qualified_type : {qualified_type, ctx('$1'), '$1'}.
+pattern_verb -> type_symbol : make_symbol('$1').
 
 
 % Collections
@@ -268,15 +277,16 @@ element -> function             : '$1'.
 
 sum_or_expression -> flat_sum_list : unpack_sum('$1').
 sum_or_expression -> sum_list : '$1'.
+sum_or_expression -> open sum_elem close : '$2'.
 flat_sum_list -> sum_elem : ['$1'].
 flat_sum_list -> sum_elem pipe flat_sum_list : ['$1' | '$3'].
 
 sum_list -> open sum_terms close                    : {sum, ctx('$1'), '$2'}.
 sum_list -> open newlines sum_terms close           : {sum, ctx('$1'), '$3'}.
 
-sum_terms -> sum_elem : ['$1'].
-sum_terms -> sum_elem newlines : ['$1'].
-sum_terms -> sum_elem secondary_separator sum_terms : ['$1' | '$3'].
+sum_terms -> sum_elem secondary_separator sum_elem          : ['$1', '$3'].
+sum_terms -> sum_elem secondary_separator sum_elem newlines : ['$1', '$3'].
+sum_terms -> sum_elem secondary_separator sum_terms         : ['$1' | '$3'].
 
 sum_elem -> application             : '$1'.
 sum_elem -> pair                    : '$1'.

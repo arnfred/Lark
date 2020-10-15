@@ -7,17 +7,12 @@ gen(TypesEnv, ArgsEnv, AST) ->
         {ok, {Types, _}} -> gen_modules(Types, TypesEnv, ArgsEnv, AST)
     end.
 
+
 gen_types(TypesEnv, AST) ->
-    Pre = fun(Type, Scope, Term) -> pre_gen_term(TypesEnv, Type, Scope, Term) end,
-    Post = fun(_, _, _) -> ok end,
-    ast:traverse(Pre, Post, AST).
+    ast:traverse(fun pre_gen_term/3, fun code_gen:gen/3, TypesEnv, AST).
 
-pre_gen_term(_, top_level, _, {def, _, _, _, _})    -> skip;
-pre_gen_term(TypesEnv, top_level, _, Term)          -> {change, expr_gen:gen(TypesEnv), Term};
-pre_gen_term(TypesEnv, pattern, _, Term)            -> {change, pattern_gen:gen(TypesEnv), Term};
-pre_gen_term(TypesEnv, expr, _, Term)               -> {change, expr_gen:gen(TypesEnv), Term};
-pre_gen_term(_, _, _, _)                            -> ok.
-
+pre_gen_term(top_level, Scope, {def, _, _, _, _})   -> skip;
+pre_gen_term(Type, Scope, Term)              -> code_gen:pre_gen(Type, Scope, Term).
 
 gen_modules(Types, TypesEnv, ArgsEnv, {ast, _, Modules, _, _} = AST) ->
     % Create a map from types to type members

@@ -242,12 +242,10 @@ recursion_top_level_f_test_() ->
             fun({ok, [Mod | _]}) ->
                     {f, 'List', DomainFun} = Mod:domain('List'),
                     Actual = DomainFun('List/Nil'),
-                    {_, [_, {_, _, {recur, RecurFun}}]} = Actual,
-                    ProductMap = RecurFun(),
+                    {_, [_, {_, _, {recur, ProductMap}}]} = Actual,
                     [?test({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, Actual),
-                     ?test(_, RecurFun()),
-                     ?test('List/Nil', maps:get(head, ProductMap)),
-                     ?test({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, maps:get(tail, ProductMap))]
+                     ?test('List/Nil', maps:get(head, ProductMap())),
+                     ?test({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, maps:get(tail, ProductMap()))]
             end)}.
 
 recursion_top_level_non_function_test_() ->
@@ -256,12 +254,10 @@ recursion_top_level_non_function_test_() ->
            "type List -> Nil | Cons: {elem: Args, tail: List}",
            fun({ok, [Mod | _]}) ->
                    Actual = Mod:domain('List'),
-                   {_, [_, {_, _, {recur, RecurFun}}]} = Actual,
-                   ProductMap = RecurFun(),
+                   {_, [_, {_, _, {recur, ProductMap}}]} = Actual,
                    [?test({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, Actual),
-                    ?test(_, RecurFun()),
-                    ?test({sum, ['Args/A', 'Args/B', 'Args/C']}, maps:get(elem, ProductMap)),
-                    ?test({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, maps:get(tail, ProductMap))]
+                    ?test({sum, ['Args/A', 'Args/B', 'Args/C']}, maps:get(elem, ProductMap())),
+                    ?test({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, maps:get(tail, ProductMap()))]
            end)}.
 
 pattern_then_type_parse_test_() ->
@@ -598,6 +594,30 @@ var_application_in_type_def_test_() ->
             fun({ok, Mods}) ->
                     Mod = lists:last(Mods),
                     [?test('Boolean/False', Mod:'Test'('Boolean/True'))]
+            end)}.
+
+pattern_type_application_test_() ->
+    {"A type application inside a pattern is evaluated against the resulting domain",
+     ?setup("type Test _\n"
+            "  | Boolean.Option  -> True\n"
+            "  | _               -> False",
+            #{add_kind_libraries => true},
+            fun({ok, Modules}) ->
+                    Mod = lists:last(Modules),
+                    [?test('Boolean/True', Mod:'Test'('Option/Nil')),
+                     ?test('Boolean/True', Mod:'Test'('Boolean/True')),
+                     ?test('Boolean/True', Mod:'Test'('Boolean/False')),
+                     ?test('Boolean/False', Mod:'Test'('_'))]
+            end)}.
+
+pattern_local_application_test_() ->
+    {"Apply a local type constructor in a pattern should pattern match against the result",
+     ?setup("type F a -> a\n"
+            "type Test a\n"
+            "  | True.F -> True",
+            #{add_kind_libraries => true},
+            fun(Err) ->
+                    [?testError({local_type_in_pattern_application, 'F'}, Err)]
             end)}.
 
 

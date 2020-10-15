@@ -8,15 +8,10 @@ gen(TypesEnv, TypeForms, AST) ->
     end.
 
 gen_defs(TypesEnv, AST) ->
-    Pre = fun(Type, Scope, Term) -> pre_gen_term(TypesEnv, Type, Scope, Term) end,
-    Post = fun(_, _, _) -> ok end,
-    ast:traverse(Pre, Post, AST).
+    ast:traverse(fun pre_gen_term/3, fun code_gen:gen/3, TypesEnv, AST).
 
-pre_gen_term(_, top_level, _, {type_def, _, _, _, _}) -> skip;
-pre_gen_term(TypesEnv, top_level, _, Term)       -> {change, expr_gen:gen(TypesEnv), Term};
-pre_gen_term(TypesEnv, pattern, _, Term)         -> {change, pattern_gen:gen(TypesEnv), Term};
-pre_gen_term(TypesEnv, expr, _, Term)            -> {change, expr_gen:gen(TypesEnv), Term};
-pre_gen_term(_, _, _, _)                         -> ok.
+pre_gen_term(top_level, _, {type_def, _, _, _, _}) -> skip;
+pre_gen_term(Type, Scope, Term)                    -> code_gen:pre_gen(Type, Scope, Term).
 
 gen_modules(DefFormMap, TypeForms, {ast, _, Modules, _, Defs}) ->
 
