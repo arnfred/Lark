@@ -23,10 +23,9 @@ union(D1, D2) when is_map(D1), is_map(D2) ->
     {sum, ordsets:from_list([D1, D2])};
 union(L1, L2) when is_list(L1) andalso is_list(L2) andalso length(L1) =:= length(L2) -> 
     [union(E1, E2) || {E1, E2} <- lists:zip(L1, L2)];
-union({f, Name1, F1}, {f, Name2, F2}) -> 
-    Name = list_to_atom(lists:flatten([atom_to_list(Name1), "_", atom_to_list(Name2)])), 
+union(F1, F2) when is_function(F1), is_function(F2) -> 
     case {domain_util:get_arity(F1), domain_util:get_arity(F2)} of
-        {N, N} -> {f, Name, domain_util:mapfun(fun(Res1, Res2) -> union(Res1, Res2) end, F1, F2)};
-        _ -> {sum, ordsets:from_list([{f, Name1, F1}, {f, Name2, F2}])}
+        {N, N} -> domain_util:mapfun(fun(Res1, Res2) -> union(Res1, Res2) end, F1, F2);
+        _ -> {sum, ordsets:from_list([F1, F2])}
     end;
 union(D1, D2) -> {sum, ordsets:from_list([D1, D2])}.

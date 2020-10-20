@@ -22,7 +22,7 @@ env_gen_test() ->
                            {function2, {def, 2, function2, [], []}}])},
     Output = scanner:scan({}, AST),
     ExpectedDomains = [none, none],
-    ActualDomains = [DomainFun([]) || {_, {f, _, DomainFun}} <- maps:to_list(Output)],
+    ActualDomains = [DomainFun([]) || {_, DomainFun} <- maps:to_list(Output)],
     ExpectedKeys = [{function1, 0}, {function2, 0}],
     ActualKeys = [Key || {Key, _} <- maps:to_list(Output)],
     ?assertEqual(ExpectedDomains, ActualDomains),
@@ -35,7 +35,7 @@ run_xor_test() ->
            " | Boolean/False Boolean/True -> b\n"
            " | _ _ -> Boolean/False",
     RunAsserts = fun(Env) ->
-                         {f, 'xor', DomainFun} = maps:get({'xor', 2}, Env),
+                         DomainFun = maps:get({'xor', 2}, Env),
 
                          Actual1 = DomainFun(any, any),
                          Expected1 = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
@@ -64,7 +64,7 @@ direct_recursion_test() ->
            " | State/Stop -> state",
 
     RunAsserts = fun(Env) ->
-                         {f, g, DomainFun} = maps:get({g, 1}, Env),
+                         DomainFun = maps:get({g, 1}, Env),
 
                          Actual1 = DomainFun('State/Stop'),
                          Expected1 = 'State/Stop',
@@ -79,7 +79,7 @@ direct_recursion_test() ->
 infinite_recursion_test() ->
     Code = "def recurse a -> recurse(a)",
     RunAsserts = fun(Env) ->
-                         {f, recurse, DomainFun} = maps:get({recurse, 1}, Env),
+                         DomainFun = maps:get({recurse, 1}, Env),
                          Expected = none,
                          Actual = DomainFun(['_']),
                          ?assertEqual(Expected, Actual)
@@ -91,7 +91,7 @@ infinite_co_recursion_test() ->
            "def g a -> h(a)\n"
            "def h a -> f(a)",
     RunAsserts = fun(Env) ->
-                         {f, f, DomainFun} = maps:get({f, 1}, Env),
+                         DomainFun = maps:get({f, 1}, Env),
                          Expected = none,
                          Actual = DomainFun(['_']),
                          ?assertEqual(Expected, Actual)
@@ -101,7 +101,7 @@ infinite_co_recursion_test() ->
 application_error_test() ->
     Code = "def f a -> a(f)",
     RunAsserts = fun(Env) ->
-                         {f, f, DomainFun} = maps:get({f, 1}, Env),
+                         DomainFun = maps:get({f, 1}, Env),
                          {error, Error} = DomainFun(any),
                          ExpectedError = expected_function_domain,
                          ExpectedDomain = any,
@@ -115,7 +115,7 @@ pair_values_refinement_test() ->
     Code = "type Boolean -> True | False\n"
            "def f t -> t: Boolean",
     RunAsserts = fun(Env) ->
-                         {f, f, DomainFun} = maps:get({f, 1}, Env),
+                         DomainFun = maps:get({f, 1}, Env),
                          Actual1 = DomainFun('Boolean/True'),
                          Expected1 = 'Boolean/True',
                          ?assertEqual(none, domain:diff(Expected1, Actual1)),
@@ -132,7 +132,7 @@ pair_expressions_refinement_test() ->
            "def id a -> a\n"
            "def f t -> id(t): Option(Boolean)",
     RunAsserts = fun(Env) ->
-                         {f, f, DomainFun} = maps:get({f, 1}, Env),
+                         DomainFun = maps:get({f, 1}, Env),
                          Actual1 = DomainFun('Boolean'),
                          Expected1 = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
                          ?assertEqual(none, domain:diff(Expected1, Actual1)),
@@ -152,7 +152,7 @@ lambda_clause_test() ->
            "                  Args/B -> Args/C),\n"
            "                 a)",
     RunAsserts = fun(Env) ->
-                         {f, test, DomainFun} = maps:get({test, 1}, Env),
+                         DomainFun = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Args/A'),
                          ?assertEqual('Args/C', Actual1),
 
@@ -176,7 +176,7 @@ assignment_variable_test() ->
            "                        Args/B -> Args/C)\n"
            "               f(a))",
     RunAsserts = fun(Env) ->
-                         {f, test, DomainFun} = maps:get({test, 1}, Env),
+                         DomainFun = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Args/A'),
                          ?assertEqual('Args/B', Actual1),
 
@@ -190,7 +190,7 @@ assignment_pattern_test() ->
     Code = "type Dict -> {a: (Ah | Oh), b: Buh}\n"
            "def test input -> (val {a: (out: Dict/Ah)} = input, out)",
     RunAsserts = fun(Env) ->
-                         {f, test, DomainFun} = maps:get({test, 1}, Env),
+                         DomainFun = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Dict'),
                          ?assertEqual('Dict/Ah', Actual1),
 
@@ -206,7 +206,7 @@ assignment_nonexistent_key_test() ->
     Code = "type Sum -> {a: A} | {b: B}\n"
            "def test input -> (val {a, b} = input, b)",
     RunAsserts = fun(Env) ->
-                         {f, test, DomainFun} = maps:get({test, 1}, Env),
+                         DomainFun = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Sum'),
                          ?errorMatch({nonexistent_key, a, {product, _}},
                                      {nonexistent_key, b, {product, _}}, Actual1),
@@ -223,7 +223,7 @@ assignment_tagged_product_test() ->
     Code = "type Tagged -> T: {a: A, b: B}\n"
            "def test input -> (val Tagged/T: {a: out} = input, out)",
     RunAsserts = fun(Env) ->
-                         {f, test, DomainFun} = maps:get({test, 1}, Env),
+                         DomainFun = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Tagged'),
                          ?assertEqual('Tagged/A', Actual1),
 
@@ -236,7 +236,7 @@ assignment_intersection_no_subset_test() ->
     Code = "type Args -> A | B | C\n"
            "def test input -> (val a: (Args/A | Args/B) = input, a)",
     RunAsserts = fun(Env) ->
-                         {f, test, DomainFun} = maps:get({test, 1}, Env),
+                         DomainFun = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Args/A'),
                          ?assertEqual('Args/A', Actual1),
 
@@ -260,7 +260,7 @@ assignment_narrowing_of_expression_domain_by_pattern_test() ->
     Code = "type Args -> A | B | C\n"
            "def test input -> (val a: Args/A = input, input)",
     RunAsserts = fun(Env) ->
-                         {f, test, DomainFun} = maps:get({test, 1}, Env),
+                         DomainFun = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Args'),
                          Expected1 = {sum, ordsets:from_list(['Args/A', 'Args/B', 'Args/C'])},
                          ?assertEqual(none, domain:diff(Expected1, Actual1))
@@ -273,7 +273,7 @@ match_single_arg_test() ->
            "def test input -> input.match(Args/A -> Args/B\n"
            "                              Args/B -> Args/C)",
     RunAsserts = fun(Env) ->
-                         {f, test, DomainFun} = maps:get({test, 1}, Env),
+                         DomainFun = maps:get({test, 1}, Env),
                          Actual1 = DomainFun('Args/A'),
                          ?assertEqual('Args/B', Actual1),
 
@@ -294,7 +294,7 @@ pattern_recursive_lookup_test() ->
            " | (List/Cons: {elem, tail: List/Nil}) -> elem\n"
            " | (List/Cons: {tail}) -> tail.last()",
     RunAsserts = fun(Env) ->
-                         {f, last, DomainFun} = maps:get({last, 1}, Env),
+                         DomainFun = maps:get({last, 1}, Env),
                          ListDomain = {tagged, 'List/Cons',
                                        {product, #{elem => 'Args/A',
                                                    tail => {tagged, 'List/Cons',

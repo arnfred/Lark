@@ -14,7 +14,7 @@ gen_types(TypesEnv, AST) ->
 pre_gen_term(top_level, _, {def, _, _, _, _})   -> skip;
 pre_gen_term(Type, Scope, Term)              -> code_gen:pre_gen(Type, Scope, Term).
 
-gen_modules(Types, TypesEnv, ArgsEnv, {ast, _, Modules, _, _} = AST) ->
+gen_modules(Types, TypesEnv, ArgsEnv, {ast, _, Modules, _, _}) ->
     % Create a map from types to type members
     F = fun([Parent | _] = Path, {tagged, _, _, _} = Term) ->
                 Tag = symbol:tag(Term),
@@ -106,10 +106,9 @@ gen_domain(Types) ->
 
 gen_def(Tag, Args, TypesEnv) ->
     TagEnv = maps:from_list([{symbol:tag(Path), Term} || {Path, Term} <- maps:to_list(TypesEnv)]),
-    case maps:get(Tag, TagEnv, undefined) of
+    case maps:get(Tag, TagEnv) of
         {tagged, _, _, _} = T   -> tagged_gen:gen(TypesEnv, T);
-        _T                      -> {ok, [gen_domain_call(Tag, Args)]};
-        undefined               -> error:format({undefined_type, Tag}, {type_gen})
+        _                       -> {ok, [gen_domain_call(Tag, Args)]}
     end.
 
 name_defs(Name, Tag, TypeDefs) ->
@@ -135,18 +134,3 @@ exported_types({module, _, _, Exports}, Types) ->
         end,
     ExportedTypeTags = [F(Entry) || {_, {type_export, _, _, _}} = Entry <- maps:to_list(Exports)],
     error:collect(ExportedTypeTags).
-
-% case of `T: {a: Int, b: Int}` -> T(3, 5) yields `T: {a: 3, b: 5}`
-% case of `T: ({a: Int} | {b: String}) -> T(3) yields `T: {a: Int}` (code generated is pattern matched on types)
-% case of `T: ({a: s} | {b: r}) -> T("test") yields `not implemented` error 
-% case of `T: Int` -> T(4) yields T: 4
-% case of `T: {a: Int, b: 'value'}` -> T(5) yields `T: {a: 5, b: 'value'}`
-% case of `T: ({a: s} | {b: r, c: q}) -> T(4, 6) yields `T: {b: 4, c: 6}`
-%gen_tagged_elem({dict, _, Elems}) -> ???;
-%gen_tagged_elem({sum, _, Elems}) -> ???;
-%gen_tagged_elem({type, _, _, _}) -> ???;
-%gen_tagged_elem({qualified_type, _, _, _}) -> ???;
-%gen_tagged_elem({value, _, _, V}) -> V; 
-
-
-    

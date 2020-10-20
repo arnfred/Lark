@@ -11,7 +11,7 @@ gen_expr(expr, Scope, {def, Ctx, Name, ArgList, Clauses}) when is_list(Clauses) 
     Expr = cerl:c_case(cerl:c_values(Args), AllClauses),
     gen_expr(expr, Scope, {def, Ctx, Name, ArgList, Expr});
 
-gen_expr(expr, Scope, {def, _, Name, ArgList, Expr}) ->
+gen_expr(expr, _, {def, _, Name, ArgList, Expr}) ->
     Args = [A || As <- ArgList, A <- As],
     FName = cerl:c_fname(Name, length(Args)),
     {ok, Name, {FName, cerl:c_fun(Args, Expr)}};
@@ -32,7 +32,7 @@ gen_expr(expr, _, {type_def, _, Name, ArgList, Expr}) ->
     Args = [A || As <- ArgList, A <- As],
     Form = case lists:flatten(Args) of
                []	-> Expr;
-               _	-> gen_f(cerl:c_atom(Name), Args, Expr)
+               _	-> cerl:c_fun(Args, Expr)
            end,
     {ok, Name, Form};
 
@@ -42,7 +42,7 @@ gen_expr(expr, _, {tagged, Ctx, _, Val} = Term) ->
     CoreForm = cerl:c_tuple([cerl:c_atom(tagged), cerl:c_atom(Tag), Val]),
     TypeForm = case maps:get(args, Ctx) of
                    []       -> CoreForm;
-                   Args     -> gen_f(cerl:c_atom(Tag), [cerl:c_var(A) || {var, A} <- Args], CoreForm)
+                   Args     -> cerl:c_fun([cerl:c_var(A) || {var, A} <- Args], CoreForm)
                end,
     {ok, Tag, TypeForm, CoreForm};
 
@@ -72,22 +72,13 @@ gen_expr(expr, _, {dict, _, Elements}) ->
     {ok, cerl:c_map(Elements)};
 
 % expr of form: `f(a)` or `T(a)`
-% f can either be a type (encoded as {f, Tag, Function}) or a Function.
-% If we knew the domain, we could separate the two out a compile time, but for now,
-% we're matching against the domain
 gen_expr(expr, _, {application, _, Expr, Args}) -> 
     case cerl:is_c_fun(Expr) of
         true    -> {ok, cerl:c_apply(Expr, Args)};
         false   ->
             case cerl:is_c_fname(Expr) of
                 true    -> {ok, cerl:c_apply(cerl:c_fname(cerl:fname_id(Expr), length(Args)), Args)};
-                false   ->
-                    Var = cerl:c_var(symbol:id('')),
-                    F = cerl:c_var(symbol:id('F')),
-                    FName = cerl:c_fname(cerl:var_name(F), length(Args)),
-                    TypeClause = cerl:c_clause([cerl:c_tuple([cerl:c_atom('f'), cerl:c_var('_'), F])], cerl:c_apply(F, Args)),
-                    VarClause = cerl:c_clause([F], cerl:c_apply(F, Args)),
-                    {ok, cerl:c_let([Var], Expr, cerl:c_case(Var, [TypeClause, VarClause]))}
+                false   -> {ok, cerl:c_apply(Expr, Args)}
             end
     end;
 
@@ -151,7 +142,7 @@ gen_expr(expr, _, {lambda, Ctx, ClauseList}) ->
     Clauses = lists:flatten(ClauseList),
     case Clauses of
         []              -> error:format({empty_pattern}, {expr_gen, Ctx});
-        [Clause | _]    -> Args = [cerl:c_var(S) || N <- lists:seq(1, cerl:clause_arity(Clause)),
+        [Clause | _]    -> Args = [cerl:c_var(S) || _ <- lists:seq(1, cerl:clause_arity(Clause)),
                                                      S <- [symbol:id('')]],
                            {ok, cerl:c_fun(Args, cerl:c_case(cerl:c_values(Args), Clauses))}
     end;
@@ -161,8 +152,6 @@ gen_expr(expr, _, {value, _, _, Val}) -> {ok, cerl:abstract(Val)};
 
 % expr of form: `(<Expr>)`
 gen_expr(expr, Scope, {tuple, _, [Expr]}) -> gen_expr(expr, Scope, Expr).
-
-gen_f(Tag, Args, Expr) -> cerl:c_tuple([cerl:c_atom(f), Tag, cerl:c_fun(Args, Expr)]).
 
 catchall(Args) ->
     Error = cerl:c_tuple([cerl:c_atom(error),
@@ -174,11 +163,7 @@ catchall(Args) ->
                                 cerl:c_tuple([cerl:c_atom(no_context)])])])]),
     cerl:c_clause([cerl:c_var(symbol:id('_')) || _ <- lists:seq(1, length(Args))], Error).
 
-call_type_domain(ExprForm, ArgForms) ->
-    cerl:c_apply(
-      cerl:c_call(cerl:c_atom(erlang), cerl:c_atom(element), 
-                  [cerl:c_int(3), ExprForm]),
-      ArgForms).
+call_type_domain(ExprForm, ArgForms) -> cerl:c_apply(ExprForm, ArgForms).
 
 domain(Tag) -> cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)]).
 domain(Module, Tag) -> cerl:c_call(cerl:c_atom(Module), cerl:c_atom(domain), [cerl:c_atom(Tag)]).

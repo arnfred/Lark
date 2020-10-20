@@ -19,10 +19,9 @@ intersection(D, any) -> D;
 intersection(none, _) -> none;
 intersection(_, none) -> none;
 
-intersection({f, Name1, F1}, {f, Name2, F2}) -> 
-    Name = list_to_atom(lists:flatten([atom_to_list(Name1), "_", atom_to_list(Name2)])), 
+intersection(F1, F2) when is_function(F1), is_function(F2) -> 
     case {domain_util:get_arity(F1), domain_util:get_arity(F2)} of
-        {N, N} -> {f, Name, domain_util:mapfun(fun(Res1, Res2) -> intersection(Res1, Res2) end, F1, F2)};
+        {N, N} -> domain_util:mapfun(fun(Res1, Res2) -> intersection(Res1, Res2) end, F1, F2);
         _ -> none
     end;
 

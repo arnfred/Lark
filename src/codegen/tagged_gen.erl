@@ -50,14 +50,14 @@ gen_tagged_fun(TypesEnv, {sum, _, _} = Term) ->
                               Body = case length(Args) of
                                          0 -> FirstBody;
                                          1 -> cerl:c_case(hd(Args), Clauses);
-                                         N -> cerl:c_case(cerl:c_values(Args), Clauses)
+                                         _ -> cerl:c_case(cerl:c_values(Args), Clauses)
                                      end,
                               {Args, Body}
                       end,
             {ok, [MakeFun(Fs) || {_Arity, Fs} <- FunsByArity]}
     end;
 
-gen_tagged_fun(_, Term) ->
+gen_tagged_fun(_, _) ->
     Var = cerl:c_var(symbol:id(substituted)),
     {ok, [{[Var], Var}]}.
 

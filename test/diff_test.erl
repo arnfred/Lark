@@ -84,6 +84,12 @@ diff_tagged_sum_test_() ->
     Actual = domain:diff(Old, New),
     ?_assertEqual(Expected, Actual).
 
+diff_f_f_test_() ->
+    F = fun(_A, _B) -> any end,
+    G = fun(_A, _B) -> none end,
+    [?test(none, domain:diff(F, F)),
+     ?test(#{old := F, new := G}, domain:diff(F, G))].
+
 diff_recur_recur_test_() ->
     F = fun() -> f end,
     G = fun() -> g end,

@@ -7,7 +7,7 @@ compact({sum, S}) -> compact_sum({sum, S});
 compact(Map) when is_map(Map) -> compact_product(Map);
 compact({tagged, Tag, Domain}) -> {tagged, Tag, compact(Domain)};
 compact(L) when is_list(L) -> [compact(E) || E <- L];
-compact({f, Name, F}) -> {f, Name, domain_util:mapfun(fun(D) -> compact(D) end, F)};
+compact(F) when is_function(F) -> domain_util:mapfun(fun(D) -> compact(D) end, F);
 compact({recur, D}) -> {recur, fun() -> compact(D()) end};
 compact(T) -> T.
 

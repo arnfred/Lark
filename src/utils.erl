@@ -1,5 +1,5 @@
 -module(utils).
--export([combinations/1, duplicates/2, group_by/2, group_by/3, unique/1, merge/1, pivot/1, domain_to_term/2]).
+-export([combinations/1, duplicates/2, group_by/2, group_by/3, unique/1, merge/1, pivot/1, domain_to_term/2, gen_tag/1]).
 
 % All combinations of list elements:
 % [[a, b, c], [1, 2]] -> [[a, 1], [a, 2], [b, 1], [b, 2], [c, 1], [c, 2]]
@@ -55,3 +55,7 @@ domain_to_term({tagged, Tag, Domain}, Ctx) ->
     {tagged, Ctx, Tag, domain_to_term(Domain, Ctx)};
 domain_to_term({recur, _F}, Ctx) ->
     {variable, Ctx, '_', '_'}.
+
+gen_tag(F) -> 
+    {name, Tag} = erlang:fun_info(F, name),
+    Tag.

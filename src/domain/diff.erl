@@ -3,20 +3,20 @@
 
 diff(_, {recur, D}, {recur, D}) -> none;
 diff(Path, {recur, OldF}, {recur, NewF}) -> 
-    OldTag = gen_tag(OldF),
-    NewTag = gen_tag(NewF),
+    OldTag = utils:gen_tag(OldF),
+    NewTag = utils:gen_tag(NewF),
     case lists:member(OldTag, Path) or lists:member(NewTag, Path) of
         true -> none;
         false -> diff([OldTag | [NewTag | Path]], OldF(), NewF())
     end;
 diff(Path, {recur, OldF}, New) -> 
-    Tag = gen_tag(OldF),
+    Tag = utils:gen_tag(OldF),
     case lists:member(Tag, Path) of
         true -> none;
         false -> diff([Tag | Path], OldF(), New)
     end;
 diff(Path, Old, {recur, NewF}) -> 
-    Tag = gen_tag(NewF),
+    Tag = utils:gen_tag(NewF),
     case lists:member(Tag, Path) of
         true -> none;
         false -> diff([Tag | Path], Old, NewF())
@@ -38,9 +38,14 @@ diff(Path, {tagged, Tag, Old}, {tagged, Tag, New}) ->
         Diff -> {tagged, Tag, Diff}
     end;
 
-diff(_, {f, Name, _}, {f, Name, _}) -> none;
-diff(_, {f, _, _} = Old, {f, _, _} = New) -> #{old => Old,
-                                               new => New};
+diff(_, OldF, NewF) when is_function(OldF), is_function(NewF) ->
+    OldTag = utils:gen_tag(OldF),
+    NewTag = utils:gen_tag(NewF),
+    case OldTag =:= NewTag of
+        true    -> none;
+        false   -> #{old => OldF,
+                     new => NewF}
+    end;
 
 diff(Path, Old, New) when is_map(Old), is_map(New) -> 
     Keys = ordsets:to_list(ordsets:from_list(maps:keys(Old) ++ maps:keys(New))),
@@ -91,7 +96,3 @@ diff_set(Path, Old, New) ->
         false -> #{only_in_old => OnlyInOld,
                    only_in_new => OnlyInNew}
     end.
-
-gen_tag(F) -> 
-    {name, Tag} = erlang:fun_info(F, name),
-    Tag.

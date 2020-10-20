@@ -108,8 +108,8 @@ scan(Env, _, _, {key, _, _}) -> {Env, any};
 
 scan(Env, _, TypeMod, {type, _, _, _} = T) -> 
     Domain = case TypeMod:domain(symbol:tag(T)) of
-                 {f, Name, F}   -> two_step_ignore_stack(F, Name);
-                 D              -> D end,
+                 F when is_function(F) -> two_step_ignore_stack(F);
+                 D                     -> D end,
     {Env, Domain};
 
 scan(Env, _, _, {qualified_type, _, S}) ->
@@ -167,7 +167,7 @@ scan_clause(Env, Stack, TypeMod, Args, {clause, _, Patterns, Expr}) ->
 % Pattern of: `T(a, b)`
 scan_pattern(Domain, TypeMod, Stack, {application, _, {type, _, _, T}, Args}) ->
     {ArgEnvs, ArgDomains} = unzip([scan_pattern(any, TypeMod, Stack, A) || A <- Args]),
-    {f, _, TDomainFun} = TypeMod:domain(T), 
+    TDomainFun = TypeMod:domain(T), 
     {intersection(ArgEnvs), intersection(Domain, TDomainFun(ArgDomains))};
 
 % Pattern of: `{ k: v, ... }`
@@ -281,7 +281,7 @@ pivot([H | _] = ListOfLists) ->
 
 % This is a bit of a funky pattern that is going to be hard to understand when
 % reading the code. In short, what's going on here is that we want the domain
-% function in `{f, Name, DomainFun}` to be purely a function that accepts a
+% function in `DomainFun` to be purely a function that accepts a
 % domain as a parameter and returns a domain. However, when the function is
 % executed, it executes the scan of the AST and needs an environment of other
 % top level functions available. This isn't known at the time we generate the
@@ -299,9 +299,9 @@ generate_env_fun(Name, Length, DomainFromEnv, TypeMod) ->
                         Env = maps:from_list(Envs),
                         DomainFromEnv(Env, Stack, ArgDomains)
                 end,
-            {f, Name, DomainFun} = two_step_pass_stack(F, Name, Length),
+            DomainFun = two_step_pass_stack(F, Name, Length),
             Domain = DomainFun([]), % Pass empty stack for top-level domain
-            {{{Name, Length}, {f, Name, DomainFun}}, {Name, Length}, Domain}
+            {{{Name, Length}, DomainFun}, {Name, Length}, Domain}
     end.
 
 get_domain(_, any)                              -> any;
@@ -317,10 +317,11 @@ get_type(List) when is_list(List) ->
     {Element, Rest} = lists:splitwith(fun(C) -> not(C =:= $/) end, List),
     [list_to_atom(Element) | get_type(Rest)].
 
-apply_domain({f, Name, StackFun}, Stack, Args, _) ->
+apply_domain(StackFun, Stack, Args, _) ->
+    Name = utils:gen_tag(StackFun),
     case check_stack_recursion(Stack, Name, Args) of
         error -> none;
-        ok -> {f, Name, DomainFun} = StackFun(Stack),
+        ok -> DomainFun = StackFun(Stack),
               io:format("Args for ~p: ~p~n", [Name, Args]),
               erlang:apply(DomainFun, Args)
     end;
@@ -345,15 +346,11 @@ check_stack_recursion([_ | Stack], Name, ArgDomains) ->
 % We need to pass the stack to avoid recursions. Check the corresponding git
 % commit message for more details.
 two_step_pass_stack(F, Name, N) ->
-    StepOne = fun(Stack) -> 
-                      StepTwo = spread(fun(Args) -> F(Stack, Args) end, N),
-                      {f, Name, StepTwo}
-              end,
-    {f, Name, StepOne}.
+    fun(Stack) -> spread(fun(Args) -> F(Stack, Args) end, N) end.
 
 % In cases where we don't need to pass the stack, we still want to wrap the
 % function domains in another domain to keep things consistent
-two_step_ignore_stack(F, Name) -> {f, Name, fun(_) -> {f, Name, F} end}.
+two_step_ignore_stack(F) -> fun(_) -> F end.
 
 spread(F, N) ->
     case N of
