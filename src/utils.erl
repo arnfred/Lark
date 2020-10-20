@@ -1,5 +1,5 @@
 -module(utils).
--export([combinations/1, duplicates/2, group_by/2, group_by/3, unique/1, merge/1, pivot/1, domain_to_term/2, gen_tag/1]).
+-export([combinations/1, duplicates/2, group_by/2, group_by/3, unique/1, merge/1, pivot/1, domain_to_term/2, gen_tag/1, print_core/1]).
 
 % All combinations of list elements:
 % [[a, b, c], [1, 2]] -> [[a, 1], [a, 2], [b, 1], [b, 2], [c, 1], [c, 2]]
@@ -59,3 +59,9 @@ domain_to_term({recur, _F}, Ctx) ->
 gen_tag(F) -> 
     {name, Tag} = erlang:fun_info(F, name),
     Tag.
+
+print_core(Name) ->
+    {ok, FileContents} = file:read_file(Name),
+    Core = unicode:characters_to_list(FileContents, utf8),
+    {ok, Scanned, _} = core_scan:string(Core),
+    io:format("~tp~n", [core_parse:parse(Scanned)]).

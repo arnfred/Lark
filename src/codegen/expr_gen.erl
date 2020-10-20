@@ -147,11 +147,15 @@ gen_expr(expr, _, {lambda, Ctx, ClauseList}) ->
                            {ok, cerl:c_fun(Args, cerl:c_case(cerl:c_values(Args), Clauses))}
     end;
 
-% expr of form: `"test string"` or `1.32`
-gen_expr(expr, _, {value, _, _, Val}) -> {ok, cerl:abstract(Val)};
+% expr of form `(<Pattern> = Expr, Other expression)`
+gen_expr(expr, _, {'let', _, Patterns, Expr, Acc}) ->
+    {ok, cerl:c_case(Expr, [cerl:c_clause([Ps], Acc) || Ps <- Patterns])};
 
-% expr of form: `(<Expr>)`
-gen_expr(expr, Scope, {tuple, _, [Expr]}) -> gen_expr(expr, Scope, Expr).
+% exor of form `(Expr1(), Expr2)`
+gen_expr(expr, _, {seq, _, Expr, Acc}) -> {ok, cerl:c_seq(Expr, Acc)};
+
+% expr of form: `"test string"` or `1.32`
+gen_expr(expr, _, {value, _, _, Val}) -> {ok, cerl:abstract(Val)}.
 
 catchall(Args) ->
     Error = cerl:c_tuple([cerl:c_atom(error),

@@ -66,7 +66,7 @@ check_args(ArgsEnv, AST) ->
 
 collect_types(ArgsEnv, {ast, _, _, _, Defs} = AST) ->
     Scope = maps:from_list([{[Name], Args} || {type_def, _, Name, Args, _} <- maps:values(Defs)]),
-    ast:traverse(make_types_pre(ArgsEnv), make_types_post(ArgsEnv), Scope, AST).
+    ast:traverse(make_types_pre(ArgsEnv), fun types_post/3, Scope, AST).
 
 % args_pre only tags the pair key to make sure we know its tag after the key
 % has been converted to an empty list of args
@@ -120,7 +120,6 @@ check_args_pre(_, _, _) -> ok.
 % assumptions about the type tree. It also renames `pairs` inside of a
 % dict to `dict_pair` to make it easier to generate erlang core afterwards
 make_types_pre(ArgsEnv) -> fun(Type, Scope, Term) -> tag(types_pre(ArgsEnv, Type, Scope, Term)) end.
-make_types_post(ArgsEnv) -> fun(Type, Scope, Term) -> types_post(ArgsEnv, Type, Scope, Term) end.
 
 tag({error, Errs})      -> {error, Errs};
 tag({ok, Term})         -> {ok, ast:tag(path, Term)}.
@@ -163,7 +162,7 @@ types_pre(_, _, _, {type, Ctx, Name, Path} = Term) ->
         false   -> {ok, Term}
     end;
 
-types_pre(ArgsEnv, _, _, {application, Ctx, {type, _, _, _} = T, Args} = Term) ->
+types_pre(_, _, _, {application, Ctx, {type, _, _, _} = T, Args} = Term) ->
     Tag = symbol:tag(T),
     PathTag = ast:get_tag(path, Term),
     IsRecursive = lists:member(Tag, lists:droplast(PathTag)),
@@ -178,11 +177,11 @@ types_pre(_, _, _, Term) -> {ok, Term}.
 
 % types_post collects all types defined by the type definitions in the AST.
 % This includes the type defs and any tags
-types_post(_, top_level, _, {type_def, _, Name, _, _} = Term)  -> {ok, [Name], Term};
-types_post(_, expr, _, {tagged, _, Path, _} = Term)            -> {ok, Path, Term};
-types_post(_, expr, Scope, {type, _, _, Path} = Term)          ->
+types_post(top_level, _, {type_def, _, Name, _, _} = Term)  -> {ok, [Name], Term};
+types_post(expr, _, {tagged, _, Path, _} = Term)            -> {ok, Path, Term};
+types_post(expr, Scope, {type, _, _, Path} = Term)          ->
     case maps:is_key(Path, Scope) of
         true    -> {ok, Term};
         false   -> {ok, Path, Term}
     end;
-types_post(_, _, _, _)                                         -> ok.
+types_post(_, _, _)                                         -> ok.

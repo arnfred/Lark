@@ -316,11 +316,30 @@ tagged_constructor_test_() ->
      ?setup("module test { Test/T, main }
              type Test -> T: ({a: Boolean, b: 4} | {c: Boolean, d: Boolean})
              def main _ -> Test/T(False, True)",
-            fun({ok, Modules}) ->
+            fun({ok, _}) ->
                     [?test({tagged, 'Test/T', #{a := 'Boolean/True', b := 4}},
                            test:'T'('Boolean/True')),
                      ?test({tagged, 'Test/T', #{c := 'Boolean/True', d := 'Boolean/False'}},
                             test:'T'('Boolean/True', 'Boolean/False')),
                      ?test({tagged, 'Test/T', #{c := 'Boolean/False', d := 'Boolean/True'}},
                             test:main('_'))]
+            end)}.
+
+assignment_test_() ->
+    {"Assigning to variable pattern should let those variables be accessible in subsequent expressions",
+     ?setup("module test { main }
+             def main a -> (val [1,2,b] = a
+                            [b, b, b])",
+            fun({ok, _}) ->
+                    [?test([3, 3, 3], test:main([1, 2, 3]))]
+            end)}.
+
+seq_test_() ->
+    {"Two expressions in successions should be evaluated in order",
+     ?setup("module test { main }
+             def main a -> (val f = (b -> [b, b])
+                            f(a)
+                            [a, a, a])",
+            fun({ok, _}) ->
+                    [?test([1, 1, 1], test:main(1))]
             end)}.
