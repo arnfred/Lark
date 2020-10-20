@@ -11,7 +11,7 @@ type(AST, Options) ->
             case gen(TypedAST, TypesEnv, ArgsEnv) of
                 {error, Errs}                           -> {error, Errs};
                 {ok, {Exported, ScannerMod, TypeMods}}  ->
-                    Envs = scanner:scan(ScannerMod, AST),
+                    _Envs = scanner:scan(ScannerMod, AST),
                     case PurgeScannerMod of
                         true    ->
                             true = code:soft_purge(ScannerMod),
@@ -27,10 +27,14 @@ prepare(AST) ->
     case collect_args(AST) of
         {error, Errs}               -> {error, Errs};
         {ok, {ArgsEnv, _}}          ->
-            case collect_types(ArgsEnv, AST) of
-                {error, Errs}               -> {error, Errs};
-                {ok, {TypesEnv, TypesAST}}  ->
-                    {ok, {ArgsEnv, TypesEnv, TypesAST}}
+            case check_args(ArgsEnv, AST) of
+                {error, Errs}           -> {error, Errs};
+                {ok, _}                 ->
+                    case collect_types(ArgsEnv, AST) of
+                        {error, Errs}               -> {error, Errs};
+                        {ok, {TypesEnv, TypesAST}}  ->
+                            {ok, {ArgsEnv, TypesEnv, TypesAST}}
+                    end
             end
     end.
 
@@ -57,6 +61,9 @@ load_type_module(Name, ModuleForm) ->
 collect_args({ast, _, _, _, Defs} = AST) ->
     TopLevelTypes = maps:from_list([{Name, []} || Name <- maps:keys(Defs)]),
     ast:traverse(fun args_pre/3, fun args_post/3, TopLevelTypes, AST).
+check_args(ArgsEnv, AST) ->
+    ast:traverse(fun check_args_pre/3, fun(_, _, _) -> skip end, ArgsEnv, AST).
+
 collect_types(ArgsEnv, {ast, _, _, _, Defs} = AST) ->
     Scope = maps:from_list([{[Name], Args} || {type_def, _, Name, Args, _} <- maps:values(Defs)]),
     ast:traverse(make_types_pre(ArgsEnv), make_types_post(ArgsEnv), Scope, AST).
@@ -95,6 +102,18 @@ get_vars(Term) when is_tuple(Term) ->
     Args = [{var, V} || I <- lists:seq(3, size(Term)), {var, V} <- lists:flatten([element(I, Term)])],
     utils:unique(Args);
 get_vars(Term) when is_list(Term) -> utils:unique([V || T <- Term, V <- get_vars(T)]).
+
+
+check_args_pre(_, _, {def, _, _, _, _}) -> skip;
+check_args_pre(Type, Scope, {application, Ctx, {type, _, _, _} = T, Args} = Term) ->
+    Tag = symbol:tag(T),
+    Vars = maps:get(Tag, Scope),
+    case length(Vars) =:= length(Args) of
+        false   -> error:format({wrong_number_of_arguments, Tag, length(Args), length(Vars)},
+                                {typer, Type, Ctx});
+        true    -> {ok, Term}
+    end;
+check_args_pre(_, _, _) -> ok.
 
 
 % types_pre adds a `path` tag to the term contexts and checks a few
@@ -146,20 +165,15 @@ types_pre(_, _, _, {type, Ctx, Name, Path} = Term) ->
 
 types_pre(ArgsEnv, _, _, {application, Ctx, {type, _, _, _} = T, Args} = Term) ->
     Tag = symbol:tag(T),
-    Vars = maps:get(Tag, ArgsEnv),
-    case length(Vars) =:= length(Args) of
-        false   -> error:format({wrong_number_of_arguments, Tag, length(Args), length(Vars)},
-                                {typegen, expr, Term});
-        true    -> 
-            PathTag = ast:get_tag(path, Term),
-            IsRecursive = lists:member(Tag, lists:droplast(PathTag)),
-            case IsRecursive of
-                true    -> {ok, {recursive_type_application, Ctx, Tag, Args}};
-                false   -> {ok, {application, Ctx, T, Args}}
-            end
+    PathTag = ast:get_tag(path, Term),
+    IsRecursive = lists:member(Tag, lists:droplast(PathTag)),
+    case IsRecursive of
+        true    -> {ok, {recursive_type_application, Ctx, Tag, Args}};
+        false   -> {ok, {application, Ctx, T, Args}}
     end;
 
 types_pre(_, _, _, Term) -> {ok, Term}.
+
 
 
 % types_post collects all types defined by the type definitions in the AST.

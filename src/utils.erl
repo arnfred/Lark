@@ -52,4 +52,6 @@ domain_to_term(Elems, Ctx) when is_map(Elems) ->
 domain_to_term(Elems, Ctx) when is_list(Elems) -> 
     {list, Ctx, [domain_to_term(V, Ctx) || {K, V} <- Elems]};
 domain_to_term({tagged, Tag, Domain}, Ctx) ->
-    {tagged, Ctx, Tag, domain_to_term(Domain, Ctx)}.
+    {tagged, Ctx, Tag, domain_to_term(Domain, Ctx)};
+domain_to_term({recur, _F}, Ctx) ->
+    {variable, Ctx, '_', '_'}.

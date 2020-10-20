@@ -475,6 +475,7 @@ pattern_tagged_sum_list_test_() ->
                      ?test('Args/B', DomainFun('Args/C'))]
             end)}.
 
+% Disabling: I'm not sure I see a need to support subtype application
 tagged_pair_in_pattern_test_() ->
     {"When a subtype is defined after a pattern it can still be called independently",
      ?setup("type Test -> Blip/Blop(T)\n"

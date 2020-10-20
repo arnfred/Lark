@@ -24,9 +24,10 @@ gen_modules(DefFormMap, TypeForms, {ast, _, Modules, _, Defs}) ->
     {ok, ModuleForms}.
 
 gen_module({module, _, Path, Exports}, Defs, DefForms, TypeForms) ->
-    {TypeExports, _} = lists:unzip(TypeForms), 
+    TypeExports = [FName || {FName, _Form} <- TypeForms,
+                            (cerl:fname_id(FName) == domain) or maps:is_key(cerl:fname_id(FName), Exports)],
     DefExports = [cerl:c_fname(Name, length(Args)) || {def, _, Name, Args, _} <- maps:values(Defs), 
-                                                           maps:is_key(Name, Exports)],
+                                                      maps:is_key(Name, Exports)],
     ModuleExports = TypeExports ++ DefExports,
     ModuleName = module:beam_name(Path),
     {ModuleName, cerl:c_module(cerl:c_atom(ModuleName), ModuleExports, [], DefForms ++ TypeForms)}.

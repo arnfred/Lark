@@ -19,7 +19,7 @@ gen_pattern(pattern, _, {variable, _, _, _} = Term) -> {ok, [cerl:c_var(symbol:t
 % Pattern of shape: T
 gen_pattern(pattern, Scope, {type, _, _, Path} = Term) ->
     Tag = symbol:tag(Term),
-    NewEnv = maps:remove(Tag, Scope), % Avoid recursion for atomic terms
+    NewEnv = maps:remove(Path, Scope), % Avoid recursion for atomic terms
     case maps:get(Path, Scope, undefined) of
         undefined       -> {ok, [cerl:c_atom(Tag)]};
         {type, _, _, _} -> {ok, [cerl:c_atom(Tag)]};
@@ -55,8 +55,9 @@ gen_pattern(pattern, _, {sum, _, ElemList}) ->
 
 % Pattern of shape: '[1, 2]'
 gen_pattern(pattern, _, {list, _, ElemList}) ->
-    Elements = lists:flatten(ElemList),
-    {ok, [cerl:make_list(Elements), cerl:c_tuple(Elements)]};
+    Ls = [cerl:make_list(Elems) || Elems <- utils:combinations(ElemList)],
+    Ts = [cerl:c_tuple(Elems) || Elems <- utils:combinations(ElemList)],
+    {ok, Ls ++ Ts};
 
 % Pattern of shape: module/T(a, b)
 gen_pattern(pattern, Scope, {qualified_type_application, Ctx, ModulePath, Name, Args}) ->
@@ -71,6 +72,14 @@ gen_pattern(pattern, Scope, {qualified_type_application, Ctx, ModulePath, Name, 
                            traverse_domain(Scope, ResDomain, Ctx)
             end
     end;
+
+% Pattern of shape: T where T is recursive
+gen_pattern(pattern, _Scope, {recursive_type, Ctx, Name, _}) ->
+    {ok, [{variable, Ctx, Name, symbol:id('_')}]};
+
+% Pattern of shape: T(A) where T is recursive
+gen_pattern(pattern, _Scope, {recursive_type_application, Ctx, _, _}) ->
+    {ok, [{variable, Ctx, '_', symbol:id('_')}]};
 
 % Pattern of shape: T(A)
 gen_pattern(pattern, _Scope, {application, Ctx, {type, _, _, _} = T, _}) ->
@@ -98,7 +107,7 @@ gen_pattern(pattern, _, {value, _, Type, Val}) ->
 traverse_domain(Scope, Domain, Ctx) -> traverse_term(Scope, utils:domain_to_term(Domain, Ctx)).
 traverse_term(Scope, Term) ->  traverse_term(Scope, Term, pattern).
 traverse_term(Scope, Term, Type) -> 
-    case ast:traverse_term(Type, fun code_gen:pre_gen/3, fun gen_pattern/3, Scope, Term) of
+    case ast:traverse_term(Type, fun code_gen:pre_gen/3, fun code_gen:gen/3, Scope, Term) of
         {error, Errs}       -> {error, Errs};
         {ok, {_Env, Form}}  -> {ok, Form}
     end.

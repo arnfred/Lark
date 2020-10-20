@@ -74,16 +74,21 @@ gen_expr(expr, _, {dict, _, Elements}) ->
 % expr of form: `f(a)` or `T(a)`
 % f can either be a type (encoded as {f, Tag, Function}) or a Function.
 % If we knew the domain, we could separate the two out a compile time, but for now,
-% we're assuming all applications is for types
+% we're matching against the domain
 gen_expr(expr, _, {application, _, Expr, Args}) -> 
-    case cerl:is_c_fun(Expr) orelse cerl:is_c_fname(Expr) of
+    case cerl:is_c_fun(Expr) of
         true    -> {ok, cerl:c_apply(Expr, Args)};
-        false   -> 
-            Var = cerl:c_var(symbol:id('')),
-            F = cerl:c_var(symbol:id('F')),
-            TypeClause = cerl:c_clause([cerl:c_tuple([cerl:c_atom('f'), cerl:c_var('_'), F])], cerl:c_apply(F, Args)),
-            VarClause = cerl:c_clause([F], cerl:c_apply(F, Args)),
-            {ok, cerl:c_let([Var], Expr, cerl:c_case(Var, [TypeClause, VarClause]))}
+        false   ->
+            case cerl:is_c_fname(Expr) of
+                true    -> {ok, cerl:c_apply(cerl:c_fname(cerl:fname_id(Expr), length(Args)), Args)};
+                false   ->
+                    Var = cerl:c_var(symbol:id('')),
+                    F = cerl:c_var(symbol:id('F')),
+                    FName = cerl:c_fname(cerl:var_name(F), length(Args)),
+                    TypeClause = cerl:c_clause([cerl:c_tuple([cerl:c_atom('f'), cerl:c_var('_'), F])], cerl:c_apply(F, Args)),
+                    VarClause = cerl:c_clause([F], cerl:c_apply(F, Args)),
+                    {ok, cerl:c_let([Var], Expr, cerl:c_case(Var, [TypeClause, VarClause]))}
+            end
     end;
 
 % expr of form: `T(a)` where `T` is a recursive type (and so we want to not
@@ -105,10 +110,12 @@ gen_expr(expr, _, {qualified_variable_application, _, ModulePath, Name, Args}) -
 gen_expr(expr, Scope, {type, _, _, Path} = Term) ->
     Tag = symbol:tag(Term),
     DomainForm = cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)]),
-    case maps:get(Path, Scope) of
-        {tagged, _, _, _}       -> {ok, DomainForm};
+    NewScope = maps:remove(Path, Scope), % Avoid recursion for atomic terms
+    case maps:get(Path, Scope, undefined) of
+        undefined               -> {ok, Tag, cerl:c_atom(Tag)};
         {type_def, _, _, _, _}  -> {ok, DomainForm};
-        {type, _, _, _}         -> {ok, Tag, cerl:c_atom(Tag)}
+        {tagged, _, Path, _}    -> {ok, cerl:c_fname(symbol:tag(Path), 0)};
+        T                       -> traverse_term(NewScope, T, Tag)
     end;
 
 % expr of form: kind/prelude/Boolean
@@ -181,3 +188,9 @@ call_type_tag(ModulePath, Tag, ArgForms) ->
     call_type_domain(domain(Module, Tag), ArgForms).
 call_type_tag(Tag, ArgForms) ->
     call_type_domain(domain(Tag), ArgForms).
+
+traverse_term(Scope, Term, Tag) -> 
+    case ast:traverse_term(expr, fun code_gen:pre_gen/3, fun code_gen:gen/3, Scope, Term) of
+        {error, Errs}       -> {error, Errs};
+        {ok, {_Env, Form}}  -> {ok, Tag, Form}
+    end.

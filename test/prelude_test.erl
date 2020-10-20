@@ -44,8 +44,8 @@ tagged_test_() ->
 %            "  | Leaf _                         -> Leaf\n"
 %            "  | (Node: {left, value, right}) _ -> compare(elem, value).match(\n"
 %            "        EQ -> root\n"
-%            "        LT -> Node.new(left.insert(elem), value, right)\n"
-%            "        GT -> Node.new(left, value, right.insert(elem)))\n",
+%            "        LT -> Node(left.insert(elem), value, right)\n"
+%            "        GT -> Node(left, value, right.insert(elem)))\n",
 
        
 
