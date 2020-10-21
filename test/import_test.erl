@@ -131,5 +131,5 @@ import_qualified_module_name_test_() ->
     SourceMap = #{kind_prelude => {module, #{}, [kind, prelude], #{'Option' => 'Option'}}},
     Actual = test_import([kind, prelude], SourceMap),
     [?test({ok, [{alias, _,
-                      [kind, prelude, 'Option'],
+                      'kind/prelude/Option',
                       {qualified_type, _, [kind, prelude], 'Option'}}]}, Actual)].

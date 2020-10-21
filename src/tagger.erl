@@ -44,7 +44,7 @@ tag_defs_pre(_, _, _)                               -> skip.
 tag_defs_post(top_level, _, {def, _, Name, Args, _}) ->
     {ok, Name, {variable, #{}, Name, {Name, length(Args)}}};
 tag_defs_post(top_level, _, {type_def, _, Name, _, _}) ->
-    {ok, [Name], {type, #{}, Name, [Name]}};
+    {ok, Name, {type, #{}, Name, [Name]}};
 tag_defs_post(_, _, _) -> ok.
 
 
@@ -54,11 +54,9 @@ add_type_path(top_level, _, {type_def, _, Name, _, _} = Term) -> {ok, ast:tag(pa
 add_type_path(Type, Scope, Term)        -> add_path(Type, Scope, Term).
 
 tag_types(_, Scope, {symbol, Ctx, type, S} = Term) -> 
-    % We look for S in case the type is a top-level type
-    % We look for path(Term) in case the type is a tag
     case maps:is_key(S, Scope) of
         true    -> {ok, replace(Scope, S, Term)};
-        false   -> {ok, path(Term), {type, Ctx, S, path(Term)}}
+        false   -> {ok, symbol:tag(path(Term)), {type, Ctx, S, path(Term)}}
     end;
 tag_types(top_level, _, {type_def, Ctx, Name, _, _} = Term) -> 
     {ok, Name, {type, Ctx, Name, [Name]}, Term};
@@ -88,7 +86,6 @@ tag_symbols(Type, Scope, {symbol, _, type, T} = Term) ->
         false   -> error:format({undefined_type, T}, {tagger, Type, Term})
     end;
 tag_symbols(Type, Scope, {symbol, Ctx, variable, S} = Term) ->
-    io:format("Path of ~p: ~p~n", [S, path(Term)]),
     case {Type, maps:is_key(S, Scope)} of
         {expr, false}    -> error:format({undefined_variable, S}, {tagger, Type, Term});
         {expr, true}     -> {ok, replace(Scope, S, Term)};
@@ -99,18 +96,16 @@ tag_symbols(Type, Scope, {symbol, Ctx, variable, S} = Term) ->
                             end
     end;
 tag_symbols(Type, Scope, {qualified_type, _, Symbols} = Term) ->
-    Path = [S || {_, _, _, S} <- Symbols],
-    case maps:is_key(Path, Scope) of
-        true    -> {ok, replace(Scope, Path, Term)};
-        false   -> Tag = symbol:tag({type, #{}, Path, Path}),
-                   error:format({undefined_type, Tag}, {tagger, Type, Term})
+    Tag = symbol:tag([S || {_, _, _, S} <- Symbols]),
+    case maps:is_key(Tag, Scope) of
+        true    -> {ok, replace(Scope, Tag, Term)};
+        false   -> error:format({undefined_type, Tag}, {tagger, Type, Term})
     end;
 tag_symbols(Type, Scope, {qualified_variable, _, Symbols} = Term) ->
-    Path = [S || {_, _, _, S} <- Symbols],
-    case maps:is_key(Path, Scope) of
-        true    -> {ok, replace(Scope, Path, Term)};
-        false   -> Tag = symbol:tag({type, #{}, Path, Path}),
-                   error:format({undefined_variable, Tag}, {tagger, Type, Term})
+    Tag = symbol:tag([S || {_, _, _, S} <- Symbols]),
+    case maps:is_key(Tag, Scope) of
+        true    -> {ok, replace(Scope, Tag, Term)};
+        false   -> error:format({undefined_variable, Tag}, {tagger, Type, Term})
     end;
 tag_symbols(_, _, _) -> ok.
 

@@ -65,7 +65,8 @@ import_module(ImportPath, SourceMap, LocalTypes, ImportTerm, Sandboxed) ->
 
     case error:collect(import_def('_', '_', ImportPath, SourceMap, LocalTypes, ImportTerm, Sandboxed)) of
         {error, Errs}   -> {error, Errs};
-        {ok, Aliases}   -> {ok, [{alias, Ctx, ModulePath ++ [Alias], Term} || {alias, Ctx, Alias, Term} <- Aliases]}
+        {ok, Aliases}   -> {ok, [{alias, Ctx, symbol:tag(ModulePath ++ [Alias]), Term} || 
+                                 {alias, Ctx, Alias, Term} <- Aliases]}
     end.
 
 import_def(Name, Alias, ImportPath, SourceMap, LocalTypes, Term, Sandboxed) ->
@@ -203,7 +204,7 @@ is_whitelisted(Module, Name) ->
 beam_subtypes(qualified_variable, _, _, _, _) -> [];
 beam_subtypes(qualified_type, ImportPath, Alias, Term, Sandboxed) ->
     Ctx = element(2, Term),
-    [{ok, {alias, Ctx, [Alias, T],
+    [{ok, {alias, Ctx, symbol:tag([Alias, T]),
            {get_tag(T), #{import => Term}, ImportPath, T}}}
      || {ok, {alias, _, T, _}} <- beam_function(ImportPath, '_', '_', Term, Sandboxed)].
 
@@ -230,7 +231,7 @@ kind_subtypes(qualified_variable, _, _, _, _, _) -> [];
 kind_subtypes(qualified_type, ImportPath, ImportBeamName, Alias, SourceMap, Term) ->
     Ctx = element(2, Term),
     case maps:get(ImportBeamName, SourceMap, undefined) of
-        {module, _, _, Types} -> [{ok, {alias, Ctx, [Alias, T],
+        {module, _, _, Types} -> [{ok, {alias, Ctx, symbol:tag([Alias, T]),
                                         {get_tag(T), #{import => Term}, ImportPath, T}}}
                                   || T <- maps:keys(Types)];
         undefined             -> []

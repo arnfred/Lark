@@ -621,6 +621,24 @@ pattern_local_application_test_() ->
                     [?testError({local_type_in_pattern_application, 'F'}, Err)]
             end)}.
 
+recursive_wrong_number_of_arguments_1_test_() ->
+    {"A recursive type should be checked for number of arguments",
+     ?setup("module test { Tree }
+             import Tree/_
+             type Tree a -> Leaf | Node: {left: Tree(a), value: a, right: Tree(a)}",
+            fun({ok, _}) ->
+                    Recur = fun() -> test:'Tree'('Int') end,
+                    [?test({sum,['Tree/Leaf', {tagged,'Tree/Node',{recur,_}}]}, test:'Tree'('Int'))]
+            end)}.
+
+recursive_wrong_number_of_arguments_2_test_() ->
+    {"A recursive type should be checked for number of arguments",
+     ?setup("module test { Tree }
+             type Tree a -> Leaf | Node: {left: Tree(a), value: a, right: Tree(a)}",
+            fun({ok, _}) ->
+                    Recur = fun() -> test:'Tree'('Int') end,
+                    [?test({sum,['Tree/Leaf', {tagged,'Tree/Node',{recur,_}}]}, test:'Tree'('Int'))]
+            end)}.
 
 %multiple_tagged_pair_in_pattern_test_() ->
 %     Code = "type Test a\n"

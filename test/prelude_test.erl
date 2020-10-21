@@ -27,25 +27,51 @@ compare_test_() ->
             end)}.
 
 tagged_test_() ->
-    {"extract value from tagged function",
+    {"get inner value from tagged function",
      ?setup("module test { Test, main }\n"
             "type Test -> Test: A\n"
-            "def main t -> t.value",
+            "def main t -> t.get",
             fun({ok, _}) ->
                     [?test('Test/A', test:main(test:'Test'()))]
             end)}.
 
 
-%binary_search_test_() ->
-%    {"Simple binary tree implementation",
-%     ?setup("import Compare/_\n"
-%            "type Tree a -> Leaf | Node: {left: Tree(a), value: a, right: Tree(a)}\n"
-%            "def insert root elem\n"
-%            "  | Leaf _                         -> Leaf\n"
-%            "  | (Node: {left, value, right}) _ -> compare(elem, value).match(\n"
-%            "        EQ -> root\n"
-%            "        LT -> Node(left.insert(elem), value, right)\n"
-%            "        GT -> Node(left, value, right.insert(elem)))\n",
+binary_search_test_() ->
+    {"Simple binary tree implementation",
+     ?setup("module test { main }
+             import kind/prelude/Compare/_
+             import Tree/_
+             type Tree a -> Leaf | Node: {left: Tree(a), value: a, right: Tree(a)}
+             def insert root elem
+               | Leaf _                         -> Node(Leaf, elem, Leaf)
+               | (Node: {left, value, right}) _ -> compare(elem, value).match(
+                     EQ -> root
+                     LT -> Node(left.insert(elem), value, right)
+                     GT -> Node(left, value, right.insert(elem)))
+             def main n -> Leaf.insert(1).insert(3).insert(5).insert(4).insert(n).insert(2)",
+            fun({ok, _}) ->
+                    [?testEqual({tagged,'Tree/Node',
+                                 #{left => 'Tree/Leaf',
+                                   right =>
+                                   {tagged,'Tree/Node',
+                                    #{left =>
+                                      {tagged,'Tree/Node',
+                                       #{left => 'Tree/Leaf',right => 'Tree/Leaf',
+                                         value => 2}},
+                                      right =>
+                                      {tagged,'Tree/Node',
+                                       #{left =>
+                                         {tagged,'Tree/Node',
+                                          #{left => 'Tree/Leaf',right => 'Tree/Leaf',
+                                            value => 4}},
+                                         right =>
+                                         {tagged,'Tree/Node',
+                                          #{left => 'Tree/Leaf',right => 'Tree/Leaf',
+                                            value => 7}},
+                                         value => 5}},
+                                      value => 3}},
+                                   value => 1}}, test:main(7))]
+            end)}.
 
        
 

@@ -82,8 +82,8 @@ format(Sources, ImportPrelude, Options) ->
                     ModuleMap = maps:merge(DefModuleMap, TypeModuleMap),
 
 
-                    error:collect([import_and_tag(Path, AST, SourceMap, Ts, ModuleMap, ImportPrelude, Options) ||
-                                   {{Path, AST}, Ts} <- lists:zip(ParsedSources, Types)])
+                    error:collect([import_and_tag(Path, AST, SourceMap, LocalTypes, ModuleMap, ImportPrelude, Options) ||
+                                   {{Path, AST}, LocalTypes} <- lists:zip(ParsedSources, Types)])
             end
     end.
 
@@ -120,7 +120,11 @@ types_post(expr, _, {pair, _, {symbol, _, type, Name}, _} = Term) ->
     {ok, {Parent, Name}, Term};
 types_post(expr, _, {symbol, _, type, Name} = Term) -> 
     Parent = ast:get_tag(parent, Term),
-    {ok, {Parent, Name}, Term};
+    % Don't include recursive types
+    case Parent == Name of
+        true    -> {ok, Term};
+        false   -> {ok, {Parent, Name}, Term}
+    end;
 types_post(_, _, _) -> ok.
 
 
