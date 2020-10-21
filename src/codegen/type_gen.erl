@@ -51,12 +51,9 @@ gen_modules(Types, TypesEnv, ArgsEnv, {ast, _, Modules, _, _}) ->
             % A normal module must contain the type definitions that it exports. To do
             % so we generate a map of these exports that can be included in codegen
             % when the module is created
-            case error:collect([exported_types(Mod, Types) || Mod <- Modules]) of
-                {error, Errs}           -> {error, Errs};
-                {ok, Exported}  ->
-                    Defs = gen_module_defs(lists:flatten(Exported), Types, TypeDefs),
-                    {ok, {Defs, ScannerModule, TypeModules}}
-            end
+            Exported = lists:flatten([exported_types(Mod, Types) || Mod <- Modules]),
+            Defs = gen_module_defs(Exported, Types, TypeDefs),
+            {ok, {Defs, ScannerModule, TypeModules}}
     end.
 
 
@@ -125,12 +122,5 @@ gen_domain_call(Name, Args) ->
     {FName, cerl:c_fun(ArgForms, Body)}.
 
 exported_types({module, _, _, Exports}, Types) ->
-    F = fun({Name, {type_export, Ctx, Key, _}}) ->
-                Tag = symbol:tag(Key),
-                case maps:is_key(Tag, Types) of
-                    false   -> error:format({undefined_type_export, Tag}, {typegen, Ctx});
-                    true    -> {ok, {Name, Tag}}
-                end
-        end,
-    ExportedTypeTags = [F(Entry) || {_, {type_export, _, _, _}} = Entry <- maps:to_list(Exports)],
-    error:collect(ExportedTypeTags).
+    [{Name, symbol:tag(Key)} || {Name, {export, _, Key, _}} <- maps:to_list(Exports),
+                    maps:is_key(symbol:tag(Key), Types)].

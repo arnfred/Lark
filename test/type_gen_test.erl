@@ -539,76 +539,76 @@ type_redefinition_args_test_() ->
                     [?test('Option/None', Mod:'BlahOption'())]
             end)}.
 
-qualified_type_pattern_atom_test_() ->
+qualified_symbol_pattern_atom_test_() ->
     {"When a pattern contains a qualified type constant (e.g. a type from a
      different module) it should match against it",
-     ?setup("type T a\n"
+     ?setup("module test { T }\n"
+            "type T a\n"
             " | Boolean/False -> Falsy\n"
             " | Boolean/True -> Truthy",
             #{add_kind_libraries => true},
-            fun({ok, Mods}) ->
-                    Mod = lists:last(Mods),
-                    [?test('T/Falsy', Mod:'T'('Boolean/False'))]
+            fun({ok, _}) ->
+                    [?test('T/Falsy', test:'T'('Boolean/False'))]
             end)}.
 
-qualified_type_pattern_sum_test_() ->
+qualified_symbol_pattern_sum_test_() ->
     {"When a pattern contains a qualified type constant (e.g. a type from a
      different module) it should match against it",
-     ?setup("type T a\n"
-            " | Boolean -> Falsy\n"
-            " | _ -> Truthy",
+     ?setup("module test { T }
+             type T a
+               | Boolean -> Falsy
+               | _ -> Truthy",
             #{add_kind_libraries => true},
-            fun({ok, Mods}) ->
-                    Mod = lists:last(Mods),
-                    [?test('T/Falsy', Mod:'T'('Boolean/False')),
-                     ?test('T/Falsy', Mod:'T'('Boolean/True')),
-                     ?test('T/Truthy', Mod:'T'('T/Falsy'))]
+            fun({ok, _}) ->
+                    [?test('T/Falsy', test:'T'('Boolean/False')),
+                     ?test('T/Falsy', test:'T'('Boolean/True')),
+                     ?test('T/Truthy', test:'T'('T/Falsy'))]
             end)}.
 
-qualified_type_undefined_arity_pattern_test_() ->
+qualified_symbol_undefined_arity_pattern_test_() ->
     {"type constructors that take one or more arguments can't be used as patterns on their own",
      ?setup("type T a\n"
             " | Option -> Falsy\n"
             " | _ -> Truthy",
             #{add_kind_libraries => true},
-            fun(Err) -> [?testError({undefined_type_in_pattern, 'Option'}, Err)] end)}.
+            fun(Err) -> [?testError({undefined_symbol_in_pattern, 'Option'}, Err)] end)}.
 
-call_qualified_type_with_args_test_() ->
+call_qualified_symbol_with_args_test_() ->
     {"A qualified type can be evaluated alone and as part of a type
      application. When evaluated as part of a type application, the underlying
      domain function of the types should be called with the arguments",
      ?setup("import kind/prelude\n"
+            "module test { Test }\n"
             "type Test -> kind/prelude/Option(Boolean/True)",
             #{add_kind_libraries => true},
-            fun({ok, Mods}) ->
-                    Mod = lists:last(Mods),
-                    Actual = Mod:'Test'(),
+            fun({ok, _}) ->
+                    Actual = test:'Test'(),
                     [?test(none, domain:diff({sum, ordsets:from_list(['Boolean/True', 'Option/Nil'])}, Actual))]
             end)}.
 
 var_application_in_type_def_test_() ->
     {"A type constructor can call non-type functions to construct types",
      ?setup("import erlang\n"
-            "type Test a -> a.match(True -> False\n"
-            "                       False -> True)",
+            "module test { Test }\n"
+            "type Test a -> a.match(| True -> False\n"
+            "                       | False -> True)",
             #{add_kind_libraries => true},
-            fun({ok, Mods}) ->
-                    Mod = lists:last(Mods),
-                    [?test('Boolean/False', Mod:'Test'('Boolean/True'))]
+            fun({ok, _}) ->
+                    [?test('Boolean/False', test:'Test'('Boolean/True'))]
             end)}.
 
 pattern_type_application_test_() ->
     {"A type application inside a pattern is evaluated against the resulting domain",
-     ?setup("type Test _\n"
+     ?setup("module test { Test }\n"
+            "type Test _\n"
             "  | Boolean.Option  -> True\n"
             "  | _               -> False",
             #{add_kind_libraries => true},
-            fun({ok, Modules}) ->
-                    Mod = lists:last(Modules),
-                    [?test('Boolean/True', Mod:'Test'('Option/Nil')),
-                     ?test('Boolean/True', Mod:'Test'('Boolean/True')),
-                     ?test('Boolean/True', Mod:'Test'('Boolean/False')),
-                     ?test('Boolean/False', Mod:'Test'('_'))]
+            fun({ok, _}) ->
+                    [?test('Boolean/True', test:'Test'('Option/Nil')),
+                     ?test('Boolean/True', test:'Test'('Boolean/True')),
+                     ?test('Boolean/True', test:'Test'('Boolean/False')),
+                     ?test('Boolean/False', test:'Test'('_'))]
             end)}.
 
 pattern_local_application_test_() ->
@@ -627,7 +627,6 @@ recursive_wrong_number_of_arguments_1_test_() ->
              import Tree/_
              type Tree a -> Leaf | Node: {left: Tree(a), value: a, right: Tree(a)}",
             fun({ok, _}) ->
-                    Recur = fun() -> test:'Tree'('Int') end,
                     [?test({sum,['Tree/Leaf', {tagged,'Tree/Node',{recur,_}}]}, test:'Tree'('Int'))]
             end)}.
 
@@ -636,7 +635,6 @@ recursive_wrong_number_of_arguments_2_test_() ->
      ?setup("module test { Tree }
              type Tree a -> Leaf | Node: {left: Tree(a), value: a, right: Tree(a)}",
             fun({ok, _}) ->
-                    Recur = fun() -> test:'Tree'('Int') end,
                     [?test({sum,['Tree/Leaf', {tagged,'Tree/Node',{recur,_}}]}, test:'Tree'('Int'))]
             end)}.
 

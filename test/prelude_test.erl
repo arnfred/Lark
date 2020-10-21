@@ -18,12 +18,12 @@ clean({ok, Modules}) ->
 
 compare_test_() ->
     {"Test the compare function",
-     ?setup("def main a b -> compare(a, b)",
-            fun({ok, Mods}) ->
-                    Mod = lists:last(Mods),
-                    [?test('Compare/LT', Mod:main(1, 2)),
-                     ?test('Compare/GT', Mod:main(b, a)),
-                     ?test('Compare/EQ', Mod:main([1, 2], [1, 2]))]
+     ?setup("module test { main }
+             def main a b -> compare(a, b)",
+            fun({ok, _}) ->
+                    [?test('Compare/LT', test:main(1, 2)),
+                     ?test('Compare/GT', test:main(b, a)),
+                     ?test('Compare/EQ', test:main([1, 2], [1, 2]))]
             end)}.
 
 tagged_test_() ->
@@ -45,9 +45,9 @@ binary_search_test_() ->
              def insert root elem
                | Leaf _                         -> Node(Leaf, elem, Leaf)
                | (Node: {left, value, right}) _ -> compare(elem, value).match(
-                     EQ -> root
-                     LT -> Node(left.insert(elem), value, right)
-                     GT -> Node(left, value, right.insert(elem)))
+                   | EQ -> root
+                   | LT -> Node(left.insert(elem), value, right)
+                   | GT -> Node(left, value, right.insert(elem)))
              def main n -> Leaf.insert(1).insert(3).insert(5).insert(4).insert(n).insert(2)",
             fun({ok, _}) ->
                     [?testEqual({tagged,'Tree/Node',

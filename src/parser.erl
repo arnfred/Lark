@@ -118,6 +118,9 @@ types_pre(_, _, Term) -> {ok, ast:tag(parent, Term)}.
 types_post(expr, _, {pair, _, {symbol, _, type, Name}, _} = Term) -> 
     Parent = ast:get_tag(parent, Term),
     {ok, {Parent, Name}, Term};
+types_post(expr, _, {pair, _, {symbol, _, operator, Name}, _} = Term) -> 
+    Parent = ast:get_tag(parent, Term),
+    {ok, {Parent, Name}, Term};
 types_post(expr, _, {symbol, _, type, Name} = Term) -> 
     Parent = ast:get_tag(parent, Term),
     % Don't include recursive types
@@ -159,7 +162,7 @@ to_ast(Path, Text) ->
         {error, Error}          -> error:format({lexer_error, Error},{sourcemap, Path});
         {error, Error1, Error2} -> error:format({lexer_error, Error1, Error2},{sourcemap, Path});
         {ok, Tokens, _}         ->
-            case grammar:parse(Tokens) of
+            case syntax:parse(Tokens) of
                 {error, Error}  -> error:format({parser_error, Error}, {sourcemap, Path});
                 {ok, Parsed}    ->
                     case preener:preen(Path, Parsed) of

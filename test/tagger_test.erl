@@ -41,8 +41,8 @@ tuple_test() ->
 anonymous_function_test() ->
     Code = 
         "def blip a -> a\n"
-        "def blap a -> a.blip(b -> b\n"
-        "                     _ -> a)",
+        "def blap a -> a.blip(| b -> b\n"
+        "                     | _ -> a)",
     ?assertMatch({ok, [{def, _, blap,
                         [{variable, _, a, A2}],
                         {application, _,
@@ -164,7 +164,7 @@ pattern_product_key_propagated_test() ->
 
 undefined_type_test() ->
     Code = "def test -> T",
-    ?errorMatch({undefined_type, 'T'}, get_AST(Code)).
+    ?errorMatch({undefined_symbol, type, 'T'}, get_AST(Code)).
 
 undefined_variable_test() ->
     Code = "def test -> a",
@@ -175,9 +175,9 @@ symbol_already_defined_test() ->
            " | a -> a",
     ?errorMatch({symbol_in_pattern_already_defined, a}, get_AST(Code)).
 
-undefined_qualified_type_test() ->
+undefined_qualified_symbol_test() ->
     Code = "def test -> T/T",
-    ?errorMatch({undefined_type, 'T/T'}, get_AST(Code)).
+    ?errorMatch({undefined_symbol, 'T/T'}, get_AST(Code)).
 
 nested_def_test_() ->
     Code = "def test a -> (def f b -> a,\n"
@@ -191,8 +191,8 @@ nested_def_test_() ->
 nested_type_test_() ->
     Code = "def match a f -> f(a)\n"
            "def test a -> (type T -> A | B,\n"
-           "               a.match(T -> a\n"
-           "                       T/A -> T/B))",
+           "               a.match(| T -> a\n"
+           "                       | T/A -> T/B))",
     ?_assertMatch({ok, [_,
                          {def, _, test, [{variable, _, a, _A}],
                           {let_type, _,

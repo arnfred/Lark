@@ -59,8 +59,8 @@
                                                                    [{module, ?MODULE},
                                                                     {line, ?LINE},
                                                                     {expression, (??Expr)},
-                                                                    {pattern, (??Error)},
-                                                                    {value, [E1, E2]]});
+                                                                    {pattern, ([??Err1, ??Err2])},
+                                                                    {value, [E1, E2]}]});
                           __V -> erlang:error({errorMatch,
                                                [{module, ?MODULE},
                                                 {line, ?LINE},
@@ -81,8 +81,8 @@
                                                                                       [{module, ?MODULE},
                                                                                        {line, ?LINE},
                                                                                        {expression, (??Expr)},
-                                                                                       {pattern, (??Error)},
-                                                                                       {value, [E1, E2, E3]]});
+                                                                                       {pattern, ([??Err1, ??Err2, ??Err3])},
+                                                                                       {value, [E1, E2, E3]}]});
                           __V -> erlang:error({errorMatch,
                                                [{module, ?MODULE},
                                                 {line, ?LINE},

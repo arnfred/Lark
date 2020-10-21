@@ -35,25 +35,21 @@ handle_modules({module, ModuleCtx, Path, Exports}, Defs, Types) ->
                 error:map(Make_export(K), fun({Export, _, Key, none}) ->
                                                   {Export, Ctx, Key, V} end);
             % Boolean/True
-            Make_export({qualified_type, Ctx, Symbols} = Elem) ->
+            Make_export({qualified_symbol, Ctx, Symbols} = Elem) ->
                 [P, T] = [S || {symbol, _, _, S} <- Symbols],
                 case maps:is_key(P, Defs) andalso 
                      maps:is_key(P, Types) andalso
                      lists:member(T, maps:get(P, Types)) of
                     false -> error:format({export_missing, module:kind_name([P, T])}, {module, Elem});
                     true  -> case maps:is_key(T, Defs) of
-                                 false  -> {ok, {T, {type_export, Ctx, [P, T], none}}};
-                                 true   -> error:format({type_export_already_defined, symbol:tag([P, T]), T}, {module, Elem})
+                                 false  -> {ok, {T, {export, Ctx, [P, T], none}}};
+                                 true   -> error:format({export_already_defined, symbol:tag([P, T]), T}, {module, Elem})
                              end
                 end;
             % blah
-            Make_export({symbol, Ctx, Kind, Val} = Elem) ->
-                Export = case Kind of
-                             variable -> export;
-                             type     -> type_export
-                         end,
+            Make_export({symbol, Ctx, _, Val} = Elem) ->
                 case maps:is_key(symbol:tag(Elem), Defs) of
-                    true  -> {ok, {symbol:tag(Elem), {Export, Ctx, [Val], none}}};
+                    true  -> {ok, {symbol:tag(Elem), {export, Ctx, [Val], none}}};
                     false -> error:format({export_missing, symbol:tag(Elem)}, {module, Elem})
                 end
         end,

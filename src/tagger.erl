@@ -1,6 +1,8 @@
 -module(tagger).
 -export([tag/1, tag/2]).
 
+-include_lib("eunit/include/eunit.hrl").
+
 tag(AST) -> tag(AST, #{}).
 
 tag(AST, ImportScope) ->
@@ -51,12 +53,24 @@ tag_defs_post(_, _, _) -> ok.
 % Step 2: Scan types (but skip types local to a definition)
 add_type_path(top_level, _, {def, _, _, _, _})  -> skip;
 add_type_path(top_level, _, {type_def, _, Name, _, _} = Term) -> {ok, ast:tag(path, Term, [Name])};
+add_type_path(expr, Scope, {pair, Ctx, Key, Val}) ->
+    case Key of
+        % Rewrite operators to types when they are the value of a pair
+        {symbol, ValCtx, operator, S}   -> 
+            add_path(expr, Scope, {pair, Ctx, {symbol, ValCtx, type, S}, Val});
+        _ -> add_path(expr, Scope, {pair, Ctx, Key, Val})
+    end;
 add_type_path(Type, Scope, Term)        -> add_path(Type, Scope, Term).
 
 tag_types(_, Scope, {symbol, Ctx, type, S} = Term) -> 
     case maps:is_key(S, Scope) of
         true    -> {ok, replace(Scope, S, Term)};
         false   -> {ok, symbol:tag(path(Term)), {type, Ctx, S, path(Term)}}
+    end;
+tag_types(_, Scope, {symbol, Ctx, operator, S} = Term) -> 
+    case maps:is_key(S, Scope) of
+        true    -> {ok, replace(Scope, S, Term)};
+        false   -> {ok, Term}
     end;
 tag_types(top_level, _, {type_def, Ctx, Name, _, _} = Term) -> 
     {ok, Name, {type, Ctx, Name, [Name]}, Term};
@@ -80,11 +94,6 @@ add_path(_, _, Term) ->
     {ok, ast:tag(path, Term)}.
 
 
-tag_symbols(Type, Scope, {symbol, _, type, T} = Term) ->
-    case maps:is_key(T, Scope) of
-        true    -> {ok, replace(Scope, T, Term)};
-        false   -> error:format({undefined_type, T}, {tagger, Type, Term})
-    end;
 tag_symbols(Type, Scope, {symbol, Ctx, variable, S} = Term) ->
     case {Type, maps:is_key(S, Scope)} of
         {expr, false}    -> error:format({undefined_variable, S}, {tagger, Type, Term});
@@ -95,31 +104,30 @@ tag_symbols(Type, Scope, {symbol, Ctx, variable, S} = Term) ->
                                 _   -> error:format({symbol_in_pattern_already_defined, S}, {tagger, Type, Term})
                             end
     end;
-tag_symbols(Type, Scope, {qualified_type, _, Symbols} = Term) ->
-    Tag = symbol:tag([S || {_, _, _, S} <- Symbols]),
-    case maps:is_key(Tag, Scope) of
-        true    -> {ok, replace(Scope, Tag, Term)};
-        false   -> error:format({undefined_type, Tag}, {tagger, Type, Term})
+tag_symbols(Type, Scope, {symbol, _, SymbolType, T} = Term) ->
+    case maps:is_key(T, Scope) of
+        true    -> {ok, replace(Scope, T, Term)};
+        false   -> error:format({undefined_symbol, SymbolType, T}, {tagger, Type, Term})
     end;
-tag_symbols(Type, Scope, {qualified_variable, _, Symbols} = Term) ->
+tag_symbols(Type, Scope, {qualified_symbol, _, Symbols} = Term) ->
     Tag = symbol:tag([S || {_, _, _, S} <- Symbols]),
     case maps:is_key(Tag, Scope) of
         true    -> {ok, replace(Scope, Tag, Term)};
-        false   -> error:format({undefined_variable, Tag}, {tagger, Type, Term})
+        false   -> error:format({undefined_symbol, Tag}, {tagger, Type, Term})
     end;
 tag_symbols(_, _, _) -> ok.
 
 tag_symbols_and_types(Type, Scope, {symbol, _, variable, _} = Term) -> tag_symbols(Type, Scope, Term);
-tag_symbols_and_types(Type, Scope, {qualified_type, _, _} = Term) -> tag_symbols(Type, Scope, Term);
+tag_symbols_and_types(Type, Scope, {qualified_symbol, _, _} = Term) -> tag_symbols(Type, Scope, Term);
 tag_symbols_and_types(Type, Scope, Term) -> tag_types(Type, Scope, Term).
 
 
 path({symbol, _, _, S} = Term) -> lists:reverse([S | ast:get_tag(path, Term)]).
 
 
-replace(Scope, Key, {symbol, Ctx, _, _})            -> setelement(2, maps:get(Key, Scope), Ctx);
-replace(Scope, Key, {qualified_type, Ctx, _})       -> setelement(2, maps:get(Key, Scope), Ctx);
-replace(Scope, Key, {qualified_variable, Ctx, _})   -> setelement(2, maps:get(Key, Scope), Ctx).
-
-    
-
+replace(Scope, Key, {symbol, Ctx, _, _})            -> 
+    NewCtx = maps:merge(element(2, maps:get(Key, Scope)), Ctx),
+    setelement(2, maps:get(Key, Scope), NewCtx);
+replace(Scope, Key, {qualified_symbol, Ctx, _})     -> 
+    NewCtx = maps:merge(element(2, maps:get(Key, Scope)), Ctx),
+    setelement(2, maps:get(Key, Scope), NewCtx).

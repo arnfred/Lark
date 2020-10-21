@@ -65,8 +65,10 @@ import_module(ImportPath, SourceMap, LocalTypes, ImportTerm, Sandboxed) ->
 
     case error:collect(import_def('_', '_', ImportPath, SourceMap, LocalTypes, ImportTerm, Sandboxed)) of
         {error, Errs}   -> {error, Errs};
-        {ok, Aliases}   -> {ok, [{alias, Ctx, symbol:tag(ModulePath ++ [Alias]), Term} || 
-                                 {alias, Ctx, Alias, Term} <- Aliases]}
+        {ok, Imports}   -> Aliases = [{alias, Ctx, symbol:tag(ModulePath ++ [Alias]), Term} || 
+                                      {alias, Ctx, Alias, Term} <- Imports],
+                           Other = [Imp || Imp <- Imports, not(element(1, Imp) =:= alias)],
+                           {ok, Aliases ++ Other}
     end.
 
 import_def(Name, Alias, ImportPath, SourceMap, LocalTypes, Term, Sandboxed) ->
@@ -113,15 +115,10 @@ local_type(Parent, Name, Alias, LocalTypes, Term) ->
 beam_function(ModulePath, Name, Alias, Term, Sandboxed) ->
     Module = module:beam_name(ModulePath),
     ModuleName = module:kind_name(ModulePath),
-    ImportName = module:kind_name(ModulePath ++ [Name]),
     case code:is_loaded(Module) of
         {file, _}   -> loaded_module_function(ModulePath, Name, Alias, Term, Sandboxed);
         false       -> case code:which(Module) of
-                           non_existing ->
-                               case get_tag(Name) of
-                                   qualified_type       -> [error:format({nonexistent_import, source, ImportName}, {import, Term})];
-                                   qualified_variable   -> [error:format({nonexistent_module, ModuleName}, {import, Term})]
-                               end;
+                           non_existing -> [error:format({nonexistent_module, ModuleName}, {import, Term})];
                            _            ->
                                case code:ensure_loaded(Module) of
                                    {error, Err} ->
@@ -145,14 +142,14 @@ loaded_module_function(ModulePath, Name, Alias, Term, Sandboxed) ->
     ImportPath = ModulePath ++ [Name],
     ImportName = module:kind_name(ImportPath),
     Exports = erlang:apply(Module, module_info, [exports]),
-    TypeAliases = beam_subtypes(get_tag(Name), ImportPath, Alias, Term, Sandboxed),
+    TypeAliases = beam_subtypes(ImportPath, Alias, Term, Sandboxed),
     case Sandboxed andalso not(is_whitelisted(Module, Name)) of
         true    -> [error:format({function_not_whitelisted, Module, Name}, {import, Term})];
         false   ->
             case lists:filter(fun({Export, _}) -> Export =:= Name end, Exports) of
                 []      -> [error:format({nonexistent_import, beam, ImportName}, {import, Term})];
                 _       -> [{ok, {alias, ErrorCtx, Alias,
-                                  {get_tag(Name), #{import => Term}, ModulePath, Name}}} | TypeAliases]
+                                  {qualified_symbol, #{import => Term}, ModulePath, Name}}} | TypeAliases]
             end
     end.
 
@@ -201,11 +198,10 @@ is_whitelisted(Module, Name) ->
     maps:is_key(Module, Whitelist) andalso not(lists:member(Name, maps:get(Module, Whitelist))).
 
 
-beam_subtypes(qualified_variable, _, _, _, _) -> [];
-beam_subtypes(qualified_type, ImportPath, Alias, Term, Sandboxed) ->
+beam_subtypes(ImportPath, Alias, Term, Sandboxed) ->
     Ctx = element(2, Term),
     [{ok, {alias, Ctx, symbol:tag([Alias, T]),
-           {get_tag(T), #{import => Term}, ImportPath, T}}}
+           {qualified_symbol, #{import => Term}, ImportPath, T}}}
      || {ok, {alias, _, T, _}} <- beam_function(ImportPath, '_', '_', Term, Sandboxed)].
 
 kind_source_function({module, _, ModulePath, _} = Module, Name, Alias, SourceMap, Term) ->
@@ -220,31 +216,18 @@ kind_source_aliases({module, _, ModulePath, Exports}, Name, Alias, SourceMap, Te
     ImportPath = ModulePath ++ [Name],
     ImportName = module:kind_name(ImportPath),
     ImportBeamName = module:beam_name(ImportPath),
-    TypeAliases = kind_subtypes(get_tag(Name), ImportPath, ImportBeamName, Alias, SourceMap, Term),
+    TypeAliases = kind_subtypes(ImportPath, ImportBeamName, Alias, SourceMap, Term),
     case maps:is_key(Name, Exports) of
         false   -> [error:format({nonexistent_import, source, ImportName}, {import, Term})];
         true    -> [{ok, {alias, Ctx, Alias,
-                          {get_tag(Name), #{import => Term}, ModulePath, Name}}} | TypeAliases]
+                          {qualified_symbol, #{import => Term}, ModulePath, Name}}} | TypeAliases]
     end.
 
-kind_subtypes(qualified_variable, _, _, _, _, _) -> [];
-kind_subtypes(qualified_type, ImportPath, ImportBeamName, Alias, SourceMap, Term) ->
+kind_subtypes(ImportPath, ImportBeamName, Alias, SourceMap, Term) ->
     Ctx = element(2, Term),
     case maps:get(ImportBeamName, SourceMap, undefined) of
         {module, _, _, Types} -> [{ok, {alias, Ctx, symbol:tag([Alias, T]),
-                                        {get_tag(T), #{import => Term}, ImportPath, T}}}
+                                        {qualified_symbol, #{import => Term}, ImportPath, T}}}
                                   || T <- maps:keys(Types)];
         undefined             -> []
-    end.
-
-
-% With exports coming directly from beam files we don't know from the context if they are a variable or a type
-% To import them correctly we decide if they are a type or a variable based on whether the first letter is uppercase or lowercase.
-% This isn't great, but here we are.
-% This is going to suck when I try to implement inline functions and types...
-get_tag(Name) ->
-    First = string:substr(atom_to_list(Name), 1, 1),
-    case string:lowercase(First) =:= First of
-        true    -> qualified_variable;
-        false   -> qualified_type
     end.

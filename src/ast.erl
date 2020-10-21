@@ -135,15 +135,10 @@ step(Meta, Type, Scope, {application, Context, Expr, Args}) ->
                fun({ArgsEnvs, TArgs}, {ExprEnv, TExpr}) -> 
                        {merge([ExprEnv | ArgsEnvs]), {application, Context, TExpr, TArgs}} end);
 
-step(Meta, Type, Scope, {qualified_type_application, Context, ModulePath, Name, Args}) ->
+step(Meta, Type, Scope, {qualified_application, Context, ModulePath, Name, Args}) ->
     error:map(map(Meta, Type, Scope, Args),
               fun({ArgsEnvs, TArgs}) -> 
-                      {merge(ArgsEnvs), {qualified_type_application, Context, ModulePath, Name, TArgs}} end);
-
-step(Meta, Type, Scope, {qualified_variable_application, Context, ModulePath, Name, Args}) ->
-    error:map(map(Meta, Type, Scope, Args),
-              fun({ArgsEnvs, TArgs}) -> 
-                      {merge(ArgsEnvs), {qualified_variable_application, Context, ModulePath, Name, TArgs}} end);
+                      {merge(ArgsEnvs), {qualified_application, Context, ModulePath, Name, TArgs}} end);
 
 step(Meta, Type, Scope, {recursive_type_application, Context, Tag, Args}) ->
     error:map(map(Meta, Type, Scope, Args),
@@ -233,10 +228,8 @@ step(_, _, _, {symbol, _, _, _} = Term)             -> {ok, {#{}, Term}};
 step(_, _, _, {variable, _, _, _} = Term)           -> {ok, {#{}, Term}};
 step(_, _, _, {type, _, _, _} = Term)               -> {ok, {#{}, Term}};
 step(_, _, _, {recursive_type, _, _, _} = Term)     -> {ok, {#{}, Term}};
-step(_, _, _, {qualified_type, _, _} = Term)        -> {ok, {#{}, Term}};
-step(_, _, _, {qualified_type, _, _, _} = Term)     -> {ok, {#{}, Term}};
-step(_, _, _, {qualified_variable, _, _} = Term)    -> {ok, {#{}, Term}};
-step(_, _, _, {qualified_variable, _, _, _} = Term) -> {ok, {#{}, Term}};
+step(_, _, _, {qualified_symbol, _, _} = Term)      -> {ok, {#{}, Term}};
+step(_, _, _, {qualified_symbol, _, _, _} = Term)   -> {ok, {#{}, Term}};
 step(_, _, _, {key, _, _} = Term)                   -> {ok, {#{}, Term}};
 
 step(_, _, _, {value, _, _, _} = Term)              -> {ok, {#{}, Term}};

@@ -24,9 +24,9 @@ def get tagged
 type Compare -> GT | LT | EQ
 import Compare/_
 
-// No inline functions yet, so it's a bit clunky
-def compare a b -> >(a, b).match(
-    'true'  -> GT
-    'false' -> <(a, b).match(
-        'false' -> EQ
-        'true'  -> LT))
+% No inline functions yet, so it's a bit clunky
+def compare a b -> (a > b).match(
+  | 'true'  -> GT
+  | 'false' -> (a < b).match(
+      | 'false' -> EQ
+      | 'true'  -> LT))

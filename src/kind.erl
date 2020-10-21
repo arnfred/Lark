@@ -30,7 +30,6 @@ load(Code, Options) ->
     case parser:parse([{text, Code}], Options) of
         {error, Errs}   -> {error, Errs};
         {ok, ASTs}     ->
-            io:format("Tagged AST is ~p~n", [ASTs]),
             case error:collect([type_and_compile(AST, Options) || AST <- ASTs]) of
                 {error, Errs}       -> {error, Errs};
                 {ok, Modules}       -> {ok, lists:flatten(Modules)}

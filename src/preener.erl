@@ -44,11 +44,6 @@ dict_pre(Type, Scope, {dict, Ctx, Elems}) ->
         {error, Errs} -> {error, Errs};
         {ok, TElems} -> {ok, {dict, Ctx, TElems}}
     end;
-dict_pre(Type, Scope, {lookup, Ctx, Expr, Elems}) ->
-    case error:collect([dict_elem(Type, Scope, E) || E <- Elems]) of
-        {error, Errs} -> {error, Errs};
-        {ok, TElems} -> {ok, {lookup, Ctx, Expr, TElems}}
-    end;
 dict_pre(_Type, _Scope, Term) -> {ok, Term}.
 dict_post(_, _, _) -> ok.
 
@@ -79,7 +74,7 @@ add_path(Path, AST) ->
 do_preen(Code) ->
     {ok, Tokens, _} = lexer:string(Code),
     io:format("Tokens are ~p~n", [Tokens]),
-    {ok, Parsed} = grammar:parse(Tokens),
+    {ok, Parsed} = syntax:parse(Tokens),
     io:format("Parsed is ~p~n", [Parsed]),
     preener:preen("some_path", Parsed).
 

@@ -1,9 +1,11 @@
 Terminals
     def type val 
     type_symbol var_symbol
+    rightbias_operator plus_operator mult_operator comp_operator eq_operator
+    minus_operator div_operator caret_operator other_operator
     value
     open close square_open square_close curly_open curly_close
-    apply comma newline assign
+    apply comma newlines assign
     module_keyword import_keyword
     pipe right_arrow slash colon.
 
@@ -12,34 +14,46 @@ Nonterminals
     all statements statement
     assignment function newtype module import
     implies
-    pattern patterns pattern_application pattern_verb
-    def_clauses clause lambda_clauses lambda
-    type_clauses type_clause
-    application arguments
+    pattern patterns pattern_application pattern_verb braced_pattern
+    clauses clause lambda def_clauses type_clauses type_clause
+    application arguments 
+    infix rightbias_infix leftbias_infix
     noun verb expression expressions
     collection list dict sequence
     dict_elements dict_element
     flat_sum_list sum_list sum_terms sum_elem sum_or_expression
-    symbol symbols newlines elements element
+    symbol symbols operator elements element
     pair pair_key pair_val
-    qualified_symbol qualified_type qualified_variable qualified_type_type
+    qualified_symbol
     separator secondary_separator clause_separator.
 
 Rootsymbol all.
 
 Left 900 slash.
 Right 500 colon.
-Left 100 newline.
-Unary 100 expression.
-Unary 200 pattern.
-Unary 300 pattern_verb.
-Nonassoc 300 pair.
+
+Right 770 caret_operator.
+Right 760 mult_operator.
+Right 750 div_operator.
+Left 740 plus_operator.
+Left 740 minus_operator.
+Left 720 comp_operator.
+Left 710 eq_operator.
+Left 700 other_operator.
+Right 699 rightbias_operator.
+
+Left 745 leftbias_infix.
+%Right 701 rightbias_infix.
+
+Left 800 apply.
+
+Nonassoc 200 pattern.
+Nonassoc 200 braced_pattern.
+Nonassoc 300 pattern_verb.
+Nonassoc 100 sum_elem.
 
 all -> statements          : '$1'.
 all -> newlines statements : '$2'.
-
-newlines -> newline          : '$1'.
-newlines -> newline newlines : '$1'.
 
 literal -> value : '$1'.
 
@@ -71,28 +85,26 @@ newtype -> type symbols clause_separator type_clauses   : {type_def, ctx('$1'), 
 % Symbols
 % -------
 
-symbol -> type_symbol : make_symbol('$1').
-symbol -> var_symbol : make_symbol('$1').
+symbol -> type_symbol           : make_symbol('$1').
+symbol -> var_symbol            : make_symbol('$1').
+symbol -> operator              : '$1'.
+symbol -> rightbias_operator    : make_symbol('$1', operator).
+
+operator -> caret_operator        : make_symbol('$1', operator).
+operator -> mult_operator         : make_symbol('$1', operator).
+operator -> div_operator          : make_symbol('$1', operator).
+operator -> plus_operator         : make_symbol('$1', operator).
+operator -> minus_operator        : make_symbol('$1', operator).
+operator -> comp_operator         : make_symbol('$1', operator).
+operator -> eq_operator           : make_symbol('$1', operator).
+operator -> other_operator        : make_symbol('$1', operator).
 
 symbols -> symbol           : ['$1'].
 symbols -> symbol symbols   : ['$1' | '$2'].
 
-qualified_symbol -> qualified_type      : {qualified_type, ctx('$1'), '$1'}.
-qualified_symbol -> qualified_variable  : {qualified_variable, ctx('$1'), '$1'}.
-
-qualified_type -> var_symbol slash type_symbol                  : [make_symbol('$1'), make_symbol('$3')].
-qualified_type -> var_symbol slash qualified_type_type          : [make_symbol('$1') | '$3'].
-qualified_type -> qualified_variable slash type_symbol          : '$1' ++ [make_symbol('$3')].
-qualified_type -> qualified_variable slash qualified_type_type  : '$1' ++ '$3'.
-qualified_type -> qualified_type_type                           : '$1'.
-qualified_type_type -> type_symbol slash type_symbol            : [make_symbol('$1'), make_symbol('$3')].
-qualified_type_type -> type_symbol slash var_symbol             : [make_symbol('$1'), make_symbol('$3')].
-qualified_type_type -> type_symbol slash dict                   : [make_symbol('$1'), '$3'].
-qualified_type_type -> type_symbol slash qualified_type_type    : [make_symbol('$1') | '$3'].
-
-qualified_variable -> var_symbol slash var_symbol               : [make_symbol('$1'), make_symbol('$3')].
-qualified_variable -> var_symbol slash dict                     : [make_symbol('$1'), '$3'].
-qualified_variable -> var_symbol slash qualified_variable       : [make_symbol('$1') | '$3'].
+qualified_symbol -> symbol slash symbol            : {qualified_symbol, ctx('$1'), ['$1', '$3']}.
+qualified_symbol -> symbol slash dict              : {qualified_symbol, ctx('$1'), ['$1', '$3']}.
+qualified_symbol -> symbol slash qualified_symbol  : {qualified_symbol, ctx('$1'), ['$1' | unwrap('$3')]}.
 
 
 
@@ -100,7 +112,7 @@ qualified_variable -> var_symbol slash qualified_variable       : [make_symbol('
 % ------
 
 module -> module_keyword var_symbol dict                : {module, ctx('$1'), [make_symbol('$2')], unwrap('$3')}.
-module -> module_keyword qualified_variable dict        : {module, ctx('$1'), '$2', unwrap('$3')}.
+module -> module_keyword qualified_symbol dict          : {module, ctx('$1'), unwrap('$2'), unwrap('$3')}.
 
 import -> import_keyword symbol                         : {import, ctx('$1'), ['$2']}.
 import -> import_keyword qualified_symbol               : {import, ctx('$1'), unwrap('$2')}.
@@ -110,15 +122,16 @@ import -> import_keyword qualified_symbol               : {import, ctx('$1'), un
 % Expressions
 % -----------
 
-expression -> application           : '$1'.  % f(a)
-expression -> lambda                : '$1'.  % a -> a + 3
-expression -> pair                  : '$1'.  % a: T                
-expression -> collection            : '$1'.  % {a, b: T}
-expression -> symbol                : '$1'.  % a
-expression -> qualified_symbol      : '$1'.  % a/b/T
-expression -> literal               : '$1'.  % 1 or "string" or 'atom'
-expression -> sequence              : '$1'.  % (val a = 1, a + b)
-expression -> sum_list              : '$1'.  % (A | B)
+expression -> open expression close         : '$2'. % ( ... )
+expression -> application                   : '$1'.  % f(a)
+expression -> lambda                        : '$1'.  % | a -> a + 2
+expression -> pair                          : '$1'.  % a: T                
+expression -> collection                    : '$1'.  % {a, b: T}
+expression -> symbol                        : '$1'.  % a
+expression -> qualified_symbol              : '$1'.  % a/b/T
+expression -> literal                       : '$1'.  % 1 or "string" or 'atom'
+expression -> sequence                      : '$1'.  % (val a = 1, a + b)
+expression -> sum_list                      : '$1'.  % (A | B)
 
 expressions -> expression                        : ['$1'].
 expressions -> expression newlines               : ['$1'].
@@ -135,6 +148,7 @@ expressions -> expression separator expressions  : ['$1' | '$3'].
 % * a.f(b -> False)
 
 % Things that can be called before the dot in an application
+noun -> open expression close   : '$2'.
 noun -> application             : '$1'.
 noun -> collection              : '$1'.
 noun -> sequence                : '$1'.
@@ -143,18 +157,27 @@ noun -> qualified_symbol        : '$1'.
 noun -> literal                 : '$1'.
 
 % Things that can be called after the dot in an application
+verb -> open expression close   : '$2'.
 verb -> symbol                  : '$1'.
 verb -> qualified_symbol        : '$1'.
 verb -> literal                 : '$1'.
 
-application -> noun arguments               : {application, ctx('$1'), '$1', '$2'}.
-application -> noun apply verb              : {application, ctx('$1'), '$3', ['$1']}.
-application -> noun apply verb arguments    : {application, ctx('$1'), '$3', ['$1' | '$4']}.
-application -> noun apply verb lambda       : {application, ctx('$1'), '$3', ['$1', '$4']}.
+application -> verb arguments                       : {application, ctx('$1'), '$1', '$2'}.
+application -> noun apply verb                      : {application, ctx('$1'), '$3', ['$1']}.
+application -> noun apply verb arguments            : {application, ctx('$1'), '$3', ['$1' | '$4']}.
+application -> infix                                : '$1'.
 
-arguments -> open close                          : [].
-arguments -> open expressions close              : '$2'.
-arguments -> open newlines expressions close     : '$3'.
+arguments -> open close                             : [].
+arguments -> open expressions close                 : '$2'.
+arguments -> open newlines expressions close        : '$3'.
+
+infix -> leftbias_infix                             : '$1'.
+infix -> rightbias_infix                            : '$1'.
+leftbias_infix -> noun operator noun                : {application, ctx('$2'), '$2', ['$1', '$3']}.
+leftbias_infix -> infix operator noun               : {application, ctx('$2'), '$2', ['$1', '$3']}.
+rightbias_infix -> noun rightbias_operator noun     : {application, ctx('$2'), make_symbol('$2', operator), ['$1', '$3']}.
+rightbias_infix -> noun rightbias_operator infix    : {application, ctx('$2'), make_symbol('$2', operator), ['$1', '$3']}.
+
 
 
 
@@ -175,16 +198,16 @@ pair_val -> collection              : '$1'.
 pair_val -> symbol                  : '$1'.
 pair_val -> qualified_symbol        : '$1'.
 pair_val -> literal                 : '$1'.
-pair_val -> open sum_elem close     : '$2'.
+pair_val -> open expression close   : '$2'.
 
 
 
-% Clauses
+% Clauses and Functions
 % -------
 
-clause_separator -> newlines pipe : '$1'.
-
+clause_separator -> newlines pipe                   : '$2'.
 clause -> patterns implies expression               : {clause, ctx('$2'), '$1', '$3'}.
+clauses -> clause clause_separator pipe clauses     : ['$1' | '$4'].
 type_clause -> patterns implies sum_or_expression   : {clause, ctx('$2'), '$1', '$3'}.
 
 def_clauses -> clause                              : ['$1'].
@@ -195,12 +218,7 @@ type_clauses -> type_clause                                 : ['$1'].
 type_clauses -> type_clause newlines                        : ['$1'].
 type_clauses -> type_clause clause_separator type_clauses   : ['$1' | '$3'].
 
-lambda_clauses -> type_clause                           : ['$1'].
-lambda_clauses -> type_clause newlines                  : ['$1'].
-lambda_clauses -> type_clause separator lambda_clauses  : ['$1' | '$3'].
-
-lambda -> open lambda_clauses close              : {lambda, ctx('$1'), '$2'}.
-lambda -> open newlines lambda_clauses close     : {lambda, ctx('$1'), '$3'}.
+lambda -> pipe type_clauses                          : {lambda, ctx('$1'), '$2'}.
 
 
 
@@ -210,20 +228,24 @@ lambda -> open newlines lambda_clauses close     : {lambda, ctx('$1'), '$3'}.
 patterns -> pattern                     : ['$1'].
 patterns -> pattern patterns            : ['$1' | '$2'].
 
-pattern -> pattern_application     : '$1'.   % A(T) or T.A(S)
-pattern -> collection              : '$1'.   % {a, b: T}
-pattern -> symbol                  : '$1'.   % a
-pattern -> qualified_symbol        : '$1'.   % a/b/T
-pattern -> literal                 : '$1'.   % 2
-pattern -> open pair close         : '$2'.   % (a: T)
-pattern -> sum_list                : '$1'.   % (A | B | C)
+pattern -> open braced_pattern close    : '$2'. % (...)
+pattern -> pattern_application          : '$1'.   % A(T) or T.A(S)
+pattern -> collection                   : '$1'.   % {a, b: T}
+pattern -> symbol                       : '$1'.   % a
+pattern -> qualified_symbol             : '$1'.   % a/b/T
+pattern -> literal                      : '$1'.   % 2
+pattern -> sum_list                     : '$1'.   % (A | B | C)
 
-%pattern_application -> pattern_verb arguments                : {application, ctx('$1'), '$1', '$2'}.
+braced_pattern -> pair          : '$1'.
+braced_pattern -> application   : '$1'.
+braced_pattern -> pattern       : '$1'.
+
 pattern_application -> noun apply pattern_verb            : {application, ctx('$1'), '$3', ['$1']}.
 pattern_application -> noun apply pattern_verb arguments  : {application, ctx('$1'), '$3', ['$1' | '$4']}.
 
-pattern_verb -> qualified_type : {qualified_type, ctx('$1'), '$1'}.
+pattern_verb -> qualified_symbol : '$1'.
 pattern_verb -> type_symbol : make_symbol('$1').
+
 
 
 % Collections
@@ -261,9 +283,9 @@ sequence -> open close                      : {tuple, ctx('$1'), []}.
 sequence -> open elements close             : {tuple, ctx('$1'), '$2'}.
 sequence -> open newlines elements close    : {tuple, ctx('$1'), '$3'}.
 
-elements -> element : ['$1'].
-elements -> element separator elements                 : ['$1' | '$3'].
-elements -> element newlines         : ['$1'].
+elements -> element separator element   : ['$1', '$3'].
+elements -> element separator elements  : ['$1' | '$3'].
+elements -> element newlines            : ['$1'].
 
 element -> expression           : '$1'.
 element -> assignment           : '$1'.
@@ -277,7 +299,8 @@ element -> function             : '$1'.
 
 sum_or_expression -> flat_sum_list : unpack_sum('$1').
 sum_or_expression -> sum_list : '$1'.
-sum_or_expression -> open sum_elem close : '$2'.
+%sum_or_expression -> open sum_elem close : '$2'.
+
 flat_sum_list -> sum_elem : ['$1'].
 flat_sum_list -> sum_elem pipe flat_sum_list : ['$1' | '$3'].
 
@@ -313,10 +336,12 @@ name([{symbol, _, _, S} | _]) -> S.
 args([_ | Args]) -> Args.
 
 unwrap({_,V})   -> V;
-unwrap({_,_,V}) -> V.
+unwrap({_,_,V}) -> V;
+unwrap({_,_,_,V}) -> V.
 
 make_symbol({var_symbol, L, S}) -> {symbol, L, variable, S};
 make_symbol({type_symbol, L, S}) -> {symbol, L, type, S}.
+make_symbol({_, L, S}, Type) -> {symbol, L, Type, S}.
 
 ctx({_, Ctx})         -> Ctx;
 ctx({_, Ctx, _})      -> Ctx;

@@ -18,24 +18,24 @@ test_import(Symbols, Mappings, SourceMap, LocalTypes) ->
 
 erlang_import_test() ->
     Actual = test_import([erlang, atom_to_list], #{}),
-    ?assertMatch({ok, [{alias, _, atom_to_list, {qualified_variable, _, [erlang], atom_to_list}}]}, Actual).
+    ?assertMatch({ok, [{alias, _, atom_to_list, {qualified_symbol, _, [erlang], atom_to_list}}]}, Actual).
 
 erlang_module_import_test() ->
     Actual = test_import([lists, reverse], #{}),
-    ?assertMatch({ok, [{alias, _, reverse, {qualified_variable, _, [lists], reverse}}]}, Actual).
+    ?assertMatch({ok, [{alias, _, reverse, {qualified_symbol, _, [lists], reverse}}]}, Actual).
 
 source_import_test() ->
     SourceMap = #{module_name => {module, #{}, [module_name], #{test_fun => blup}}},
     Actual = test_import([module_name, test_fun], SourceMap),
     ?assertMatch({ok, [{dependency, _, [module_name]},
-                       {alias, _, test_fun, {qualified_variable, _, [module_name], test_fun}}]}, Actual).
+                       {alias, _, test_fun, {qualified_symbol, _, [module_name], test_fun}}]}, Actual).
 
 beam_wildcard_test() ->
     Actual = test_import([random, '_'], #{}),
-    ?assertMatch({ok, [{alias, _, seed0, {qualified_variable, _, [random], seed0}},
-                       {alias, _, seed, {qualified_variable, _, [random], seed}},
-                       {alias, _, uniform, {qualified_variable, _, [random], uniform}},
-                       {alias, _, uniform_s, {qualified_variable, _, [random], uniform_s}}]}, Actual).
+    ?assertMatch({ok, [{alias, _, seed0, {qualified_symbol, _, [random], seed0}},
+                       {alias, _, seed, {qualified_symbol, _, [random], seed}},
+                       {alias, _, uniform, {qualified_symbol, _, [random], uniform}},
+                       {alias, _, uniform_s, {qualified_symbol, _, [random], uniform_s}}]}, Actual).
 
 source_wildcard_test() ->
     SourceMap = #{blap => {module, #{}, [blap], #{fun1 => blip,
@@ -43,14 +43,14 @@ source_wildcard_test() ->
                                                       fun3 => blup}}},
     Actual = test_import([blap, '_'], SourceMap),
     ?assertMatch({ok, [{dependency, _, [blap]},
-                       {alias, _, fun1, {qualified_variable, _, [blap], fun1}},
-                       {alias, _, fun2, {qualified_variable, _, [blap], fun2}},
-                       {alias, _, fun3, {qualified_variable, _, [blap], fun3}}]}, Actual).
+                       {alias, _, fun1, {qualified_symbol, _, [blap], fun1}},
+                       {alias, _, fun2, {qualified_symbol, _, [blap], fun2}},
+                       {alias, _, fun3, {qualified_symbol, _, [blap], fun3}}]}, Actual).
 
 beam_dict_test() ->
     Actual = test_import([random], #{seed => glunk, uniform => uniform}, #{}),
-    ?assertMatch({ok, [{alias, _, glunk, {qualified_variable, _, [random], seed}},
-                       {alias, _, uniform, {qualified_variable, _, [random], uniform}}]}, Actual).
+    ?assertMatch({ok, [{alias, _, glunk, {qualified_symbol, _, [random], seed}},
+                       {alias, _, uniform, {qualified_symbol, _, [random], uniform}}]}, Actual).
 
 source_dict_test() ->
     SourceMap = #{blap => {module, #{}, [blap], #{fun1 => blip,
@@ -58,24 +58,24 @@ source_dict_test() ->
                                                   fun3 => blup}}},
     Actual = test_import([blap], #{fun1 => blarg, fun2 => fun2}, SourceMap),
     ?assertMatch({ok, [{dependency, _, [blap]},
-                       {alias, _, blarg, {qualified_variable, _, [blap], fun1}},
+                       {alias, _, blarg, {qualified_symbol, _, [blap], fun1}},
                        {dependency, _, [blap]},
-                       {alias, _, fun2, {qualified_variable, _, [blap], fun2}}]}, Actual).
+                       {alias, _, fun2, {qualified_symbol, _, [blap], fun2}}]}, Actual).
 
 module_type_test() ->
     SourceMap = #{blap_Blup => {module, #{}, ['blap', 'Blup'], #{'A' => 'A'}}},
     Path = [{symbol, #{}, variable, blap}, {symbol, #{}, type, 'Blup'}, {symbol, #{}, type, 'A'}],
     Actual = import:import({import, #{}, Path}, SourceMap, #{}),
     ?assertMatch({ok, [{dependency, _, [blap, 'Blup']},
-                       {alias, _, 'A', {qualified_type, _, ['blap', 'Blup'], 'A'}}]}, Actual).
+                       {alias, _, 'A', {qualified_symbol, _, ['blap', 'Blup'], 'A'}}]}, Actual).
 
 wildcard_type_test() ->
     SourceMap = #{blap_Blup => {module, #{}, [blap, 'Blup'], #{'A' => 'A', 'B' => 'B'}}},
     Path = [{symbol, #{}, variable, blap}, {symbol, #{}, type, 'Blup'}, {symbol, #{}, variable, '_'}],
     Actual = import:import({import, #{}, Path}, SourceMap, #{}),
     ?assertMatch({ok, [{dependency, _, [blap, 'Blup']},
-                       {alias, _, 'A', {qualified_type, _, ['blap', 'Blup'], 'A'}},
-                       {alias, _, 'B', {qualified_type, _, ['blap', 'Blup'], 'B'}}]}, Actual).
+                       {alias, _, 'A', {qualified_symbol, _, ['blap', 'Blup'], 'A'}},
+                       {alias, _, 'B', {qualified_symbol, _, ['blap', 'Blup'], 'B'}}]}, Actual).
 
 local_type_test() ->
     Path = [{symbol, #{}, type, 'Blup'}, {symbol, #{}, variable, '_'}],
@@ -132,4 +132,5 @@ import_qualified_module_name_test_() ->
     Actual = test_import([kind, prelude], SourceMap),
     [?test({ok, [{alias, _,
                       'kind/prelude/Option',
-                      {qualified_type, _, [kind, prelude], 'Option'}}]}, Actual)].
+                      {qualified_symbol, _, [kind, prelude], 'Option'}},
+                 {dependency, _, [kind, prelude]}]}, Actual)].

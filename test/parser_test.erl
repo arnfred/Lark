@@ -1,31 +1,7 @@
 -module(parser_test).
 
 -include_lib("eunit/include/eunit.hrl").
--include("src/error.hrl").
-
--define(TIMEOUT, 3600).
-
--define(test(Expected, Actual),
-        begin
-            {timeout, ?TIMEOUT,
-             [?_assertMatch(Expected, Actual)]}
-        end).
-
--define(testError(Error, Expr),
-        begin
-            {timeout, ?TIMEOUT,
-             [?_errorMatch(Error, Expr)]}
-        end).
--define(testError(Error1, Error2, Expr),
-        begin
-            {timeout, ?TIMEOUT,
-             [?_errorMatch(Error1, Error2, Expr)]}
-        end).
--define(testError(Error1, Error2, Error3, Expr),
-        begin
-            {timeout, ?TIMEOUT,
-             [?_errorMatch(Error1, Error2, Error3, Expr)]}
-        end).
+-include("test/macros.hrl").
 
 local_type_test_() ->
     Module = 
@@ -59,7 +35,7 @@ local_type_no_import_test_() ->
     " | True False -> True\n"
     " | False True -> True\n"
     " | _ _ -> False",
-    ?testError({undefined_type, 'True'}, parser:parse([{text, Module}], #{import_prelude => false})).
+    ?testError({undefined_symbol, type, 'True'}, parser:parse([{text, Module}], #{import_prelude => false})).
 
 local_type_wildcard_test_() ->
     Module = 
@@ -199,7 +175,7 @@ qualified_beam_import_test_() ->
     "def blap -> reverse",
     ?test({ok, [{ast, _, _, _,
                  #{blap := {def, _, 'blap', [],
-                            {qualified_variable, _, [lists], reverse}}}}]},
+                            {qualified_symbol, _, [lists], reverse}}}}]},
           parser:parse([{text, Module}], #{add_kind_libraries => false})).
 
 qualified_source_import_test_() ->
@@ -212,7 +188,7 @@ qualified_source_import_test_() ->
     ?test({ok, [_,
                 {ast, _, _, _,
                  #{blap := {def, _, 'blap', [],
-                            {qualified_type, _, [blip, 'T'], 'A'}}}}]},
+                            {qualified_symbol, _, [blip, 'T'], 'A'}}}}]},
           parser:parse([{text, Module1}, {text, Module2}], #{add_kind_libraries => false})).
 
 qualified_local_import_test_() ->

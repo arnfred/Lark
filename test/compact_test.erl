@@ -45,8 +45,7 @@ compact_recur_flatten_test_() ->
     R = fun R() -> {sum, ordsets:from_list([#{recurse => {recur, R}}])} end,
     Input = {recur, R},
     Actual = domain:compact(Input),
-    [?_assertMatch(_, Actual),
-     ?_assertMatch([{recurse, {recur, _}}], maps:to_list(Actual))].
+    [?_assertMatch([{recurse, {recur, _}}], maps:to_list(Actual))].
 
 compact_recursive_linked_list_test_() ->
     List = fun List() -> {sum, ordsets:from_list(['List/Nil',

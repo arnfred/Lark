@@ -112,11 +112,7 @@ scan(Env, _, TypeMod, {type, _, _, _} = T) ->
                  D                     -> D end,
     {Env, Domain};
 
-scan(Env, _, _, {qualified_type, _, S}) ->
-    D = maps:get(S, Env, any),
-    {intersection(Env, #{S => D}), D};
-
-scan(Env, _, _, {qualified_symbol, _, S}) ->
+scan(Env, _, _, {qualified_symbol, _, _, S}) ->
     D = maps:get(S, Env, any),
     {intersection(Env, #{S => D}), D}.
 

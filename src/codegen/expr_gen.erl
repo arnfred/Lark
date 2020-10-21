@@ -88,12 +88,8 @@ gen_expr(expr, _, {recursive_type_application, _, Tag, Args}) ->
     BranchFun = cerl:c_fun([], call_type_tag(Tag, Args)),
     {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
 
-% expr of Form: kind/prelude/Option(a)
-gen_expr(expr, _, {qualified_type_application, _, ModulePath, Name, Args}) -> 
-    {ok, call_type_tag(ModulePath, Name, Args)};
-
 % expr of Form: kind/prelude/match(a)
-gen_expr(expr, _, {qualified_variable_application, _, ModulePath, Name, Args}) -> 
+gen_expr(expr, _, {qualified_application, _, ModulePath, Name, Args}) -> 
     ModuleName = module:beam_name(ModulePath),
     {ok, cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(Name), Args)};
 
@@ -109,14 +105,14 @@ gen_expr(expr, Scope, {type, _, _, Path} = Term) ->
         T                       -> traverse_term(NewScope, T, Tag)
     end;
 
-% expr of form: kind/prelude/Boolean
-gen_expr(expr, _, {qualified_type, _, ModulePath, Name}) ->
+% expr of form: kind/prelude/Boolean or kind/prelude/match
+gen_expr(expr, _, {qualified_symbol, _, ModulePath, Name}) ->
+    % If the module function doesn't exist with zero arguments, try calling the domain function
     ModuleName = module:beam_name(ModulePath),
-    {ok, cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(domain), [cerl:c_atom(Name)])};
-
-gen_expr(expr, _, {qualified_variable, _, ModulePath, Name}) ->
-    ModuleName = module:beam_name(ModulePath),
-    cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(Name), []);
+    case erlang:function_exported(ModuleName, Name, 0) of
+        true    -> {ok, cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(Name), [])};
+        false   -> {ok, cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(domain), [cerl:c_atom(Name)])}
+    end;
 
 % expr of form `T` where T is recursive like `type T -> {a: Boolean, b: T}` 
 gen_expr(expr, _, {recursive_type, _, _, _} = Term) ->
@@ -170,11 +166,7 @@ catchall(Args) ->
 call_type_domain(ExprForm, ArgForms) -> cerl:c_apply(ExprForm, ArgForms).
 
 domain(Tag) -> cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)]).
-domain(Module, Tag) -> cerl:c_call(cerl:c_atom(Module), cerl:c_atom(domain), [cerl:c_atom(Tag)]).
 
-call_type_tag(ModulePath, Tag, ArgForms) ->
-    Module = module:beam_name(ModulePath),
-    call_type_domain(domain(Module, Tag), ArgForms).
 call_type_tag(Tag, ArgForms) ->
     call_type_domain(domain(Tag), ArgForms).
 

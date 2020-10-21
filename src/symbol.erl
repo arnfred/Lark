@@ -19,8 +19,7 @@ tag({key, _, K}) -> K.
 name({pair, _, K, _}) -> name(K);
 name({key, _, Key}) -> Key;
 name({symbol, _, _, S}) -> S;
-name({qualified_type, _, S}) -> S;
-name({qualified_variable, _, S}) -> S;
+name({qualified_symbol, _, _, S}) -> S;
 name({qualified_symbol, _, S}) -> S;
 name({variable, _, Key, _}) -> Key;
 name({type, _, Key}) -> Key.
@@ -28,8 +27,8 @@ name({type, _, Key}) -> Key.
 is({symbol, _, _, _})           -> true;
 is({variable, _, _, _})         -> true;
 is({type, _, _, _})             -> true;
-is({qualified_type, _, _})      -> true;
-is({qualified_variable, _, _})  -> true;
+is({recursive_type, _, _, _})   -> true;
+is({qualified_symbol, _, _, _}) -> true;
 is({qualified_symbol, _, _})    -> true;
 is(_)                           -> false.
 

@@ -147,11 +147,8 @@ types_pre(_, Type, _, {dict, Ctx, Elements} = Term) ->
     error:map(error:collect([F(Elem) || Elem <- Elements]),
               fun(TaggedElements) -> {dict, Ctx, TaggedElements} end);
 
-types_pre(_, _, _, {application, Ctx, {qualified_type, _, ModulePath, Name}, Args}) ->
-    {ok, {qualified_type_application, Ctx, ModulePath, Name, Args}};
-
-types_pre(_, _, _, {application, Ctx, {qualified_variable, _, ModulePath, Name}, Args}) ->
-    {ok, {qualified_variable_application, Ctx, ModulePath, Name, Args}};
+types_pre(_, _, _, {application, Ctx, {qualified_symbol, _, ModulePath, Name}, Args}) ->
+    {ok, {qualified_application, Ctx, ModulePath, Name, Args}};
 
 types_pre(_, _, _, {type, Ctx, Name, Path} = Term) ->
     Tag = symbol:tag(Term),

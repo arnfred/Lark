@@ -5,10 +5,10 @@
 % Pattern of shape: prelude/Boolean
 % TODO: test with tagged import and type_def with no arguments
 % TODO: test with recursive type
-gen_pattern(pattern, Scope, {qualified_type, Ctx, ModulePath, Name}) ->
+gen_pattern(pattern, Scope, {qualified_symbol, Ctx, ModulePath, Name}) ->
     ModuleName = module:beam_name(ModulePath),
     case erlang:function_exported(ModuleName, Name, 0) of
-        false   -> error:format({undefined_type_in_pattern, Name}, {pattern_gen, Ctx});
+        false   -> error:format({undefined_symbol_in_pattern, Name}, {pattern_gen, Ctx});
         true    -> Domain = erlang:apply(ModuleName, Name, []),
                    traverse_domain(Scope, Domain, Ctx)
     end;
@@ -60,7 +60,7 @@ gen_pattern(pattern, _, {list, _, ElemList}) ->
     {ok, Ls ++ Ts};
 
 % Pattern of shape: module/T(a, b)
-gen_pattern(pattern, Scope, {qualified_type_application, Ctx, ModulePath, Name, Args}) ->
+gen_pattern(pattern, Scope, {qualified_application, Ctx, ModulePath, Name, Args}) ->
     case error:collect([to_domain(Scope, A) || A <- Args]) of
         {error, Errs}       -> {error, Errs};
         {ok, ArgDomains}    -> 
@@ -132,11 +132,11 @@ gen_domain(pattern, _Scope, {tagged, _, Tag, Val}) -> {ok, {tagged, Tag, Val}};
 gen_domain(pattern, _Scope, {sum, _, ElemList}) -> {ok, {sum, ordsests:from_list(ElemList)}};
 % Type list: `[A, B]`
 gen_domain(pattern, _Scope, {list, _, ElemList}) -> {ok, {list, ElemList}};
-% Qualified type: `a/b/T`
-gen_domain(pattern, _Scope, {qualified_type, Ctx, ModulePath, Name}) ->
+% Qualified symbol: `a/b/T`
+gen_domain(pattern, _Scope, {qualified_symbol, Ctx, ModulePath, Name}) ->
     ModuleName = module:beam_name(ModulePath),
     case erlang:function_exported(ModuleName, Name, 0) of
-        false   -> error:format({undefined_type_in_pattern, ModulePath, Name}, {pattern_gen, Ctx});
+        false   -> error:format({undefined_symbol_in_pattern, ModulePath, Name}, {pattern_gen, Ctx});
         true    -> {ok, erlang:apply(ModuleName, Name, [])}
     end;
 % variable

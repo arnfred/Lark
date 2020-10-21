@@ -165,7 +165,6 @@ gen_pattern(TypesEnv, PatternTerm) ->
     
 is_literal(_TypesEnv, {value, _, _, _})                         -> true;
 is_literal(_TypesEnv, {variable, _, _, _})                      -> false;
-is_literal(_TypesEnv, {qualified_variable, _, _, _})            -> false;
 is_literal(_TypesEnv, {application, _, _, _})                   -> false;
 is_literal(_TypesEnv, {recursive_type_application, _, _, _})    -> false;
 is_literal(_TypesEnv, {recursive_type, _, _, _})                -> false;
@@ -177,12 +176,16 @@ is_literal(TypesEnv, {pair, _, _, Val})                 -> is_literal(TypesEnv, 
 is_literal(TypesEnv, {dict_pair, _, _, Val})            -> is_literal(TypesEnv, Val);
 is_literal(TypesEnv, {tagged, _, _, Val})               -> is_literal(TypesEnv, Val);
 is_literal(TypesEnv, {type, _, _, Path})                -> not(maps:is_key(Path, TypesEnv));
-is_literal(TypesEnv, {qualified_type, Ctx, ModulePath, Name}) -> 
-    ModuleName = module:beam_name(ModulePath),
-    case erlang:function_exported(ModuleName, Name, 0) of
-        false   -> false;
-        true    -> Domain = erlang:apply(ModuleName, Name, []),
-                   is_literal(TypesEnv, utils:domain_to_term(Domain, Ctx))
+is_literal(TypesEnv, {qualified_symbol, Ctx, ModulePath, Name}) -> 
+    case module:kind_name(ModulePath) of
+        'kind/domain/Domain' -> false;
+        _                    ->
+            ModuleName = module:beam_name(ModulePath),
+            case erlang:function_exported(ModuleName, Name, 0) of
+                false   -> false;
+                true    -> Domain = erlang:apply(ModuleName, Name, []),
+                           is_literal(TypesEnv, utils:domain_to_term(Domain, Ctx))
+            end
     end.
             
 

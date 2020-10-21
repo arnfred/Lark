@@ -1,0 +1,7 @@
+module kind/domain {
+    Domain
+    Domain/Any
+    Domain/None
+}
+
+type Domain -> Any | None
