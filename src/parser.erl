@@ -47,66 +47,66 @@ parse(Inputs, Options) ->
             end
     end.
 
-load(Path) ->
-    case traverse(Path) of
+load(FileName) ->
+    case traverse(FileName) of
         {error, Errs}   -> {error, Errs};
         {ok, Files}     -> error:collect([load_source(F) || F <- Files])
     end.
 
 format(Sources, ImportPrelude, Options) ->
-    CollectedTypes = [types(AST) || {_, AST} <- Sources],
-    case error:collect(CollectedTypes) of
+    case error:collect([types(FileName, AST) || {FileName, AST} <- Sources]) of
         {error, Errs}   -> {error, Errs};
-        {ok, Types}     ->
+        {ok, TypeList}  ->
+            Types = maps:from_list(TypeList),
             case module:format(Sources, Types) of
                 {error, Errs}   -> {error, Errs};
                 {ok, ParsedSources}    ->
-                    ModuleList = [{Path, Modules} || {Path, {ast, _, Modules, _, _}} <- ParsedSources],
-                    SourceDefList = [{module:beam_name(Name), M} || {_, Modules} <- ModuleList, 
-                                                                    {module, _, Name, _} = M <- Modules],
-                    SourceTypeList = [{Path, Name, Module} || {T, {Path, Mods}}  <- lists:zip(Types, ModuleList),
-                                                              DefModule          <- Mods,
-                                                              {Name, Module}     <- type_module(DefModule, T)],
+                    ModuleList = [{FileName, Modules} || {FileName, {ast, _, Modules, _, _}} <- ParsedSources],
+                    SourceDefList = [{FileName, M} || {FileName, Modules} <- ModuleList, 
+                                                      {module, _, _, _} = M <- Modules],
+                    SourceTypeList = [{FileName, TypeModule} || 
+                                      {FileName, Mods}  <- ModuleList,
+                                      Module            <- Mods,
+                                      TypeModule        <- type_modules(Module, maps:get(FileName, Types))],
 
-                    % Lookup table from Module Beam Name to Module for modules and type modules
-                    SourceDefMap = maps:from_list(SourceDefList),
-                    SourceTypeMap = maps:from_list([{Name, Source} || {_, Name, Source} <- SourceTypeList]),
-                    SourceMap = maps:merge(SourceDefMap, SourceTypeMap),
+                    SourceList = SourceDefList ++ SourceTypeList,
+                    SourceMap = maps:from_list([{module:beam_name(ModulePath), Module} || 
+                                                    {_, {module, _, ModulePath, _} = Module} <- SourceList]),
+                    ModuleMap = maps:from_list([{ModulePath, FileName}
+                                                || {FileName, {module, _, ModulePath, _}} <- SourceList]),
 
-
-                    % Lookup table from ModulePath to Path for modules and type modules
-                    DefModuleMap = maps:from_list([{ModulePath, Path} || {Path, Modules} <- ModuleList,
-                                                                      {module, _, ModulePath, _} <- Modules]),
-                    TypeModuleMap = maps:from_list([{ModulePath, Path}
-                                                    || {Path, _, {module, _, ModulePath, _}} <- SourceTypeList]),
-                    ModuleMap = maps:merge(DefModuleMap, TypeModuleMap),
-
-
-                    error:collect([import_and_tag(Path, AST, SourceMap, LocalTypes, ModuleMap, ImportPrelude, Options) ||
-                                   {{Path, AST}, LocalTypes} <- lists:zip(ParsedSources, Types)])
+                    error:collect([import_and_tag(FileName,
+                                                  AST,
+                                                  SourceMap,
+                                                  maps:get(FileName, Types),
+                                                  ModuleMap,
+                                                  ImportPrelude,
+                                                  Options) || {FileName, AST} <- ParsedSources])
             end
     end.
 
-traverse(Path) ->
-    case {filelib:is_dir(Path), filelib:is_file(Path)} of
-        {true, _} -> traverse(dir, Path);
-        {_, true} -> traverse(file, Path);
-        _         -> error:format({malformed_path, Path}, {sourcemap})
+
+
+traverse(FileName) ->
+    case {filelib:is_dir(FileName), filelib:is_file(FileName)} of
+        {true, _} -> traverse(dir, FileName);
+        {_, true} -> traverse(file, FileName);
+        _         -> error:format({malformed_path, FileName}, {sourcemap})
     end.
 
-traverse(dir, Path) -> 
-    case file:list_dir(Path) of
-        {error, Err}     -> error:format({error_listing_dir_files, Path, Err}, {sourcemap});
+traverse(dir, FileName) -> 
+    case file:list_dir(FileName) of
+        {error, Err}     -> error:format({error_listing_dir_files, FileName, Err}, {sourcemap});
         {ok, List}       -> 
-            case error:collect([traverse(filename:absname_join(Path, File)) || File <- List]) of
+            case error:collect([traverse(filename:absname_join(FileName, File)) || File <- List]) of
                 {error, Errs}   -> {error, Errs};
                 {ok, Files}     -> {ok, lists:flatten(Files)}
             end
     end;
 
-traverse(file, Path) ->
-    case filename:extension(Path) of
-        ".kind" ++ _    -> {ok, {source, Path}};
+traverse(file, FileName) ->
+    case filename:extension(FileName) of
+        ".kind" ++ _    -> {ok, {source, FileName}};
         _               -> []
     end.
 
@@ -131,7 +131,7 @@ types_post(expr, _, {symbol, _, type, Name} = Term) ->
 types_post(_, _, _) -> ok.
 
 
-types(AST) ->
+types(FileName, AST) ->
     case ast:traverse(fun types_pre/3, fun types_post/3, AST) of
         {error, Errs}   -> 
             {error, Errs};
@@ -139,40 +139,46 @@ types(AST) ->
             GetKey = fun({K, _}) -> K end,
             GetVal = fun({_, V}) -> V end,
             Types = maps:from_list(utils:group_by(GetKey, GetVal, maps:keys(Env))),
-            {ok, Types}
+            {ok, {FileName, Types}}
     end.
 
 
-type_module({module, Ctx, Name, Exports}, Types) ->
+type_modules({module, Ctx, Name, Exports}, Types) ->
     F = fun(Type, Members) ->
                 TypeExports = maps:from_list([{T, T} || T <- Members]),
                 Path = Name ++ [Type],
-                {module:beam_name(Path), {module, Ctx, Path, TypeExports}}
+                {module, Ctx, Path, TypeExports}
         end,
     [F(T, Members) || {T, Members} <- maps:to_list(Types), maps:is_key(T, Exports)].
 
-load_source({source, Path}) ->
-    case file:read_file(Path) of
-        {error, Err}    -> error:format({malformed_source_file, Err, Path}, {sourcemap, Path});
-        {ok, Data}      -> {Path, unicode:characters_to_list(Data, utf8)}
+load_source({source, FileName}) ->
+    case file:read_file(FileName) of
+        {error, Err}    -> error:format({malformed_source_file, Err, FileName}, {sourcemap, FileName});
+        {ok, Data}      -> {FileName, unicode:characters_to_list(Data, utf8)}
     end.
 
-to_ast(Path, Text) -> 
+to_ast(FileName, Text) ->
     case lexer:string(Text) of
-        {error, Error}          -> error:format({lexer_error, Error},{sourcemap, Path});
-        {error, Error1, Error2} -> error:format({lexer_error, Error1, Error2},{sourcemap, Path});
+        {error, Error}          -> error:format({lexer_error, Error},{sourcemap, FileName});
+        {error, Error1, Error2} -> error:format({lexer_error, Error1, Error2},{sourcemap, FileName});
         {ok, Tokens, _}         ->
             case syntax:parse(Tokens) of
-                {error, Error}  -> error:format({parser_error, Error}, {sourcemap, Path});
+                {error, Error}  -> error:format({parser_error, Error}, {sourcemap, FileName});
                 {ok, Parsed}    ->
-                    case preener:preen(Path, Parsed) of
+                    case preener:preen(FileName, Parsed) of
                         {error, Errs}   -> {error, Errs};
-                        {ok, Preened}   -> {ok, {Path, Preened}}
+                        {ok, Preened}   -> {ok, {FileName, Preened}}
                     end
             end
     end.
 
-import_and_tag(Path, {ast, _, Modules, ImportClauses, _} = AST, SourceMap, LocalTypes, ModuleMap, ImportPrelude, Options) ->
+import_and_tag(FileName,
+               {ast, _, Modules, ImportClauses, _} = AST,
+               SourceMap,
+               LocalTypes,
+               ModuleMap,
+               ImportPrelude,
+               Options) ->
 
 	% make sure to include if we're running imports in sandboxed mode where
 	% only some erlang functions are allowed
@@ -192,7 +198,7 @@ import_and_tag(Path, {ast, _, Modules, ImportClauses, _} = AST, SourceMap, Local
         {ok, NestedImports} ->
             Imports = lists:flatten(NestedImports),
             Aliases = [A || {alias, _, _, _} = A <- Imports],
-            Dependencies = [{dependency, Ctx, Path, maps:get(Module, ModuleMap)} || 
+            Dependencies = [{dependency, Ctx, FileName, maps:get(Module, ModuleMap)} ||
                             {dependency, Ctx, Module} <- Imports],
             ErrFun = fun({alias, ErrorCtx1, Alias, _},
                          {alias, ErrorCtx2, _, _}) -> error:format({duplicate_import, Alias},
@@ -238,10 +244,10 @@ cycles(G, [Vertex | Rest], CycleErrs) ->
 
 % Any source without any dependencies isn't included in the module order
 % It needs to get added to the front of the path order
-reorder_asts(PathOrder, TaggedSources) ->
+reorder_asts(FileNameOrder, TaggedSources) ->
     SourceMap = maps:from_list(TaggedSources),
-    Roots = [maps:get(Path, SourceMap) || {Path, _} <- TaggedSources, not(lists:member(Path, PathOrder))],
-    Roots ++ [maps:get(Path, SourceMap) || Path <- PathOrder].
+    Roots = [maps:get(FileName, SourceMap) || {FileName, _} <- TaggedSources, not(lists:member(FileName, FileNameOrder))],
+    Roots ++ [maps:get(FileName, SourceMap) || FileName <- FileNameOrder].
 
 
 -ifdef(TEST).

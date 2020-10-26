@@ -4,8 +4,8 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("src/error.hrl").
 
-format(Sources, Types) ->
-    case error:collect([prepare(File, AST, Ts) || {{File, AST}, Ts} <- lists:zip(Sources, Types)]) of
+format(Sources, TypesByFile) ->
+    case error:collect([prepare(FileName, AST, maps:get(FileName, TypesByFile)) || {FileName, AST} <- Sources]) of
         {error, Errs}           -> {error, Errs};
         {ok, PreparedSources}   ->
             Modules = [{Name, Term, File} || {File, {ast, _, Modules, _, _}} <- PreparedSources,
@@ -19,13 +19,13 @@ format(Sources, Types) ->
             end
     end.
 
-prepare(File, Code, Types) ->
+prepare(FileName, Code, Types) ->
     Modules = [M || M = {module, _, _, _} <- Code],
     Imports = [I || I = {import, _, _} <- Code],
     Defs = maps:from_list([{Name, T} || T = {Type, _, Name, _, _} <- Code, Type == type_def orelse Type == def]),
     case error:collect([handle_modules(M, Defs, Types) || M <- Modules]) of
         {error, Errs}   -> {error, Errs};
-        {ok, Mods}        -> {ok, {File, {ast, #{file => File}, Mods, Imports, Defs}}}
+        {ok, Mods}      -> {ok, {FileName, {ast, #{filename => FileName}, Mods, Imports, Defs}}}
     end.
 
 handle_modules({module, ModuleCtx, Path, Exports}, Defs, Types) ->
