@@ -4,14 +4,13 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("src/error.hrl").
 
-preen(Path, AST) -> 
+preen(FileName, AST) -> 
     case expand_tuples(AST) of
         {error, Errs}         -> {error, Errs};
         {ok, {_, DetupledAST}}  ->
             case dict_keys(DetupledAST) of
                 {error, Errs}         -> {error, Errs};
-                {ok, {_, KeyedAst}}   -> {ok, {_, IdAST}} = add_ids(KeyedAst),
-                                         {ok, {_, PathAST}} = add_path(list_to_atom(Path), IdAST),
+                {ok, {_, KeyedAST}}   -> {ok, {_, PathAST}} = add_filename(FileName, KeyedAST),
                                          {ok, PathAST}
             end
     end.
@@ -59,13 +58,8 @@ dict_pair_elem(_Type, _Scope, {symbol, Ctx, variable, Name}) -> {ok, {key, Ctx, 
 dict_pair_elem(Type, _, Term) ->
     error:format({illegal_dict_pair_element, ast:term_type(Term), Type}, {preener, Term}).
 
-add_ids(AST) ->
-    TagId = fun(_, _, Term) -> {ok, ast:tag(id, Term, symbol:id(id))} end,
-    Skip = fun(_, _, _) -> ok end,
-    ast:traverse(TagId, Skip, AST).
-
-add_path(Path, AST) ->
-    TagId = fun(_, _, Term) -> {ok, ast:tag(source_path, Term, Path)} end,
+add_filename(FileName, AST) ->
+    TagId = fun(_, _, Term) -> {ok, ast:tag(source_path, Term, FileName)} end,
     Skip = fun(_, _, _) -> ok end,
     ast:traverse(TagId, Skip, AST).
 
