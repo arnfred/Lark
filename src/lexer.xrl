@@ -26,14 +26,15 @@ Rules.
 \|                          : {token, {pipe,                #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \/                          : {token, {slash,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \:                          : {token, {colon,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
-def                         : {token, {def,                 #{line => TokenLine}, list_to_atom(TokenChars)}}.
-val                         : {token, {val,                 #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \.                          : {token, {apply,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
 ,                           : {token, {comma,   	        #{line => TokenLine}, list_to_atom(TokenChars)}}.
 =                           : {token, {assign,              #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {RightArrow}                : {token, {right_arrow,         #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {LeftArrow}                 : {token, {left_arrow,          #{line => TokenLine}, list_to_atom(TokenChars)}}.
+def                         : {token, {def,                 #{line => TokenLine}, list_to_atom(TokenChars)}}.
+val                         : {token, {val,                 #{line => TokenLine}, list_to_atom(TokenChars)}}.
 type                        : {token, {type,                #{line => TokenLine}, list_to_atom(TokenChars)}}.
+macro                       : {token, {macro,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
 import                      : {token, {import_keyword,      #{line => TokenLine}, list_to_atom(TokenChars)}}.
 module                      : {token, {module_keyword,      #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {Operator}                  : {token, {op_type(TokenChars), #{line => TokenLine}, list_to_atom(TokenChars)}}.

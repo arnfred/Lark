@@ -1,5 +1,5 @@
 Terminals
-    def type val 
+    def type val macro
     type_symbol var_symbol
     rightbias_operator plus_operator mult_operator comp_operator eq_operator
     minus_operator div_operator caret_operator other_operator
@@ -12,7 +12,7 @@ Terminals
 Nonterminals
     literal
     all statements statement
-    assignment function newtype module import
+    assignment function newtype module import newmacro
     implies
     pattern patterns pattern_application pattern_verb braced_pattern
     clauses clause lambda def_clauses type_clauses type_clause
@@ -68,6 +68,7 @@ statements -> statement statements                       : ['$1' | '$2'].
 statement -> statement newlines : '$1'.
 statement -> function           : '$1'.
 statement -> newtype            : '$1'.
+statement -> newmacro           : '$1'.
 statement -> module             : '$1'.
 statement -> import             : '$1'.
 
@@ -79,6 +80,8 @@ function -> def symbols implies expression              : {def, ctx('$1'), name(
 function -> def symbols clause_separator def_clauses    : {def, ctx('$1'), name('$2'), args('$2'), '$4'}.
 newtype -> type symbols implies sum_or_expression       : {type_def, ctx('$1'), name('$2'), args('$2'), '$4'}.
 newtype -> type symbols clause_separator type_clauses   : {type_def, ctx('$1'), name('$2'), args('$2'), '$4'}.
+newmacro -> macro symbols implies expression            : {macro, ctx('$1'), name('$2'), args('$2'), '$4'}.
+newmacro -> macro symbols clause_separator def_clauses  : {macro, ctx('$1'), name('$2'), args('$2'), '$4'}.
 
 
 
@@ -327,8 +330,6 @@ secondary_separator -> pipe     : '$1'.
 
 Erlang code.
 
-unpack_tuple([T]) -> T;
-unpack_tuple([T | _] = Terms) -> {tuple, ctx(T), Terms}.
 unpack_sum([T]) -> T;
 unpack_sum([T | _] = Terms) -> {sum, ctx(T), Terms}.
 

@@ -1,5 +1,5 @@
 -module(kind).
--export([load/1, load/2, run/2, run/3]).
+-export([load/1, load/2, run/2, run/3, type_compile_load/2]).
 -import(lists, [zip/2, zip3/3, unzip/1]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -10,6 +10,7 @@ run(Code, Args, Options) ->
     case load(Code, Options) of
         {error, Errs}   -> {error, Errs};
         {ok, Mods} -> 
+            ?debugVal(Mods, 100),
             case [M || M <- Mods, erlang:function_exported(M, main, length(Args))] of
                 []          -> error:format({no_main_function_for_arity, length(Args)}, {kind});
                 [Module]    ->
@@ -30,13 +31,17 @@ load(Code, Options) ->
     case parser:parse([{text, Code}], Options) of
         {error, Errs}   -> {error, Errs};
         {ok, ASTs}     ->
-            case error:collect([type_and_compile(AST, Options) || AST <- ASTs]) of
-                {error, Errs}       -> {error, Errs};
-                {ok, Modules}       -> {ok, lists:flatten(Modules)}
+            case error:collect([macros:expand(AST) || AST <- ASTs]) of
+                {error, Errs}      -> {error, Errs};
+                {ok, ExpandedASTs}  ->
+                    case error:collect([type_compile_load(AST, Options) || AST <- ExpandedASTs]) of
+                        {error, Errs}       -> {error, Errs};
+                        {ok, Modules}       -> {ok, lists:flatten(Modules)}
+                    end
             end
     end.
 
-type_and_compile(AST, Options) ->
+type_compile_load(AST, Options) ->
     case typer:type(AST, Options) of
         {error, Errs}                                   -> {error, Errs};
         {ok, {TypedAST, TypesEnv, Types, TypeModules}}  ->
@@ -79,6 +84,7 @@ clean(Modules) ->
                   true = code:delete(M)
         end,
     [F(M) || M <- Modules].
+
 
 -ifdef(TEST).
 

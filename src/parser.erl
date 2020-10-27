@@ -249,7 +249,6 @@ reorder_asts(FileNameOrder, TaggedSources) ->
     Roots = [maps:get(FileName, SourceMap) || {FileName, _} <- TaggedSources, not(lists:member(FileName, FileNameOrder))],
     Roots ++ [maps:get(FileName, SourceMap) || FileName <- FileNameOrder].
 
-
 -ifdef(TEST).
 
 traverse_test_() -> 

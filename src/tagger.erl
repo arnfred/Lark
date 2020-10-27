@@ -5,17 +5,22 @@
 
 tag(AST) -> tag(AST, #{}).
 
-tag(AST, ImportScope) ->
-    case ast:traverse(fun tag_defs_pre/3, fun tag_defs_post/3, AST) of
+tag({ast, _, _, _, TopLevelDefs} = UnexpandedAST, ImportScope) ->
+    MacroScope = maps:from_list([{Name, true} || {macro, _, Name, _, _} <- maps:values(TopLevelDefs)]),
+    case ast:traverse(fun(_, _, _) -> ok end, fun tag_macros/3, MacroScope, UnexpandedAST) of
         {error, Errs}   -> {error, Errs};
-        {ok, {Defs, _}} ->
-            case ast:traverse(fun add_type_path/3, fun tag_types/3, Defs, AST) of
-                {error, Errs}       -> {error, Errs};
-                {ok, {Types, _}}    ->
-                    LocalScope = maps:merge(Types, Defs),
-                    case merge_scopes(LocalScope, ImportScope) of
-                        {error, Errs}   -> {error, Errs};
-                        {ok, Scope}     -> ast:traverse(fun add_path/3, fun tag_symbols/3, Scope, AST)
+        {ok, {_, AST}}  ->
+            case ast:traverse(fun tag_defs_pre/3, fun tag_defs_post/3, AST) of
+                {error, Errs}   -> {error, Errs};
+                {ok, {Defs, _}} ->
+                    case ast:traverse(fun add_type_path/3, fun tag_types/3, Defs, AST) of
+                        {error, Errs}       -> {error, Errs};
+                        {ok, {Types, _}}    ->
+                            LocalScope = maps:merge(Types, Defs),
+                            case merge_scopes(LocalScope, ImportScope) of
+                                {error, Errs}   -> {error, Errs};
+                                {ok, Scope}     -> ast:traverse(fun add_path/3, fun tag_symbols/3, Scope, AST)
+                            end
                     end
             end
     end.
@@ -38,8 +43,15 @@ merge_scopes(LocalScope, ImportScope) ->
         {ok, Imports}   -> {ok, maps:merge(LocalScope, maps:from_list(Imports))}
     end.
 
+% Step 1: Tag all macros
+tag_macros(_, Scope, {application, _, {symbol, Ctx, _, S}, Args} = Term) ->
+    case maps:is_key(S, Scope) of
+        false   -> {ok, Term};
+        true    -> {ok, {macro_application, Ctx, S, Args}}
+    end;
+tag_macros(_, _, _) -> ok.
 
-% Step 1: Scan all top-level module definitions
+% Step 2: Scan all top-level module definitions
 tag_defs_pre(top_level, _, _)                       -> ok;
 tag_defs_pre(_, _, _)                               -> skip.
 
@@ -50,12 +62,13 @@ tag_defs_post(top_level, _, {type_def, _, Name, _, _}) ->
 tag_defs_post(_, _, _) -> ok.
 
 
-% Step 2: Scan types (but skip types local to a definition)
+% Step 3: Scan types (but skip types local to a definition)
 add_type_path(top_level, _, {def, _, _, _, _})  -> skip;
+add_type_path(top_level, _, {macro, _, _, _, _})  -> skip;
 add_type_path(top_level, _, {type_def, _, Name, _, _} = Term) -> {ok, ast:tag(path, Term, [Name])};
 add_type_path(expr, Scope, {pair, Ctx, Key, Val}) ->
     case Key of
-        % Rewrite operators to types when they are the value of a pair
+        % Rewrite operators to types when they are the key of a pair
         {symbol, ValCtx, operator, S}   -> 
             add_path(expr, Scope, {pair, Ctx, {symbol, ValCtx, type, S}, Val});
         _ -> add_path(expr, Scope, {pair, Ctx, Key, Val})
@@ -67,7 +80,7 @@ tag_types(_, Scope, {symbol, Ctx, type, S} = Term) ->
         true    -> {ok, replace(Scope, S, Term)};
         false   -> {ok, symbol:tag(path(Term)), {type, Ctx, S, path(Term)}}
     end;
-tag_types(_, Scope, {symbol, Ctx, operator, S} = Term) -> 
+tag_types(_, Scope, {symbol, _, operator, S} = Term) -> 
     case maps:is_key(S, Scope) of
         true    -> {ok, replace(Scope, S, Term)};
         false   -> {ok, Term}
@@ -87,6 +100,8 @@ tag_types(_, _, _) -> ok.
 add_path(_, _, {ast, _, _, _, _} = Term) ->
     {ok, ast:tag(path, Term, fun(Tag) -> Tag end, [])};
 add_path(_, _, {def, _, Name, _, _} = Term) ->
+    {ok, ast:tag(path, Term, fun(Tag) -> [Name | Tag] end, [])};
+add_path(_, _, {macro, _, Name, _, _} = Term) ->
     {ok, ast:tag(path, Term, fun(Tag) -> [Name | Tag] end, [])};
 add_path(_, _, {type_def, _, Name, _, _} = Term) ->
     {change, fun tag_symbols_and_types/3, ast:tag(path, Term, [Name])};

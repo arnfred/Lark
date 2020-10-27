@@ -9,8 +9,8 @@ traverse(Pre, Post, Scope, ASTs) when is_list(ASTs) -> map_asts(Pre, Post, Scope
 traverse(Pre, Post, Scope, AST)                     -> traverse_ast(Pre, Post, Scope, AST).
 traverse(Pre, Post, ASTs) when is_list(ASTs)        -> map_asts(Pre, Post, #{}, ASTs);
 traverse(Pre, Post, AST)                            -> traverse_ast(Pre, Post, #{}, AST).
-traverse(Post, ASTs) when is_list(ASTs)             -> map_asts(fun(_,_,T) -> T end, Post, #{}, ASTs);
-traverse(Post, AST)                                 -> traverse_ast(fun(_, _, T) -> T end, Post, #{}, AST).
+traverse(Post, ASTs) when is_list(ASTs)             -> map_asts(fun(_,_,_) -> ok end, Post, #{}, ASTs);
+traverse(Post, AST)                                 -> traverse_ast(fun(_, _, _) -> ok end, Post, #{}, AST).
 
 traverse_term(Type, Pre, Post, Scope, Term)         -> climb({Pre, Post}, Type, Scope, Term).
 
@@ -99,6 +99,12 @@ step(Meta, Type, Scope, {type_def, Context, Name, Args, Expr}) when is_list(Args
         {ok, {Env, Term}}   -> {ok, {Env, setelement(1, Term, type_def)}}
     end;
 
+step(Meta, Type, Scope, {macro, Context, Name, Args, Expr}) when is_list(Args) ->
+    case step(Meta, Type, Scope, {def, Context, Name, Args, Expr}) of
+        {error, Errs}       -> {error, Errs};
+        {ok, {Env, Term}}   -> {ok, {Env, setelement(1, Term, macro)}}
+    end;
+
 step(Meta, expr, Scope, {clause, Context, Patterns, Expr}) when is_list(Patterns) ->
     case map(Meta, pattern, Scope, Patterns) of
         {error, Errs}                       -> {error, Errs};
@@ -144,6 +150,11 @@ step(Meta, Type, Scope, {recursive_type_application, Context, Tag, Args}) ->
     error:map(map(Meta, Type, Scope, Args),
 	      fun({ArgsEnvs, TArgs}) -> 
                        {merge(ArgsEnvs), {recursive_type_application, Context, Tag, TArgs}} end);
+
+step(Meta, Type, Scope, {macro_application, Context, Name, Args}) ->
+    error:map(map(Meta, Type, Scope, Args),
+              fun({ArgsEnvs, TArgs}) -> 
+                      {merge(ArgsEnvs), {macro_application, Context, Name, TArgs}} end);
 
 step(Meta, Type, Scope, {lookup, Context, Expr, Elems}) when is_list(Elems) ->
     error:map2(climb(Meta, Type, Scope, Expr),
