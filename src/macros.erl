@@ -5,8 +5,8 @@
 -include("test/macros.hrl").
 
 expand({ast, Ctx, Modules, Imports, Defs} = AST) ->
-    Macros = maps:from_list([{Name, {def, MacroCtx, Name, Args, Expr}} ||
-                              {macro, MacroCtx, Name, Args, Expr} <- maps:values(Defs)]),
+    Macros = maps:from_list([{Name, {def, MacroCtx, Name, Fun}} ||
+                              {macro, MacroCtx, Name, Fun} <- maps:values(Defs)]),
     case maps:size(Macros) of
         0   -> {ok, AST};
         _N  ->
@@ -15,7 +15,7 @@ expand({ast, Ctx, Modules, Imports, Defs} = AST) ->
             case kind:type_compile_load(MacroAST, #{}) of
                 {error, Errs}       -> {error, Errs};
                 {ok, LoadedModules} -> 
-                    NoMacros = maps:filter(fun(_, {T, _, _, _, _}) -> not(T =:= macro) end, Defs),
+                    NoMacros = maps:filter(fun(_, {T, _, _, _}) -> not(T =:= macro) end, Defs),
                     NoMacroAST = {ast, Ctx, Modules, Imports, NoMacros},
                     case ast:traverse(fun(_, _, Term) -> expand_macro(Module, Term) end, NoMacroAST) of
                         {error, Errs}               -> clean(LoadedModules), {error, Errs};
@@ -42,16 +42,14 @@ clean(Modules) ->
 -ifdef(TEST).
 
 
--define(setup(Code, Tests), {setup, fun() -> kind:load(Code, #{add_kind_libraries => false}) end, fun clean/1, Tests}).
+-define(setup(Code, Tests), {setup, fun() -> kind:load(Code, #{import_kind_libraries => false}) end, fun clean/1, Tests}).
 
 
 happy_macro_test_() ->
     ?setup("module test { test }
             import erlang/{+, list_to_tuple: tuple}
-            macro inc _
-              | ['value', ctx, typ, n]  -> ['value', ctx, typ, n + 1].tuple
-              | otherwise               -> otherwise
 
+            macro inc ['value', ctx, typ, n]  -> ['value', ctx, typ, n + 1].tuple
             def test -> 4.inc",
            fun({ok, _}) ->
                    [?test(5, test:test())]
@@ -60,10 +58,8 @@ happy_macro_test_() ->
 unhappy_macro_test_() ->
     ?setup("module test { test }
             import erlang/{+, list_to_tuple}
-            macro inc _
-              | ['value', ctx, typ, n]  -> ['value', ctx, typ, n + 1].list_to_tuple
-              | otherwise               -> otherwise
 
+            macro inc ['value', ctx, typ, n]  -> ['value', ctx, typ, n + 1].list_to_tuple
             def test -> 4.inc(2)",
            fun(Err) ->
                    [?testError({wrong_macro_arity, inc, 2}, Err)]

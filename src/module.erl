@@ -22,7 +22,7 @@ format(Sources, TypesByFile) ->
 prepare(FileName, Code, Types) ->
     Modules = [M || M = {module, _, _, _} <- Code],
     Imports = [I || I = {import, _, _} <- Code],
-    Defs = maps:from_list([{Name, T} || T = {Type, _, Name, _, _} <- Code,
+    Defs = maps:from_list([{Name, T} || T = {Type, _, Name, _} <- Code,
                                         Type == type_def orelse Type == def orelse Type == macro]),
     case error:collect([handle_modules(M, Defs, Types) || M <- Modules]) of
         {error, Errs}   -> {error, Errs};

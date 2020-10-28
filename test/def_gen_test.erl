@@ -31,7 +31,7 @@ always_true_test_() ->
 
 pattern_match_test_() ->
     ?setup("module kind/test { rexor }\n"
-           "def rexor a\n"
+           "def rexor\n"
            " | True -> False\n"
            " | False -> True",
            fun({ok, _}) ->
@@ -41,7 +41,7 @@ pattern_match_test_() ->
 
 pattern_match_multivariate_test_() ->
     ?setup("module kind/test { rexor }\n"
-           "def rexor a b\n"
+           "def rexor\n"
            " | True False -> True\n"
            " | False True -> True\n"
            " | _ _ -> False",
@@ -52,7 +52,7 @@ pattern_match_multivariate_test_() ->
 
 pattern_match3_test_() ->
     ?setup("module kind/test { blah }\n"
-           "def blah a\n"
+           "def blah\n"
            " | b -> b",
            fun({ok, _}) ->
                    ?test('Boolean/True', kind_test:blah('Boolean/True'))
@@ -61,7 +61,7 @@ pattern_match3_test_() ->
 pattern_match_type_test_() ->
     ?setup("module kind/test{ blah }\n"
            "type T -> {key1: Boolean, key2: Option(Boolean)}\n"
-           "def blah a\n"
+           "def blah\n"
            " | {key1: True, key2: k2} -> k2\n"
            " | {key1: False, key2: Nil} -> Nil\n",
            fun({ok, _}) ->
@@ -101,8 +101,8 @@ erlang_module_call_no_dot_notation_test_() ->
 shadow_variable_test_() ->
     {"Test how we handle variable reuse",
      ?setup("module kind/test { test }\n"
-            "def test a\n"
-            " | a -> a",
+            "def test\n"
+            " | a -> a.match(| a -> a)",
             fun(Error) -> 
                     [?testError({symbol_in_pattern_already_defined, a}, Error)]
             end)}.
@@ -110,7 +110,7 @@ shadow_variable_test_() ->
 top_level_type_import_test_() ->
     {"Test if we can use Boolean as defined in the prelude",
      ?setup("module kind/test { Test }\n"
-            "type Test -> Boolean | Maybe",
+            "type Test -> (Boolean | Maybe)",
             fun({ok, _}) -> 
                     ?testEqual({sum, ordsets:from_list(['Test/Maybe', 'Boolean/True', 'Boolean/False'])}, kind_test:'Test'())
             end)}.
@@ -118,7 +118,7 @@ top_level_type_import_test_() ->
 sup_level_type_import_test_() ->
     {"Test if we can use Boolean as defined in the prelude",
      ?setup("module kind/test { Test }\n"
-            "type Test -> True | Maybe",
+            "type Test -> (True | Maybe)",
             fun({ok, _}) -> 
                     ?testEqual({sum, ordsets:from_list(['Test/Maybe', 'Boolean/True'])}, kind_test:'Test'())
             end)}.
@@ -126,15 +126,15 @@ sup_level_type_import_test_() ->
 unicode_string_test_() ->
     {"Support for string expressions in utf8",
      ?setup("module test { main }
-             def main _ -> \"strings! ❤️\"",
+             def main -> \"strings! ❤️\"",
             fun({ok, _}) ->
-                    ?testEqual(<<"strings! ❤️"/utf8>>, test:main("_"))
+                    ?testEqual(<<"strings! ❤️"/utf8>>, test:main())
             end)}.
 
 unicode_string_pattern_test_() ->
     {"Support for string patterns in utf8",
      ?setup("module test { main }\n"
-            "def main _\n"
+            "def main\n"
             " | \"❤️\" -> True\n"
             " | _ -> False",
             fun({ok, _}) ->
@@ -144,15 +144,15 @@ unicode_string_pattern_test_() ->
 number_test_() ->
     {"Support for number expressions",
      ?setup("module test { main }\n"
-            "def main _ -> 3.14",
+            "def main -> 3.14",
             fun({ok, _}) ->
-                    ?test(3.14, test:main("_"))
+                    ?test(3.14, test:main())
             end)}.
 
 number_pattern_test_() ->
     {"Support for numbers in patterns",
      ?setup("module test { main }\n"
-            "def main _\n"
+            "def main\n"
             " | 3.14 -> True\n"
             " | _ -> False",
             fun({ok, _}) ->
@@ -162,16 +162,16 @@ number_pattern_test_() ->
 atom_test_() ->
     {"Support for atoms",
      ?setup("module test { main }\n"
-            "def main _ -> 'atom'.match(\n"
+            "def main -> 'atom'.match(\n"
             "  | atom -> atom)",
             fun({ok, _}) ->
-                    ?test(atom, test:main("_"))
+                    ?test(atom, test:main())
             end)}.
 
 atom_pattern_test_() ->
     {"Support for atoms in patterns",
      ?setup("module test { main }\n"
-            "def main _\n"
+            "def main\n"
             " | 'atom' -> True\n"
             " | _ -> False",
             fun({ok, _}) ->
@@ -181,17 +181,17 @@ atom_pattern_test_() ->
 list_test_() ->
     {"Support for lists",
      ?setup("module test { main }
-             def main _ -> [1, 2, 3]",
+             def main -> [1, 2, 3]",
             fun({ok, _}) ->
-                    ?test([1, 2, 3], test:main('_'))
+                    ?test([1, 2, 3], test:main())
             end)}.
 
 list_pattern_test_() ->
     {"Support for lists in patterns",
      ?setup("module test { main }\n"
-            "def main a\n"
+            "def main\n"
             " | [1, 2, b] -> b\n"
-            " | _         -> a",
+            " | a         -> a",
             fun({ok, _}) ->
                     ?test(3, test:main([1, 2, 3]))
             end)}.
@@ -200,16 +200,16 @@ unexported_type_test_() ->
     {"A def within a local file can call all types defined in the module",
      ?setup("module test { main }\n"
             "type Test -> {a: A, b: B}\n"
-            "def main _ -> Test\n",
+            "def main -> Test\n",
             fun({ok, _}) ->
-                    [?testEqual(#{a => 'Test/A', b => 'Test/B'}, test:main('_'))]
+                    [?testEqual(#{a => 'Test/A', b => 'Test/B'}, test:main())]
             end)}.
              
 type_parameter_pattern_test_() ->
     {"A def within a local file can call all types defined in the module",
      ?setup("module test { main }\n"
             "type Test -> Option(Boolean)\n"
-            "def main _\n"
+            "def main\n"
             "  | Test -> True\n"
             "  | _ -> False",
             fun({ok, _}) ->
@@ -236,14 +236,14 @@ tagged_constructor_test_() ->
     {"To construct tagged values we can call a tagged type constructor",
      ?setup("module test { Test/T, main }
              type Test -> T: ({a: Boolean, b: 4} | {c: Boolean, d: Boolean})
-             def main _ -> Test/T(False, True)",
+             def main -> Test/T(False, True)",
             fun({ok, _}) ->
                     [?test({tagged, 'Test/T', #{a := 'Boolean/True', b := 4}},
                            test:'T'('Boolean/True')),
                      ?test({tagged, 'Test/T', #{c := 'Boolean/True', d := 'Boolean/False'}},
                             test:'T'('Boolean/True', 'Boolean/False')),
                      ?test({tagged, 'Test/T', #{c := 'Boolean/False', d := 'Boolean/True'}},
-                            test:main('_'))]
+                            test:main())]
             end)}.
 
 assignment_test_() ->
@@ -263,4 +263,13 @@ seq_test_() ->
                             [a, a, a])",
             fun({ok, _}) ->
                     [?test([1, 1, 1], test:main(1))]
+            end)}.
+
+param_pattern_test_() ->
+    {"Defs accept patterns for parameters",
+     ?setup("module test { main }
+             import erlang/+
+             def main {key1: a, key2: b} -> a + b",
+            fun({ok, _}) ->
+                    [?test(3, test:main(#{key1 => 1, key2 => 2}))]
             end)}.

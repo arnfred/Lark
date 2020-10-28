@@ -145,7 +145,7 @@ pair_expressions_refinement_test() ->
                  end,
     run(Code, RunAsserts).
 
-lambda_clause_test() ->
+fun_clause_test() ->
     Code = "type Args -> A | B | C\n"
            "def ap f a -> f(a)\n"
            "def test a -> ap((Args/A -> Args/C\n"

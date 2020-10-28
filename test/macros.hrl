@@ -37,14 +37,14 @@
                                                                    [{module, ?MODULE},
                                                                     {line, ?LINE},
                                                                     {expression, (??Expr)},
-                                                                    {pattern, (??Error)},
-                                                                    {value, Err}]});
+                                                                    {expected, (??Error)},
+                                                                    {actual, Err}]});
                           __V -> erlang:error({errorMatch,
                                                [{module, ?MODULE},
                                                 {line, ?LINE},
                                                 {expression, (??Expr)},
-                                                {pattern, (??Error)},
-                                                {value, __V}]})
+                                                {expected, (??Error)},
+                                                {actual, __V}]})
                       end
               end)())
         end).
@@ -59,14 +59,14 @@
                                                                    [{module, ?MODULE},
                                                                     {line, ?LINE},
                                                                     {expression, (??Expr)},
-                                                                    {pattern, ([??Err1, ??Err2])},
-                                                                    {value, [E1, E2]}]});
+                                                                    {expected, ([??Err1, ??Err2])},
+                                                                    {actual, [E1, E2]}]});
                           __V -> erlang:error({errorMatch,
                                                [{module, ?MODULE},
                                                 {line, ?LINE},
                                                 {expression, (??Expr)},
-                                                {pattern, ([??Err1, ??Err2])},
-                                                {value, __V}]})
+                                                {expected, ([??Err1, ??Err2])},
+                                                {actual, __V}]})
                       end
               end)())
         end).
@@ -81,15 +81,16 @@
                                                                                       [{module, ?MODULE},
                                                                                        {line, ?LINE},
                                                                                        {expression, (??Expr)},
-                                                                                       {pattern, ([??Err1, ??Err2, ??Err3])},
-                                                                                       {value, [E1, E2, E3]}]});
+                                                                                       {expected, ([??Err1, ??Err2, ??Err3])},
+                                                                                       {actual, [E1, E2, E3]}]});
                           __V -> erlang:error({errorMatch,
                                                [{module, ?MODULE},
                                                 {line, ?LINE},
                                                 {expression, (??Expr)},
-                                                {pattern, ([??Err1, ??Err2, ??Err3])},
-                                                {value, __V}]})
+                                                {expected, ([??Err1, ??Err2, ??Err3])},
+                                                {actual, __V}]})
                       end
               end)())
         end).
 -define(_errorMatch(Err1, Err2, Err3, Expr), ?_test(?errorMatch(Err1, Err2, Err3, Expr))).
+

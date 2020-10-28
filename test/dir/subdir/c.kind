@@ -1,6 +1,6 @@
-type Args -> A | B | C
+type Args -> (A | B | C)
 
-def rotate a
+def rotate
  | Args/A -> Args/B
  | Args/B -> Args/C
  | Args/C -> Args/A

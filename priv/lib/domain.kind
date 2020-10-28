@@ -4,4 +4,4 @@ module kind/domain {
     Domain/None
 }
 
-type Domain -> Any | None
+type Domain -> (Any | None)

@@ -38,9 +38,13 @@ climb({Pre, Post}, Type, Scope, Term) ->
     end.
 
 chew(Pre, Post, Type, Scope, Term) ->
-    case step({Pre, Post}, Type, Scope, Term) of
-        {error, Errs}               -> {error, Errs};
-        {ok, {Env, TraversedTerm}}  -> run_post(Post, Env, Type, Scope, TraversedTerm)
+    case Term of
+        {error, Errs}  -> {error, Errs};
+        _              ->
+            case step({Pre, Post}, Type, Scope, Term) of
+                {error, Errs}               -> {error, Errs};
+                {ok, {Env, TraversedTerm}}  -> run_post(Post, Env, Type, Scope, TraversedTerm)
+            end
     end.
 
 run_post(Post, Env, Type, Scope, Term) ->
@@ -72,40 +76,32 @@ step(Meta, top_level, Scope, {module, Ctx, BeamName, KindName, Exports}) ->
         {ok, {ExportEnvs, TExports}}    -> {ok, {merge(ExportEnvs), {module, Ctx, BeamName, KindName, TExports}}}
     end;
 
-step(Meta, top_level, Scope, {def, Context, Name, Args, Expr}) when is_list(Args) ->
-    step(Meta, expr, Scope, {def, Context, Name, Args, Expr});
+step(Meta, top_level, Scope, {def, Ctx, Name, Fun}) ->
+    step(Meta, expr, Scope, {def, Ctx, Name, Fun});
+step(Meta, top_level, Scope, {type_def, Ctx, Name, Fun}) ->
+    step(Meta, expr, Scope, {type_def, Ctx, Name, Fun});
+step(Meta, top_level, Scope, {macro, Ctx, Name, Fun}) ->
+    step(Meta, expr, Scope, {macro, Ctx, Name, Fun});
 
-step(Meta, Type, Scope, {def, Context, Name, Args, Expr}) ->
-    case map(Meta, pattern, Scope, Args) of
-        {error, Errs}            -> {error, Errs};
-        {ok, {ArgsEnvs, TArgs}}  ->
-            ExprScope = merge([Scope | ArgsEnvs]),
-            RawExpr = case Expr of
-                          _ when is_list(Expr)  -> map(Meta, Type, ExprScope, Expr);
-                          _                     -> climb(Meta, Type, ExprScope, Expr)
-                      end,
-            case RawExpr of
-                {error, Errs}                           -> {error, Errs};
-                {ok, {Envs, TExprs}} when is_list(Envs) -> 
-                    {ok, {merge(ArgsEnvs ++ Envs), {def, Context, Name, TArgs, TExprs}}};
-                {ok, {Env, TExpr}}                      -> 
-                    {ok, {merge([Env | ArgsEnvs]), {def, Context, Name, TArgs, TExpr}}}
-            end
+step(Meta, Type, Scope, {def, Ctx, Name, Fun}) ->
+    case climb(Meta, Type, Scope, Fun) of
+        {error, Errs}           -> {error, Errs};
+        {ok, {FunEnv, TFun}}    -> {ok, {FunEnv, {def, Ctx, Name, TFun}}}
     end;
 
-step(Meta, Type, Scope, {type_def, Context, Name, Args, Expr}) when is_list(Args) ->
-    case step(Meta, Type, Scope, {def, Context, Name, Args, Expr}) of
-        {error, Errs}       -> {error, Errs};
-        {ok, {Env, Term}}   -> {ok, {Env, setelement(1, Term, type_def)}}
+step(Meta, Type, Scope, {type_def, Ctx, Name, Fun}) ->
+    case climb(Meta, Type, Scope, Fun) of
+        {error, Errs}           -> {error, Errs};
+        {ok, {FunEnv, TFun}}    -> {ok, {FunEnv, {type_def, Ctx, Name, TFun}}}
     end;
 
-step(Meta, Type, Scope, {macro, Context, Name, Args, Expr}) when is_list(Args) ->
-    case step(Meta, Type, Scope, {def, Context, Name, Args, Expr}) of
-        {error, Errs}       -> {error, Errs};
-        {ok, {Env, Term}}   -> {ok, {Env, setelement(1, Term, macro)}}
+step(Meta, Type, Scope, {macro, Ctx, Name, Fun}) ->
+    case climb(Meta, Type, Scope, Fun) of
+        {error, Errs}           -> {error, Errs};
+        {ok, {FunEnv, TFun}}    -> {ok, {FunEnv, {macro, Ctx, Name, TFun}}}
     end;
 
-step(Meta, expr, Scope, {clause, Context, Patterns, Expr}) when is_list(Patterns) ->
+step(Meta, expr, Scope, {clause, Ctx, Patterns, Expr}) ->
     case map(Meta, pattern, Scope, Patterns) of
         {error, Errs}                       -> {error, Errs};
         {ok, {PatternEnvs, TPatterns}}   -> 
@@ -113,74 +109,74 @@ step(Meta, expr, Scope, {clause, Context, Patterns, Expr}) when is_list(Patterns
             case climb(Meta, expr, NewScope, Expr) of
                 {error, Errs}       -> {error, Errs};
                 {ok, {Env, TExpr}}  -> 
-                    {ok, {merge([Env | PatternEnvs]), {clause, Context, TPatterns, TExpr}}}
+                    {ok, {merge([Env | PatternEnvs]), {clause, Ctx, TPatterns, TExpr}}}
             end
     end;
 
-step(Meta, expr, Scope, {lambda, Context, Clauses}) when is_list(Clauses) ->
+step(Meta, expr, Scope, {'fun', Ctx, Clauses}) ->
     case map(Meta, expr, Scope, Clauses) of
         {error, Errs}               -> {error, Errs};
-        {ok, {Envs, TClauses}}   -> {ok, {merge(Envs), {lambda, Context, TClauses}}}
+        {ok, {Envs, TClauses}}   -> {ok, {merge(Envs), {'fun', Ctx, TClauses}}}
     end;
 
-step(Meta, expr, Scope, {val, Context, Pattern, Expr}) ->
+step(Meta, expr, Scope, {val, Ctx, Pattern, Expr}) ->
     error:map2(climb(Meta, pattern, Scope, Pattern),
                climb(Meta, expr, Scope, Expr),
                fun({PatternEnv, TPattern}, {Env, TExpr}) ->
-                       {merge(PatternEnv, Env), {val, Context, TPattern, TExpr}} end);
+                       {merge(PatternEnv, Env), {val, Ctx, TPattern, TExpr}} end);
 
-step(Meta, expr, Scope, {match, Context, Expr, Clauses}) when is_list(Clauses) ->
+step(Meta, expr, Scope, {match, Ctx, Expr, Clauses}) when is_list(Clauses) ->
     error:map2(climb(Meta, expr, Scope, Expr),
                map(Meta, expr, Scope, Clauses),
                fun({ExprEnv, TExpr}, {ClauseEnvs, TClauses}) ->
-                       {merge([ExprEnv | ClauseEnvs]), {match, Context, TExpr, TClauses}} end);
+                       {merge([ExprEnv | ClauseEnvs]), {match, Ctx, TExpr, TClauses}} end);
 
-step(Meta, Type, Scope, {application, Context, Expr, Args}) ->
+step(Meta, Type, Scope, {application, Ctx, Expr, Args}) ->
     error:map2(map(Meta, Type, Scope, Args),
                climb(Meta, Type, Scope, Expr),
                fun({ArgsEnvs, TArgs}, {ExprEnv, TExpr}) -> 
-                       {merge([ExprEnv | ArgsEnvs]), {application, Context, TExpr, TArgs}} end);
+                       {merge([ExprEnv | ArgsEnvs]), {application, Ctx, TExpr, TArgs}} end);
 
-step(Meta, Type, Scope, {qualified_application, Context, ModulePath, Name, Args}) ->
+step(Meta, Type, Scope, {qualified_application, Ctx, ModulePath, Name, Args}) ->
     error:map(map(Meta, Type, Scope, Args),
               fun({ArgsEnvs, TArgs}) -> 
-                      {merge(ArgsEnvs), {qualified_application, Context, ModulePath, Name, TArgs}} end);
+                      {merge(ArgsEnvs), {qualified_application, Ctx, ModulePath, Name, TArgs}} end);
 
-step(Meta, Type, Scope, {recursive_type_application, Context, Tag, Args}) ->
+step(Meta, Type, Scope, {recursive_type_application, Ctx, Tag, Args}) ->
     error:map(map(Meta, Type, Scope, Args),
 	      fun({ArgsEnvs, TArgs}) -> 
-                       {merge(ArgsEnvs), {recursive_type_application, Context, Tag, TArgs}} end);
+                       {merge(ArgsEnvs), {recursive_type_application, Ctx, Tag, TArgs}} end);
 
-step(Meta, Type, Scope, {macro_application, Context, Name, Args}) ->
+step(Meta, Type, Scope, {macro_application, Ctx, Name, Args}) ->
     error:map(map(Meta, Type, Scope, Args),
               fun({ArgsEnvs, TArgs}) -> 
-                      {merge(ArgsEnvs), {macro_application, Context, Name, TArgs}} end);
+                      {merge(ArgsEnvs), {macro_application, Ctx, Name, TArgs}} end);
 
-step(Meta, Type, Scope, {lookup, Context, Expr, Elems}) when is_list(Elems) ->
+step(Meta, Type, Scope, {lookup, Ctx, Expr, Elems}) when is_list(Elems) ->
     error:map2(climb(Meta, Type, Scope, Expr),
                map(Meta, Type, Scope, Elems),
                fun({ExprEnv, TExpr}, {ElemsEnvs, TElems}) ->
-                       {merge([ExprEnv | ElemsEnvs]), {lookup, Context, TExpr, TElems}} end);
+                       {merge([ExprEnv | ElemsEnvs]), {lookup, Ctx, TExpr, TElems}} end);
 
-step(Meta, Type, Scope, {tuple, Context, Expressions}) when is_list(Expressions) ->
+step(Meta, Type, Scope, {tuple, Ctx, Expressions}) when is_list(Expressions) ->
     case map(Meta, Type, Scope, Expressions) of
         {error, Errs}          -> {error, Errs};
-        {ok, {Envs, TExprs}}   -> {ok, {merge(Envs), {tuple, Context, TExprs}}}
+        {ok, {Envs, TExprs}}   -> {ok, {merge(Envs), {tuple, Ctx, TExprs}}}
     end;
 
-step(Meta, Type, Scope, {sum, Context, Expressions}) when is_list(Expressions) ->
+step(Meta, Type, Scope, {sum, Ctx, Expressions}) when is_list(Expressions) ->
     case map(Meta, Type, Scope, Expressions) of
         {error, Errs}          -> {error, Errs};
-        {ok, {Envs, TExprs}}   -> {ok, {merge(Envs), {sum, Context, TExprs}}}
+        {ok, {Envs, TExprs}}   -> {ok, {merge(Envs), {sum, Ctx, TExprs}}}
     end;
 
-step(Meta, Type, Scope, {list, Context, Expressions}) when is_list(Expressions) ->
+step(Meta, Type, Scope, {list, Ctx, Expressions}) when is_list(Expressions) ->
     case map(Meta, Type, Scope, Expressions) of
         {error, Errs}          -> {error, Errs};
-        {ok, {Envs, TExprs}}   -> {ok, {merge(Envs), {list, Context, TExprs}}}
+        {ok, {Envs, TExprs}}   -> {ok, {merge(Envs), {list, Ctx, TExprs}}}
     end;
 
-step(Meta, expr, Scope, {'let', Context, Pattern, Expr, Term}) ->
+step(Meta, expr, Scope, {'let', Ctx, Pattern, Expr, Term}) ->
     error:flatmap2(climb(Meta, pattern, Scope, Pattern),
                    climb(Meta, expr, Scope, Expr),
                    fun({PatternEnv, TPattern}, {ExprEnv, TExpr}) ->
@@ -189,11 +185,11 @@ step(Meta, expr, Scope, {'let', Context, Pattern, Expr, Term}) ->
                                {error, Errs}            -> {error, Errs};
                                {ok, {Env, TTerm}}    -> 
                                    {ok, {merge([PatternEnv, ExprEnv, Env]), 
-                                         {'let', Context, TPattern, TExpr, TTerm}}}
+                                         {'let', Ctx, TPattern, TExpr, TTerm}}}
                            end
                    end);
 
-step(Meta, expr, Scope, {let_type, Context, Type, Term}) ->
+step(Meta, expr, Scope, {let_type, Ctx, Type, Term}) ->
     error:flatmap(climb(Meta, expr, Scope, Type),
                   fun({TypeEnv, TType}) ->
                           NewScope = merge(Scope, TypeEnv),
@@ -201,26 +197,26 @@ step(Meta, expr, Scope, {let_type, Context, Type, Term}) ->
                               {error, Errs}            -> {error, Errs};
                               {ok, {TermEnv, TTerm}}    -> 
                                   {ok, {merge(TypeEnv, TermEnv), 
-                                        {let_type, Context, TType, TTerm}}}
+                                        {let_type, Ctx, TType, TTerm}}}
                           end
                   end);
 
-step(Meta, expr, Scope, {seq, Context, First, Then}) ->
+step(Meta, expr, Scope, {seq, Ctx, First, Then}) ->
     case climb(Meta, expr, Scope, First) of
         {error, Errs}               -> {error, Errs};
         {ok, {FirstEnv, TFirst}} -> 
             case climb(Meta, expr, Scope, Then) of
                 {error, Errs}           -> {error, Errs};
                 {ok, {ThenEnv, TThen}}   -> 
-                    {ok, {merge(FirstEnv, ThenEnv), {seq, Context, TFirst, TThen}}}
+                    {ok, {merge(FirstEnv, ThenEnv), {seq, Ctx, TFirst, TThen}}}
             end
     end;
 
-step(Meta, Type, Scope, {dict, Context, Expressions}) when is_list(Expressions) ->
+step(Meta, Type, Scope, {dict, Ctx, Expressions}) when is_list(Expressions) ->
     case map(Meta, Type, Scope, Expressions) of
         {error, Errs}              -> {error, Errs};
         {ok, {ExprsEnvs, TExprs}}   -> 
-            {ok, {merge(ExprsEnvs), {dict, Context, TExprs}}}
+            {ok, {merge(ExprsEnvs), {dict, Ctx, TExprs}}}
     end;
 
 step(Meta, Type, Scope, {tagged, Ctx, Path, Val}) ->

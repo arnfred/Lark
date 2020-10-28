@@ -15,13 +15,13 @@ Nonterminals
     assignment function newtype module import newmacro
     implies
     pattern patterns pattern_application pattern_verb braced_pattern
-    clauses clause lambda def_clauses type_clauses type_clause
+    clauses clause fun def_fun
     application arguments 
     infix rightbias_infix leftbias_infix
     noun verb expression expressions
     collection list dict sequence
     dict_elements dict_element
-    flat_sum_list sum_list sum_terms sum_elem sum_or_expression
+    sum_list sum_terms sum_elem
     symbol symbols operator elements element
     pair pair_key pair_val
     qualified_symbol
@@ -75,13 +75,13 @@ statement -> import             : '$1'.
 implies -> right_arrow          : '$1'.
 implies -> right_arrow newlines : '$1'.
 
-assignment -> val expression assign expression          : {val, ctx('$1'), '$2', '$4'}.
-function -> def symbols implies expression              : {def, ctx('$1'), name('$2'), args('$2'), '$4'}.
-function -> def symbols clause_separator def_clauses    : {def, ctx('$1'), name('$2'), args('$2'), '$4'}.
-newtype -> type symbols implies sum_or_expression       : {type_def, ctx('$1'), name('$2'), args('$2'), '$4'}.
-newtype -> type symbols clause_separator type_clauses   : {type_def, ctx('$1'), name('$2'), args('$2'), '$4'}.
-newmacro -> macro symbols implies expression            : {macro, ctx('$1'), name('$2'), args('$2'), '$4'}.
-newmacro -> macro symbols clause_separator def_clauses  : {macro, ctx('$1'), name('$2'), args('$2'), '$4'}.
+assignment -> val pattern assign expression             : {val, ctx('$1'), '$2', '$4'}.
+function -> def symbol def_fun                          : {def, ctx('$1'), unwrap('$2'), '$3'}.
+function -> def symbol implies expression               : {def, ctx('$1'), unwrap('$2'), '$4'}.
+newtype -> type symbol def_fun                          : {type_def, ctx('$1'), unwrap('$2'), '$3'}.
+function -> type symbol implies expression              : {type_def, ctx('$1'), unwrap('$2'), '$4'}.
+newmacro -> macro symbol def_fun                        : {macro, ctx('$1'), unwrap('$2'), '$3'}.
+function -> macro symbol implies expression             : {macro, ctx('$1'), unwrap('$2'), '$4'}.
 
 
 
@@ -127,7 +127,7 @@ import -> import_keyword qualified_symbol               : {import, ctx('$1'), un
 
 expression -> open expression close         : '$2'. % ( ... )
 expression -> application                   : '$1'.  % f(a)
-expression -> lambda                        : '$1'.  % | a -> a + 2
+expression -> fun                           : '$1'.  % | a -> a + 2
 expression -> pair                          : '$1'.  % a: T                
 expression -> collection                    : '$1'.  % {a, b: T}
 expression -> symbol                        : '$1'.  % a
@@ -208,20 +208,14 @@ pair_val -> open expression close   : '$2'.
 % Clauses and Functions
 % -------
 
-clause_separator -> newlines pipe                   : '$2'.
-clause -> patterns implies expression               : {clause, ctx('$2'), '$1', '$3'}.
-clauses -> clause clause_separator pipe clauses     : ['$1' | '$4'].
-type_clause -> patterns implies sum_or_expression   : {clause, ctx('$2'), '$1', '$3'}.
-
-def_clauses -> clause                              : ['$1'].
-def_clauses -> clause newlines                     : ['$1'].
-def_clauses -> clause clause_separator def_clauses : ['$1' | '$3'].
-
-type_clauses -> type_clause                                 : ['$1'].
-type_clauses -> type_clause newlines                        : ['$1'].
-type_clauses -> type_clause clause_separator type_clauses   : ['$1' | '$3'].
-
-lambda -> pipe type_clauses                          : {lambda, ctx('$1'), '$2'}.
+clause_separator -> newlines pipe           : '$2'.
+clause -> patterns implies expression       : {clause, ctx('$2'), '$1', '$3'}.
+clauses -> clause                           : ['$1'].
+clauses -> clause newlines                  : ['$1'].
+clauses -> clause clause_separator clauses  : ['$1' | '$3'].
+def_fun -> clauses                          : {'fun', ctx('$1'), '$1'}.
+def_fun -> clause_separator clauses         : {'fun', ctx('$2'), '$2'}.
+fun -> pipe clauses                         : {'fun', ctx('$1'), '$2'}.
 
 
 
@@ -232,7 +226,7 @@ patterns -> pattern                     : ['$1'].
 patterns -> pattern patterns            : ['$1' | '$2'].
 
 pattern -> open braced_pattern close    : '$2'. % (...)
-pattern -> pattern_application          : '$1'.   % A(T) or T.A(S)
+pattern -> pattern_application          : '$1'.   % T.A(S)
 pattern -> collection                   : '$1'.   % {a, b: T}
 pattern -> symbol                       : '$1'.   % a
 pattern -> qualified_symbol             : '$1'.   % a/b/T
@@ -300,13 +294,6 @@ element -> function             : '$1'.
 % Sum or Expression
 % -----------------
 
-sum_or_expression -> flat_sum_list : unpack_sum('$1').
-sum_or_expression -> sum_list : '$1'.
-%sum_or_expression -> open sum_elem close : '$2'.
-
-flat_sum_list -> sum_elem : ['$1'].
-flat_sum_list -> sum_elem pipe flat_sum_list : ['$1' | '$3'].
-
 sum_list -> open sum_terms close                    : {sum, ctx('$1'), '$2'}.
 sum_list -> open newlines sum_terms close           : {sum, ctx('$1'), '$3'}.
 
@@ -314,16 +301,17 @@ sum_terms -> sum_elem secondary_separator sum_elem          : ['$1', '$3'].
 sum_terms -> sum_elem secondary_separator sum_elem newlines : ['$1', '$3'].
 sum_terms -> sum_elem secondary_separator sum_terms         : ['$1' | '$3'].
 
+sum_elem -> open expression close   : '$2'.
 sum_elem -> application             : '$1'.
 sum_elem -> pair                    : '$1'.
 sum_elem -> collection              : '$1'.
+sum_elem -> sequence                : '$1'.
 sum_elem -> symbol                  : '$1'.
 sum_elem -> qualified_symbol        : '$1'.
 sum_elem -> literal                 : '$1'.
 
 secondary_separator -> newlines : '$1'.
 secondary_separator -> pipe newlines : '$1'.
-secondary_separator -> newlines pipe : '$1'.
 secondary_separator -> pipe     : '$1'.
 
 
@@ -332,9 +320,6 @@ Erlang code.
 
 unpack_sum([T]) -> T;
 unpack_sum([T | _] = Terms) -> {sum, ctx(T), Terms}.
-
-name([{symbol, _, _, S} | _]) -> S.
-args([_ | Args]) -> Args.
 
 unwrap({_,V})   -> V;
 unwrap({_,_,V}) -> V;

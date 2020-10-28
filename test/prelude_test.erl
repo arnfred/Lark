@@ -5,7 +5,7 @@
 
 -define(setup(Code, Tests), {setup,
                              fun() -> kind:load(Code, #{sandboxed => false,
-                                                        add_kind_libraries => true}) end,
+                                                        import_kind_libraries => true}) end,
                              fun clean/1,
                              Tests}).
 
@@ -41,10 +41,10 @@ binary_search_test_() ->
      ?setup("module test { main }
              import kind/prelude/Compare/_
              import Tree/_
-             type Tree a -> Leaf | Node: {left: Tree(a), value: a, right: Tree(a)}
-             def insert root elem
-               | Leaf _                         -> Node(Leaf, elem, Leaf)
-               | (Node: {left, value, right}) _ -> compare(elem, value).match(
+             type Tree a -> (Leaf | Node: {left: Tree(a), value: a, right: Tree(a)})
+             def insert
+               | Leaf elem                                  -> Node(Leaf, elem, Leaf)
+               | (root: (Node: {left, value, right})) elem  -> compare(elem, value).match(
                    | EQ -> root
                    | LT -> Node(left.insert(elem), value, right)
                    | GT -> Node(left, value, right.insert(elem)))

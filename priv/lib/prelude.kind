@@ -12,19 +12,17 @@ module kind/prelude {
     Compare
 }
 
-type Boolean -> True | False
+type Boolean -> (True | False)
 
-type Option a -> a | Nil
+type Option a -> (a | Nil)
 
 def match a f -> f(a)
 
-def get tagged
-  | ['tagged', _, domain] -> domain
+def get ['tagged', _, domain] -> domain
 
-type Compare -> GT | LT | EQ
+type Compare -> (GT | LT | EQ)
 import Compare/_
 
-% No inline functions yet, so it's a bit clunky
 def compare a b -> (a > b).match(
   | 'true'  -> GT
   | 'false' -> (a < b).match(

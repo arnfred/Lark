@@ -1,6 +1,8 @@
 -module(type_gen).
 -export([gen/3]).
 
+-include_lib("eunit/include/eunit.hrl").
+
 gen(TypesEnv, ArgsEnv, AST) ->
     case gen_types(TypesEnv, AST) of
         {error, Errs}    -> {error, Errs};
@@ -11,7 +13,7 @@ gen(TypesEnv, ArgsEnv, AST) ->
 gen_types(TypesEnv, AST) ->
     ast:traverse(fun pre_gen_term/3, fun code_gen:gen/3, TypesEnv, AST).
 
-pre_gen_term(top_level, _, {def, _, _, _, _})   -> skip;
+pre_gen_term(top_level, _, {def, _, _, _})   -> skip;
 pre_gen_term(Type, Scope, Term)              -> code_gen:pre_gen(Type, Scope, Term).
 
 gen_modules(Types, TypesEnv, ArgsEnv, {ast, _, Modules, _, _}) ->

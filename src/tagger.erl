@@ -6,7 +6,7 @@
 tag(AST) -> tag(AST, #{}).
 
 tag({ast, _, _, _, TopLevelDefs} = UnexpandedAST, ImportScope) ->
-    MacroScope = maps:from_list([{Name, true} || {macro, _, Name, _, _} <- maps:values(TopLevelDefs)]),
+    MacroScope = maps:from_list([{Name, true} || {macro, _, Name, _} <- maps:values(TopLevelDefs)]),
     case ast:traverse(fun(_, _, _) -> ok end, fun tag_macros/3, MacroScope, UnexpandedAST) of
         {error, Errs}   -> {error, Errs};
         {ok, {_, AST}}  ->
@@ -55,17 +55,22 @@ tag_macros(_, _, _) -> ok.
 tag_defs_pre(top_level, _, _)                       -> ok;
 tag_defs_pre(_, _, _)                               -> skip.
 
-tag_defs_post(top_level, _, {def, _, Name, Args, _}) ->
-    {ok, Name, {variable, #{}, Name, {Name, length(Args)}}};
-tag_defs_post(top_level, _, {type_def, _, Name, _, _}) ->
+tag_defs_post(top_level, _, {def, _, Name, Expr}) ->
+    case Expr of
+        {'fun', _, [{clause, _, Patterns, _} | _]}  ->
+            {ok, Name, {variable, #{}, Name, {Name, length(Patterns)}}};
+        _                                           ->
+            {ok, Name, {variable, #{}, Name, {Name, 0}}}
+    end;
+tag_defs_post(top_level, _, {type_def, _, Name, _}) ->
     {ok, Name, {type, #{}, Name, [Name]}};
 tag_defs_post(_, _, _) -> ok.
 
 
 % Step 3: Scan types (but skip types local to a definition)
-add_type_path(top_level, _, {def, _, _, _, _})  -> skip;
-add_type_path(top_level, _, {macro, _, _, _, _})  -> skip;
-add_type_path(top_level, _, {type_def, _, Name, _, _} = Term) -> {ok, ast:tag(path, Term, [Name])};
+add_type_path(top_level, _, {def, _, _, _})  -> skip;
+add_type_path(top_level, _, {macro, _, _, _})  -> skip;
+add_type_path(top_level, _, {type_def, _, Name, _} = Term) -> {ok, ast:tag(path, Term, [Name])};
 add_type_path(expr, Scope, {pair, Ctx, Key, Val}) ->
     case Key of
         % Rewrite operators to types when they are the key of a pair
@@ -85,9 +90,9 @@ tag_types(_, Scope, {symbol, _, operator, S} = Term) ->
         true    -> {ok, replace(Scope, S, Term)};
         false   -> {ok, Term}
     end;
-tag_types(top_level, _, {type_def, Ctx, Name, _, _} = Term) -> 
+tag_types(top_level, _, {type_def, Ctx, Name, _} = Term) -> 
     {ok, Name, {type, Ctx, Name, [Name]}, Term};
-tag_types(expr, Scope, {type_def, Ctx, Name, _, _} = Term) -> 
+tag_types(expr, Scope, {type_def, Ctx, Name, _} = Term) -> 
     case maps:is_key(Name, Scope) of
         true   -> error:format({type_already_defined, Name}, {tagger, expr, Term});
         false  -> {ok, Name, {type, Ctx, Name, [Name]}, Term}
@@ -99,11 +104,11 @@ tag_types(_, _, _) -> ok.
 % Step 3: Scan and tag all types and defs in the module
 add_path(_, _, {ast, _, _, _, _} = Term) ->
     {ok, ast:tag(path, Term, fun(Tag) -> Tag end, [])};
-add_path(_, _, {def, _, Name, _, _} = Term) ->
+add_path(_, _, {def, _, Name, _} = Term) ->
     {ok, ast:tag(path, Term, fun(Tag) -> [Name | Tag] end, [])};
-add_path(_, _, {macro, _, Name, _, _} = Term) ->
+add_path(_, _, {macro, _, Name, _} = Term) ->
     {ok, ast:tag(path, Term, fun(Tag) -> [Name | Tag] end, [])};
-add_path(_, _, {type_def, _, Name, _, _} = Term) ->
+add_path(_, _, {type_def, _, Name, _} = Term) ->
     {change, fun tag_symbols_and_types/3, ast:tag(path, Term, [Name])};
 add_path(_, _, Term) ->
     {ok, ast:tag(path, Term)}.

@@ -58,8 +58,8 @@ scan(Env, Stack, TypeMod, {pair, _, Key, Value} = Pair) ->
         true       -> {NewEnv, Domain}
     end;
 
-scan(Env, _, TypeMod, {lambda, Ctx, [{clause, _, Ps, _} | _] = Cs} = Lambda) -> 
-    Name = symbol:id(['lambda', list_to_atom(integer_to_list(maps:get(line, Ctx)))]),
+scan(Env, _, TypeMod, {'fun', Ctx, [{clause, _, Ps, _} | _] = Cs} = Fun) -> 
+    Name = symbol:id(['fun', list_to_atom(integer_to_list(maps:get(line, Ctx)))]),
     F = fun(Stack, ArgDomains) -> 
                 NewStack = [{Name, ArgDomains} | Stack],
                 Tags = [symbol:id(Name) || _ <- ArgDomains],
@@ -68,7 +68,7 @@ scan(Env, _, TypeMod, {lambda, Ctx, [{clause, _, Ps, _} | _] = Cs} = Lambda) ->
                 IsSubset = fun({D1, D2}) -> domain:subset(D1, D2) end,
                 ActualDomains = [maps:get(Tag, LEnv) || Tag <- Tags],
                 Error = error:format({arguments_not_subsets, ArgDomains, ActualDomains}, 
-                                     {scanner, Lambda, NewStack}),
+                                     {scanner, Fun, NewStack}),
                 case lists:all(IsSubset, zip(ArgDomains, ActualDomains)) of
                     false      -> error:leftbias(LDomain, Error);
                     true       -> LDomain

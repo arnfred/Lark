@@ -89,12 +89,12 @@ gen_pattern(pattern, _Scope, {application, Ctx, {type, _, _, _} = T, _}) ->
 gen_pattern(pattern, _Scope, {application, Ctx, _, _}) ->
     error:format({local_pattern_application}, {pattern_gen, Ctx});
 
-% Pattern of shape: 'T' when 'T' is a type def without arguments
-gen_pattern(pattern, _, {type_def, _, _, [], Expr}) -> {ok, Expr};
-
-% Pattern of shape: 'T' when 'T' is a type def with arguments
-gen_pattern(pattern, _, {type_def, Ctx, Name, _Args, _}) -> 
-    error:format({type_function_in_pattern, Name}, {pattern_gen, Ctx});
+% Pattern of shape: 'T' when 'T' is a type def
+gen_pattern(pattern, _, {type_def, Ctx, Name, Expr}) -> 
+    case cerl:is_c_fun(Expr) of
+        false   -> {ok, Expr};
+        true    -> error:format({type_function_in_pattern, Name}, {pattern_gen, Ctx})
+    end;
 
 % Pattern of shape: `"string"`, `'atom'` or `3.14`
 gen_pattern(pattern, _, {value, _, Type, Val}) -> 

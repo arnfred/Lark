@@ -1,40 +1,15 @@
 -module(expr_gen).
 -export([gen_expr/3, call_type_tag/2]).
 
-gen_expr(expr, Scope, {def, Ctx, Name, ArgList, Clauses}) when is_list(Clauses) ->
-    Args = [A || As <- ArgList, A <- As],
-    ClauseList = lists:flatten(Clauses),
-    AllClauses = case cerl_clauses:any_catchall(ClauseList) of
-                     true -> ClauseList;
-                     false -> ClauseList ++ [catchall(Args)]
-                 end,
-    Expr = cerl:c_case(cerl:c_values(Args), AllClauses),
-    gen_expr(expr, Scope, {def, Ctx, Name, ArgList, Expr});
+gen_expr(expr, _, {def, _, Name, Expr}) ->
+    case cerl:is_c_fun(Expr) of
+        true    -> FName = cerl:c_fname(Name, cerl:fun_arity(Expr)),
+                   {ok, Name, {FName, Expr}};
+        false   -> FName = cerl:c_fname(Name, 0),
+                   {ok, Name, {FName, cerl:c_fun([], Expr)}}
+    end;
 
-gen_expr(expr, _, {def, _, Name, ArgList, Expr}) ->
-    Args = [A || As <- ArgList, A <- As],
-    FName = cerl:c_fname(Name, length(Args)),
-    {ok, Name, {FName, cerl:c_fun(Args, Expr)}};
-
-gen_expr(expr, Scope, {type_def, Ctx, Name, ArgList, Clauses}) when is_list(Clauses) ->
-    Args = [A || As <- ArgList, A <- As],
-    ClauseList = lists:flatten(Clauses),
-    AllClauses = case cerl_clauses:any_catchall(ClauseList) of
-                     true -> ClauseList;
-                     false -> ClauseList ++ [catchall(Args)]
-                 end,
-    Expr = cerl:c_case(cerl:c_values(Args), AllClauses),
-    gen_expr(expr, Scope, {type_def, Ctx, Name, ArgList, Expr});
-
-gen_expr(expr, _, {type_def, _, Name, ArgList, Expr}) ->
-    % Double expansion of args because the Arglist is treated as a pattern and
-    % returned wrapped in a list
-    Args = [A || As <- ArgList, A <- As],
-    Form = case lists:flatten(Args) of
-               []	-> Expr;
-               _	-> cerl:c_fun(Args, Expr)
-           end,
-    {ok, Name, Form};
+gen_expr(expr, _, {type_def, _, Name, Expr}) -> {ok, Name, Expr};
 
 % type expr of form: T: ...
 gen_expr(expr, _, {tagged, Ctx, _, Val} = Term) ->
@@ -134,13 +109,13 @@ gen_expr(expr, _, {clause, _, Patterns, Expr}) ->
     {ok, [cerl:c_clause(Ps, Expr) || Ps <- utils:combinations(Patterns)]};
 
 % expr of form `(<Pattern> -> <Expr>)` which encodes an anonymous function
-gen_expr(expr, _, {lambda, Ctx, ClauseList}) ->
+gen_expr(expr, _, {'fun', Ctx, ClauseList}) ->
     Clauses = lists:flatten(ClauseList),
     case Clauses of
         []              -> error:format({empty_pattern}, {expr_gen, Ctx});
         [Clause | _]    -> Args = [cerl:c_var(S) || _ <- lists:seq(1, cerl:clause_arity(Clause)),
                                                      S <- [symbol:id('')]],
-                           {ok, cerl:c_fun(Args, cerl:c_case(cerl:c_values(Args), Clauses))}
+                           {ok, cerl:c_fun(Args, cerl:c_case(cerl:c_values(Args), Clauses ++ [catchall(Args)]))}
     end;
 
 % expr of form `(<Pattern> = Expr, Other expression)`

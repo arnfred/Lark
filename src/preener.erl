@@ -2,7 +2,7 @@
 -export([preen/2]).
 
 -include_lib("eunit/include/eunit.hrl").
--include("src/error.hrl").
+-include("test/macros.hrl").
 
 preen(FileName, AST) -> 
     case expand_tuples(AST) of
@@ -17,19 +17,19 @@ preen(FileName, AST) ->
 
 expand_tuples(AST) -> ast:traverse(fun tuple_pre/3, fun tuple_post/3, AST).
 
-tuple_pre(_, _, {type_def, _, _, _, _})   -> skip;
-tuple_pre(_, _, Term)                     -> {ok, Term}.
+tuple_pre(_, _, {type_def, _, _, _})    -> skip;
+tuple_pre(_, _, Term)                   -> {ok, Term}.
 
-tuple_post(_, _, {tuple, _, [Elem]}) -> {ok, Elem};
-tuple_post(_, _, {sum, _, [Elem]}) -> {ok, Elem};
-tuple_post(expr, _, {tuple, _, Elems}) -> clean_tuple_elements(Elems);
-tuple_post(_, _, _)                 -> ok.
+tuple_post(_, _, {tuple, _, [Elem]})    -> {ok, Elem};
+tuple_post(_, _, {sum, _, [Elem]})      -> {ok, Elem};
+tuple_post(expr, _, {tuple, _, Elems})  -> clean_tuple_elements(Elems);
+tuple_post(_, _, _)                     -> ok.
 
 clean_tuple_elements(Expressions) ->
     F = fun({val, Ctx, Pattern, Expr}, Acc)         -> {'let', Ctx, Pattern, Expr, Acc};
-           ({def, Ctx, Name, _, _} = Expr, Acc)     -> Pattern = {symbol, Ctx, variable, Name},
+           ({def, Ctx, Name, _} = Expr, Acc)        -> Pattern = {symbol, Ctx, variable, Name},
                                                        {'let', Ctx, Pattern, Expr, Acc};
-           ({type_def, Ctx, _, _, _} = Expr, Acc)   -> {let_type, Ctx, Expr, Acc};
+           ({type_def, Ctx, _, _} = Expr, Acc)      -> {let_type, Ctx, Expr, Acc};
            (T, Acc)                                 -> {seq, ast:context(T), T, Acc} end,
     case lists:reverse(Expressions) of
         [{val, _, _, _} = T | _]    -> error:format({illegal_end_of_tuple, val}, {preener, T});
@@ -74,105 +74,128 @@ do_preen(Code) ->
 
 illegal_end_of_tuple_test_() ->
     Code = "def test a b -> (val a = b, val b = a)",
-    ?_errorMatch({illegal_end_of_tuple, val}, do_preen(Code)).
+    ?testError({illegal_end_of_tuple, val}, do_preen(Code)).
 
 unwrap_tuple_with_one_element_test_() ->
     Code = "def test b -> (b)",
-    ?_assertMatch({ok, [{def, _, _, _,
-                         {symbol, _, variable, b}}]}, do_preen(Code)).
+    ?test({ok, [{def, _, _,
+                 {'fun', _,
+                  [{clause, _, _,
+                    {symbol, _, variable, b}}]}}]}, do_preen(Code)).
 
 wrap_tuple_elems_in_seq_test_() ->
     Code = "def test a b -> (a, a, b)",
-    ?_assertMatch({ok, [{def, _, _, _,
-                         {seq, _, {symbol, _, _, a},
-                          {seq, _, {symbol, _, _, a},
-                           {symbol, _, _, b}}}}]}, do_preen(Code)). 
+    ?test({ok, [{def, _, _,
+                 {'fun', _,
+                  [{clause, _, _,
+                    {seq, _, {symbol, _, _, a},
+                     {seq, _, {symbol, _, _, a},
+                      {symbol, _, _, b}}}}]}}]}, do_preen(Code)). 
 
 translate_vals_to_let_statements_test_() ->
     Code = "def test a -> (val b = a, b, val c = a, c)",
-    ?_assertMatch({ok, [{def, _, _, _,
-                         {'let', _, {symbol, _, _, b}, {symbol, _, _, a},
-                          {seq, _, {symbol, _, _, b},
-                           {'let', _, {symbol, _, _, c}, {symbol, _, _, a},
-                            {symbol, _, _, c}}}}}]}, do_preen(Code)).
+    ?test({ok, [{def, _, _,
+                 {'fun', _,
+                  [{clause, _, _,
+                    {'let', _, {symbol, _, _, b}, {symbol, _, _, a},
+                     {seq, _, {symbol, _, _, b},
+                      {'let', _, {symbol, _, _, c}, {symbol, _, _, a},
+                       {symbol, _, _, c}}}}}]}}]}, do_preen(Code)).
 
 translate_defs_to_let_statements_test_() ->
     Code = "def test a -> (def f b -> a, f(a))",
-    ?_assertMatch({ok, [{def, _, _, _,
-                         {'let', _,
-                          {symbol, _, _, f},
-                          {def, _, f, [{symbol, _, _, b}],
-                           {symbol, _, _, a}},
-                          {application, _,
-                           {symbol, _, _, f},
-                           [{symbol, _, _, a}]}}}]}, do_preen(Code)).
+    ?test({ok, [{def, _, _,
+                 {'fun', _,
+                  [{clause, _, _,
+                    {'let', _,
+                     {symbol, _, _, f},
+                     {def, _, f,
+                      {'fun', _,
+                       [{clause, _,
+                         [{symbol, _, _, b}],
+                         {symbol, _, _, a}}]}},
+                     {application, _,
+                      {symbol, _, _, f},
+                      [{symbol, _, _, a}]}}}]}}]}, do_preen(Code)).
 
 translate_typedefs_to_let_type_statements_test_() ->
-    Code = "def test a -> (type T b -> A | b\n"
+    Code = "def test a -> (type T b -> (A | b),\n"
            "               a: T(a))",
-    ?_assertMatch({ok, [{def, _, _, _,
-                         {let_type, _,
-                          {type_def, _, 'T',
-                           [{symbol, _, _, b}],
-                           {sum, _,
-                            [{symbol, _, _, 'A'},
-                             {symbol, _, _, b}]}},
-                          {pair, _,
-                           {symbol, _, _, a},
-                           {application, _,
-                            {symbol, _, _, 'T'},
-                            [{symbol, _, _, a}]}}}}]}, do_preen(Code)).
+    ?test({ok, [{def, _, _,
+                 {'fun', _,
+                  [{clause, _, _,
+                    {let_type, _,
+                     {type_def, _, 'T',
+                      {'fun', _,
+                       [{clause, _,
+                         [{symbol, _, _, b}],
+                         {sum, _,
+                          [{symbol, _, _, 'A'},
+                           {symbol, _, _, b}]}}]}},
+                     {pair, _,
+                      {symbol, _, _, a},
+                      {application, _,
+                       {symbol, _, _, 'T'},
+                       [{symbol, _, _, a}]}}}}]}}]}, do_preen(Code)).
 
 dict_expr_test_() ->
     Code = "def test a -> {a: a, b: a}",
-    ?_assertMatch({ok, [{def, _, _, _,
-                         {dict, _,
-                          [{pair, _, {key, _, a}, {symbol, _, _, a}},
-                           {pair, _, {key, _, b}, {symbol, _, _, a}}]}}]}, do_preen(Code)).
+    ?test({ok, [{def, _, _,
+                 {'fun', _,
+                  [{clause, _, _,
+                    {dict, _,
+                     [{pair, _, {key, _, a}, {symbol, _, _, a}},
+                      {pair, _, {key, _, b}, {symbol, _, _, a}}]}}]}}]}, do_preen(Code)).
 
 dict_pattern_test_() ->
-    Code = "def test a\n"
+    Code = "def test\n"
            " | {a: b, b: c} -> c",
-    ?_assertMatch({ok, [{def, _, _, _,
-                         [{clause, _,
-                           [{dict, _,
-                             [{pair, _, {key, _, a}, {symbol, _, _, b}},
-                              {pair, _, {key, _, b}, {symbol, _, _, c}}]}],
-                           {symbol, _, _, c}}]}]}, do_preen(Code)).
+    ?test({ok, [{def, _, _,
+                 {'fun', _,
+                  [{clause, _,
+                    [{dict, _,
+                      [{pair, _, {key, _, a}, {symbol, _, _, b}},
+                       {pair, _, {key, _, b}, {symbol, _, _, c}}]}],
+                    {symbol, _, _, c}}]}}]}, do_preen(Code)).
 
 dict_pattern_variable_test_() ->
-    Code = "def test a\n"
+    Code = "def test\n"
            " | {a: b, b} -> b",
-    ?_assertMatch({ok, [{def, _, _, _,
-                         [{clause, _,
-                           [{dict, _,
-                             [{pair, _, {key, _, a}, {symbol, _, _, b}},
-                              {symbol, _, _, b}]}],
-                           {symbol, _, _, b}}]}]}, do_preen(Code)).
+    ?test({ok, [{def, _, _,
+                 {'fun', _,
+                  [{clause, _,
+                    [{dict, _,
+                      [{pair, _, {key, _, a}, {symbol, _, _, b}},
+                       {symbol, _, _, b}]}],
+                    {symbol, _, _, b}}]}}]}, do_preen(Code)).
 
 dict_illegal_element_test_() ->
     Code = "def test a -> {{a}, {b}: b}",
-    ?_errorMatch({illegal_dict_pair_element, dict, expr}, 
-                 {illegal_dict_element, dict, expr}, do_preen(Code)).
+    ?testError({illegal_dict_element, dict, expr},
+               {illegal_dict_pair_element, dict, expr}, do_preen(Code)).
 
 pair_expr_test_() ->
     Code = "def test a -> a: {a: a, b}",
-    ?_assertMatch({ok, [{def, _, _, _,
-                         {pair, _,
-                          {symbol, _, _, a},
-                          {dict, _,
-                           [{pair, _, {key, _, a}, {symbol, _, _, a}},
-                            {key, _, b}]}}}]}, do_preen(Code)).
+    ?test({ok, [{def, _, _,
+                 {'fun', _,
+                  [{clause, _, _,
+                    {pair, _,
+                     {symbol, _, _, a},
+                     {dict, _,
+                      [{pair, _, {key, _, a}, {symbol, _, _, a}},
+                       {key, _, b}]}}}]}}]}, do_preen(Code)).
+
 pair_pattern_test_() ->
-    Code = "def test a\n"
+    Code = "def test\n"
            " | (a: {a: b, c}) -> c",
-    ?_assertMatch({ok, [{def, _, _, _,
-                         [{clause, _,
-                           [{pair, _,
-                             {symbol, _, _, a},
-                             {dict, _,
-                              [{pair, _, {key, _, a}, {symbol, _, _, b}},
-                               {symbol, _, _, c}]}}],
-                           {symbol, _, _, c}}]}]}, do_preen(Code)).
+    ?test({ok, [{def, _, _,
+                 {'fun', _,
+                  [{clause, _,
+                    [{pair, _,
+                      {symbol, _, _, a},
+                      {dict, _,
+                       [{pair, _, {key, _, a}, {symbol, _, _, b}},
+                        {symbol, _, _, c}]}}],
+                    {symbol, _, _, c}}]}}]}, do_preen(Code)).
 
 -endif.

@@ -10,7 +10,6 @@ run(Code, Args, Options) ->
     case load(Code, Options) of
         {error, Errs}   -> {error, Errs};
         {ok, Mods} -> 
-            ?debugVal(Mods, 100),
             case [M || M <- Mods, erlang:function_exported(M, main, length(Args))] of
                 []          -> error:format({no_main_function_for_arity, length(Args)}, {kind});
                 [Module]    ->
@@ -114,7 +113,7 @@ no_main_function_test_() ->
 
 main_error_test_() ->
     {"when the main function returns an error, it be returned as an error",
-     ?setup("def main arg\n"
+     ?setup("def main\n"
             " | True -> False\n"
             " | False -> True",
             ['hello'],

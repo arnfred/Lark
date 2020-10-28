@@ -15,7 +15,7 @@ parse(Inputs, Options) ->
 
     % Add in the kind libraries as input paths unless options says no
     GivenPaths = [Path || {path, Path} <- Inputs],
-    InputPaths = case maps:get(add_kind_libraries, Options, true) of
+    InputPaths = case maps:get(import_kind_libraries, Options, true) of
                      true   -> [?KIND_SRC_LIB | GivenPaths];
                      false  -> GivenPaths
                  end,
@@ -31,7 +31,7 @@ parse(Inputs, Options) ->
                 {error, Errs}   -> {error, Errs};
                 {ok, Sources}      ->
                     ImportPrelude = maps:get(import_prelude, Options, true)
-                                    andalso maps:get(add_kind_libraries, Options, true),
+                                    andalso maps:get(import_kind_libraries, Options, true),
                     case format(Sources, ImportPrelude, Options) of
                         {error, Errs}   -> {error, Errs};
                         {ok, Formatted} ->
@@ -110,7 +110,7 @@ traverse(file, FileName) ->
         _               -> []
     end.
 
-types_pre(top_level, _, {type_def, _, Name, _, _} = Term) -> 
+types_pre(top_level, _, {type_def, _, Name, _} = Term) -> 
     {ok, ast:tag(parent, Term, Name)};
 types_pre(top_level, _, _)  -> skip;
 types_pre(_, _, Term) -> {ok, ast:tag(parent, Term)}.

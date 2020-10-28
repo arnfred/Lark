@@ -65,12 +65,12 @@ check_args(ArgsEnv, AST) ->
     ast:traverse(fun check_args_pre/3, fun(_, _, _) -> skip end, ArgsEnv, AST).
 
 collect_types(ArgsEnv, {ast, _, _, _, Defs} = AST) ->
-    Scope = maps:from_list([{[Name], Args} || {type_def, _, Name, Args, _} <- maps:values(Defs)]),
+    Scope = maps:from_list([{[Name], true} || {type_def, _, Name, _} <- maps:values(Defs)]),
     ast:traverse(make_types_pre(ArgsEnv), fun types_post/3, Scope, AST).
 
 % args_pre only tags the pair key to make sure we know its tag after the key
 % has been converted to an empty list of args
-args_pre(_, _, {def, _, _, _, _}) -> skip;
+args_pre(_, _, {def, _, _, _}) -> skip;
 args_pre(_, _, {pair, _, {type, _, _, _} = T, _} = Term) ->
     {ok, ast:tag(tag, Term, symbol:tag(T))};
 args_pre(_, _, _) -> ok.
@@ -92,8 +92,12 @@ args_post(expr, _, {pair, _, _, Val} = Term) ->
         undefined -> {ok, get_vars(Term)};
         Tag -> {ok, Tag, Val}
     end;
-args_post(_, _, {type_def, _, Name, Args, _Expr}) ->
-    {ok, Name, [{var, symbol:tag(S)} || S <- Args]};
+args_post(_, _, {type_def, _, Name, Expr}) ->
+    {ok, Name, Expr};
+args_post(_, _, {clause, _, Patterns, Expr}) ->
+    {ok, [{var, symbol:id('')} || _ <- Patterns]};
+args_post(_, _, {'fun', _, [Clause | _]}) ->
+    {ok, Clause};
 args_post(pattern, _, _) -> skip;
 args_post(_, _, Term) when is_tuple(Term) ->
     {ok, get_vars(Term)}.
@@ -104,7 +108,7 @@ get_vars(Term) when is_tuple(Term) ->
 get_vars(Term) when is_list(Term) -> utils:unique([V || T <- Term, V <- get_vars(T)]).
 
 
-check_args_pre(_, _, {def, _, _, _, _}) -> skip;
+check_args_pre(_, _, {def, _, _, _}) -> skip;
 check_args_pre(Type, Scope, {application, Ctx, {type, _, _, _} = T, Args} = Term) ->
     Tag = symbol:tag(T),
     Vars = maps:get(Tag, Scope),
@@ -126,11 +130,11 @@ tag({ok, Term})         -> {ok, ast:tag(path, Term)}.
 
 
 types_pre(_, top_level, _, {ast, _, _, _, _})  -> ok;
-types_pre(_, _, _, {def, _, Name, _, _} = Term)  ->
+types_pre(_, _, _, {def, _, Name, _} = Term)  ->
     F = fun(Path) -> [Name | Path] end,
     Tagged = ast:tag(path, Term, F, []),
     {ok, Tagged};
-types_pre(_, _, _, {type_def, _, Name, _, _} = Term) -> 
+types_pre(_, _, _, {type_def, _, Name, _} = Term) -> 
     F = fun(Path) -> [Name | Path] end,
     Tagged = ast:tag(path, Term, F, []),
     {ok, Tagged};
@@ -174,11 +178,11 @@ types_pre(_, _, _, Term) -> {ok, Term}.
 
 % types_post collects all types defined by the type definitions in the AST.
 % This includes the type defs and any tags
-types_post(top_level, _, {type_def, _, Name, _, _} = Term)  -> {ok, [Name], Term};
-types_post(expr, _, {tagged, _, Path, _} = Term)            -> {ok, Path, Term};
-types_post(expr, Scope, {type, _, _, Path} = Term)          ->
+types_post(top_level, _, {type_def, _, Name, _} = Term) -> {ok, [Name], Term};
+types_post(expr, _, {tagged, _, Path, _} = Term)        -> {ok, Path, Term};
+types_post(expr, Scope, {type, _, _, Path} = Term)      ->
     case maps:is_key(Path, Scope) of
         true    -> {ok, Term};
         false   -> {ok, Path, Term}
     end;
-types_post(_, _, _)                                         -> ok.
+types_post(_, _, _)                                     -> ok.

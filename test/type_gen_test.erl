@@ -3,7 +3,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
--define(setup(Code, Tests), {setup, loadFun(Code, #{add_kind_libraries => false}), fun unload/1, Tests}).
+-define(setup(Code, Tests), {setup, loadFun(Code, #{import_kind_libraries => false}), fun unload/1, Tests}).
 -define(setup(Code, Options, Tests), {setup, loadFun(Code, Options), fun unload/1, Tests}).
 
 loadFun(Code, Options) -> 
@@ -28,7 +28,7 @@ unload({ok, ModuleNames}) ->
 sum_type_boolean_test_() ->
     {"The domain of a sum type is the same as the type module function for
      said type",
-    ?setup("type Boolean -> True | False",
+    ?setup("type Boolean -> (True | False)",
            fun({ok, [Mod | _]}) ->
                    Expected = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
                    Actual = Mod:domain('Boolean'),
@@ -65,7 +65,7 @@ type_parameter_test_() ->
     {"a type function with a parameter should generate a function in the type"
      "module which can be called with an argument",
      ?setup("type Id a -> a\n"
-            "type T -> A | B",
+            "type T -> (A | B)",
             fun({ok, [Mod | _]}) -> 
                     DomainFun = Mod:domain('Id'),
                     [?test('T/A', Mod:'Id'('T/A')),
@@ -91,7 +91,7 @@ tagged_subtype_test_() ->
     {"Tags are useful for reusing existing data-types in new situations where
       functions that work on the underlying data type (in this case `Int`)
       aren't useful for the new domain.",
-     ?setup("type TimeUnit -> Hour: Int | Minute: Int | Second: Int",
+     ?setup("type TimeUnit -> (Hour: Int | Minute: Int | Second: Int)",
             fun({ok, [Mod | _]}) ->
                     Expected = {tagged, 'TimeUnit/Minute', 'TimeUnit/Int'},
                     Actual = Mod:domain('TimeUnit/Minute'),
@@ -111,8 +111,8 @@ tagged_product_subset_test_() ->
 
 sum_var_test_() ->
     {"We can define new types based on existing types arbitrarily so.",
-     ?setup("type Boolean -> True | False\n"
-            "type Option a -> a | None",
+     ?setup("type Boolean -> (True | False)\n"
+            "type Option a -> (a | None)",
             fun({ok, [Mod | _]}) ->
                     Expected = {sum, ordsets:from_list(['Boolean/True',
                                                         'Boolean/False',
@@ -124,7 +124,7 @@ sum_var_test_() ->
 product_sum_test_() ->
     {"Type constructors without arguments can be used in place of a specific
       type to cover over the entire domain",
-     ?setup("type Args -> A | B | C\n"
+     ?setup("type Args -> (A | B | C)\n"
             "type Elems -> {elem: Args}",
             fun({ok, [Mod | _]}) ->
                     Actual = Mod:domain('Elems'),
@@ -135,7 +135,7 @@ product_sum_test_() ->
 buried_var_test_() ->
     {"When a type declared in a type constructor (here `Buried/Bottom`)
       contains a variable, it is itself a type constructor, and can be called.",
-     ?setup("type Buried a -> Surface | Bottom: { var: a }\n"
+     ?setup("type Buried a -> (Surface | Bottom: { var: a })\n"
             "type Hidden -> Treasure",
             fun({ok, [Mod | _]}) ->
                     Expected = {tagged, 'Buried/Bottom', 
@@ -150,7 +150,7 @@ var_order_test_() ->
       defined as the order the type variables appear in in a left-biased depth
       first traversel (e.g. the order that you would read them in)",
      ?setup("type Order a b c -> T: (C: c | B: b | A: a)\n"
-            "type Args -> A | B | C",
+            "type Args -> (A | B | C)",
             fun({ok, [Mod | _]}) ->
                     Expected = {tagged, 'Order/T', 
                                 {sum, ordsets:from_list([
@@ -164,7 +164,7 @@ var_order_test_() ->
 
 application_top_level_f_test_() ->
     {"Call type function using domain function",
-     ?setup("type Option a -> a | None\n"
+     ?setup("type Option a -> (a | None)\n"
             "type BlahOption -> Option(Blah)",
             fun({ok, [Mod | _]}) ->
                     Expected = {sum, ordsets:from_list(['BlahOption/Blah', 'Option/None'])},
@@ -174,7 +174,7 @@ application_top_level_f_test_() ->
 
 application_wrong_number_of_args_test_() ->
     {"Check that we see an error when the wrong number of arguments is given to a type constructor",
-     ?setup("type Option a -> a | None\n"
+     ?setup("type Option a -> (a | None)\n"
             "type BlahOption -> Option(Option/None, Option/None)",
             fun(Error) ->
                     [?testError({wrong_number_of_arguments, 'Option', _, _}, Error)]
@@ -182,7 +182,7 @@ application_wrong_number_of_args_test_() ->
 
 application_inner_level_f_test_() ->
     {"Same as above for subtype constructor",
-     ?setup("type Option a -> P: {a: a} | None | O: P(a)\n",
+     ?setup("type Option a -> (P: {a: a} | None | O: P(a))\n",
             fun({ok, [Mod | _]}) ->
                     DomainFun = Mod:domain('Option'),
                     Actual = DomainFun('Option/None'),
@@ -197,8 +197,8 @@ application_inner_level_f_test_() ->
 
 application_first_order_type_test_() ->
     {"Similar to generics we can call a type constructor from another type constructor",
-     ?setup("type Args -> Arg1 | Arg2\n"
-            "type Option a -> None | a\n"
+     ?setup("type Args -> (Arg1 | Arg2)\n"
+            "type Option a -> (None | a)\n"
             "type AnyOption f a -> f(a)",
             fun({ok, [Mod | _]}) ->
                     Actual = Mod:'AnyOption'(Mod:domain('Option'), 'Args/Arg1'),
@@ -213,8 +213,8 @@ application_first_order_called_by_type_test_() ->
      constructor is used, it's a normal application with the domain of a type
      function, namely `Function` and so I want to make sure that it
      works",
-     ?setup("type Args -> Arg1 | Arg2\n"
-    	    "type Switch a\n"
+     ?setup("type Args -> (Arg1 | Arg2)\n"
+    	    "type Switch\n"
     	    " | Args/Arg1 -> Args/Arg2\n"
     	    " | Args/Arg2 -> Args/Arg1\n"
     	    "type Apply f a -> f(a)\n"
@@ -238,7 +238,7 @@ recursion_top_level_f_test_() ->
       trees. Non-recursive domains are strictly evaluated, but recursive domains
       replace the recursion with a `Recur` domain type containing a
       function which can be evaluated to traverse the structure.",
-     ?setup("type List a -> Nil | Cons: {head: a, tail: List(a)}",
+     ?setup("type List a -> (Nil | Cons: {head: a, tail: List(a)})",
             fun({ok, [Mod | _]}) ->
                     DomainFun = Mod:domain('List'),
                     Actual = DomainFun('List/Nil'),
@@ -250,8 +250,8 @@ recursion_top_level_f_test_() ->
 
 recursion_top_level_non_function_test_() ->
     {"Test that recursion works for a type constructor that doesn't take any arguments",
-    ?setup("type Args -> A | B | C\n"
-           "type List -> Nil | Cons: {elem: Args, tail: List}",
+    ?setup("type Args -> (A | B | C)\n"
+           "type List -> (Nil | Cons: {elem: Args, tail: List})",
            fun({ok, [Mod | _]}) ->
                    Actual = Mod:domain('List'),
                    {_, [_, {_, _, {recur, ProductMap}}]} = Actual,
@@ -262,7 +262,7 @@ recursion_top_level_non_function_test_() ->
 
 pattern_then_type_parse_test_() ->
     {"A type can be pattern matched against types it creates",
-     ?setup("type T a\n"
+     ?setup("type T\n"
             " | A -> A\n"
             "type Test -> T(T/A)",
             fun({ok, [Mod | _]}) ->
@@ -271,7 +271,7 @@ pattern_then_type_parse_test_() ->
 
 pattern_type_test_() ->
     {"The domain of the type constructor `F` should depend entirely on it's input `a`",
-     ?setup("type F a\n"
+     ?setup("type F\n"
             " | A -> B\n"
             " | B -> C\n"
             " | C -> A",
@@ -283,7 +283,7 @@ pattern_type_test_() ->
 
 pattern_variable1_test_() ->
     {"pattern matching with types allows variables",
-     ?setup("type X a\n"
+     ?setup("type X\n"
             " | T -> T\n"
             " | t -> {t: t}",
             fun({ok, [Mod | _]}) ->
@@ -294,8 +294,8 @@ pattern_variable1_test_() ->
 
 pattern_variable2_test_() ->
     {"a pattern variable can be constrained to a type",
-     ?setup("type Args -> A | B | C\n"
-            "type X a\n"
+     ?setup("type Args -> (A | B | C)\n"
+            "type X\n"
             " | Args/A -> Args/B\n"
             " | (t: Args) -> t",
             fun({ok, [Mod | _]}) ->
@@ -306,9 +306,9 @@ pattern_variable2_test_() ->
 
 pattern_dict_test_() ->
     {"When using a dict pattern, the variables are mapped on to the values associated with the product keys",
-     ?setup("type Args -> A | B | C\n"
-            "type Test t\n"
-            " | {a, b} -> a | b",
+     ?setup("type Args -> (A | B | C)\n"
+            "type Test\n"
+            " | {a, b} -> (a | b)",
             fun({ok, [Mod | _]}) ->
                     DomainFun = Mod:domain('Test'),
                     Input1 = #{a => 'Args/A', b => 'Args/B'},
@@ -329,9 +329,9 @@ pattern_dict_pair_test_() ->
                                            variable so the domain under key `a`
                                            should be assigned to type variable
                                            `s`",
-     ?setup("type Args -> A | B | C\n"
-            "type Test t\n"
-            " | {a: s, b} -> s | b",
+     ?setup("type Args -> (A | B | C)\n"
+            "type Test\n"
+            " | {a: s, b} -> (s | b)",
             fun({ok, [Mod | _]}) ->
                     DomainFun = Mod:domain('Test'),
                     Input = #{a => 'Args/A', b => 'Args/B', c => 'Args/C'},
@@ -342,10 +342,10 @@ pattern_dict_pair_test_() ->
 
 pattern_dict_dict_test_() ->
     {"Same as above, but this time the key value pair contains a pattern",
-     ?setup("type Args -> A | B | C\n"
-            "type Test t\n"
+     ?setup("type Args -> (A | B | C)\n"
+            "type Test\n"
             " | {a, b: Args/C} -> a\n"
-            " | {a: {a}, b} -> a | b",
+            " | {a: {a}, b} -> (a | b)",
             fun({ok, [Mod | _]}) ->
                     DomainFun = Mod:domain('Test'),
                     Input1 = #{a => #{a => 'Args/A'}, 
@@ -364,10 +364,10 @@ pattern_dict_sum_test_() ->
     {"'Args' in second line of pattern match should be expanded to "
      "all members ('A', 'B', 'C') of the Args type and a clause "
      "should be generated for each",
-     ?setup("type Args -> A | B | C\n"
-            "type Test t\n"
+     ?setup("type Args -> (A | B | C)\n"
+            "type Test\n"
             " | {a, b: (Args/A | Args/B)} -> a\n"
-            " | {a, b: Args} -> t",
+            " | (t: {a, b: Args}) -> t",
             fun({ok, [Mod | _]}) ->
                     DomainFun = Mod:domain('Test'),
                     Input1 = #{a => 'Args/A', 
@@ -385,8 +385,8 @@ pattern_dict_sum_test_() ->
 pattern_tagged_test_() ->
     {"A tagged value can be pattern matched by prefacing the pattern with the tag and a colon",
      ?setup("type Args -> T: {a: A, b: B}\n"
-            "type Test t\n"
-            " | (Args/T: {a: s, b}) -> s | b",
+            "type Test\n"
+            " | (Args/T: {a: s, b}) -> (s | b)",
             fun({ok, [Mod | _]}) ->
                     DomainFun = Mod:domain('Test'),
                     Actual = DomainFun(Mod:domain('Args')),
@@ -396,8 +396,8 @@ pattern_tagged_test_() ->
 
 pattern_no_matching_test_() ->
     {"when no matching pattern is found an error should be returned at compile time",
-     ?setup("type Test t\n"
-            " | T -> T | S",
+     ?setup("type Test\n"
+            " | T -> (T | S)",
             fun({ok, [Mod | _]}) ->
                     DomainFun = Mod:domain('Test'),
                     Actual = DomainFun('Test/S'),
@@ -406,8 +406,8 @@ pattern_no_matching_test_() ->
 
 pattern_sum_test_() ->
     {"A pattern with sums should match against all members of said sum",
-     ?setup("type Args -> A | B | C\n"
-            "type Test t\n"
+     ?setup("type Args -> (A | B | C)\n"
+            "type Test\n"
             " | Args -> Matched\n"
             " | _ -> Unmatched",
             fun({ok, [Mod | _]}) ->
@@ -421,7 +421,7 @@ pattern_sum_test_() ->
 pattern_sum_tagged_test_() ->
     {"A pattern with a sum of product should expand to match all products",
      ?setup("type Args -> A: ({b: B} | {c: C})\n"
-            "type Test t\n"
+            "type Test\n"
             " | (Args/A: {b}) -> b\n"
             " | (Args/A: {c}) -> c\n"
             " | _ -> Unmatched",
@@ -435,9 +435,9 @@ pattern_sum_tagged_test_() ->
 
 pattern_product_sum_test_() ->
     {"Pattern matching should match all members ('Y', 'Z') of type 'X' and generate a clause for each",
-     ?setup("type X -> Y | Z\n"
+     ?setup("type X -> (Y | Z)\n"
             "type P -> {x: X, xx: X}\n"
-            "type Test t\n"
+            "type Test\n"
             " | P -> Matched\n"
             " | _ -> Unmatched",
             fun({ok, [Mod | _]}) ->
@@ -452,8 +452,8 @@ pattern_product_sum_test_() ->
 pattern_tagged_pair_test_() ->
     {"A key value pair outside a dict pattern constraints the variable (key
      part) to a member of the domain of the value part",
-     ?setup("type Args -> A | B | C\n"
-            "type Test t\n"
+     ?setup("type Args -> (A | B | C)\n"
+            "type Test\n"
             " | (a: Args/A) -> a\n"
             " | (a: Args/B) -> Args/C",
             fun({ok, [Mod | _]}) ->
@@ -465,8 +465,8 @@ pattern_tagged_pair_test_() ->
 pattern_tagged_sum_list_test_() ->
     {"Instead of multiple patterns, a sum can also be expressed within a"
      "pattern to cover several valid values",
-     ?setup("type Args -> A | B | C\n"
-            "type Test t\n"
+     ?setup("type Args -> (A | B | C)\n"
+            "type Test\n"
             " | (a: (Args/A | Args/B)) -> a\n"
             " | (a: Args/C) -> Args/B",
             fun({ok, [Mod | _]}) ->
@@ -479,7 +479,7 @@ pattern_tagged_sum_list_test_() ->
 tagged_pair_in_pattern_test_() ->
     {"When a subtype is defined after a pattern it can still be called independently",
      ?setup("type Test -> Blip/Blop(T)\n"
-            "type Blip a\n"
+            "type Blip\n"
             " | value -> Blop: {key: value}",
             fun({ok, [Mod | _]}) ->
                     Expected = {tagged, 'Blip/Blop',
@@ -505,12 +505,12 @@ module_tagged_type_test_() ->
             end)}.
 
 unused_type_parameter_test_() ->
-    {"In a type application, the number of arguments should be compared with the number of type "
-     "arguments. We normally count type arguments as the number of variables present in the type "
-     "body, but for type definitions, we want to make sure we count the number of type parameters"
-     "instead",
+    {"In a type application, the number of arguments should be compared with
+      the number of type " "arguments. We normally count type arguments as the
+      number of variables present in the type " "body, but for type definitions,
+      we want to make sure we count the number of function parameters instead",
      ?setup("module test { BlahOption }\n"
-            "type Option a b -> a | None\n"
+            "type Option a b -> (a | None)\n"
             "type BlahOption -> Option(Option/None, Option/None)",
             fun({ok, [Mod | _]}) ->
                     [?test('Option/None', Mod:'BlahOption'())]
@@ -520,7 +520,7 @@ type_redefinition_test_() ->
     {"When we redefine one type as another type, the new type returns the function domain: "
      "`F(args)` where `F(args)` is the function of the original type", 
      ?setup("module test { RedefOption }\n"
-            "type Option a -> a | None\n"
+            "type Option a -> (a | None)\n"
             "type RedefOption -> Option",
             fun({ok, [Mod | _]}) ->
                     RedefOption = Mod:'RedefOption'(),
@@ -532,7 +532,7 @@ type_redefinition_args_test_() ->
      "number of arguments it expects hasn't changed because of the redefinition",
      ?setup("module test { BlahOption }\n"
             "type BlipOption -> Option\n"
-            "type Option a -> a | None\n"
+            "type Option a -> (a | None)\n"
             "type BlupOption -> Option\n"
             "type BlahOption -> Option(Option/None)",
             fun({ok, [Mod | _]}) ->
@@ -543,10 +543,10 @@ qualified_symbol_pattern_atom_test_() ->
     {"When a pattern contains a qualified type constant (e.g. a type from a
      different module) it should match against it",
      ?setup("module test { T }\n"
-            "type T a\n"
+            "type T\n"
             " | Boolean/False -> Falsy\n"
             " | Boolean/True -> Truthy",
-            #{add_kind_libraries => true},
+            #{import_kind_libraries => true},
             fun({ok, _}) ->
                     [?test('T/Falsy', test:'T'('Boolean/False'))]
             end)}.
@@ -555,10 +555,10 @@ qualified_symbol_pattern_sum_test_() ->
     {"When a pattern contains a qualified type constant (e.g. a type from a
      different module) it should match against it",
      ?setup("module test { T }
-             type T a
+             type T
                | Boolean -> Falsy
                | _ -> Truthy",
-            #{add_kind_libraries => true},
+            #{import_kind_libraries => true},
             fun({ok, _}) ->
                     [?test('T/Falsy', test:'T'('Boolean/False')),
                      ?test('T/Falsy', test:'T'('Boolean/True')),
@@ -567,10 +567,10 @@ qualified_symbol_pattern_sum_test_() ->
 
 qualified_symbol_undefined_arity_pattern_test_() ->
     {"type constructors that take one or more arguments can't be used as patterns on their own",
-     ?setup("type T a\n"
+     ?setup("type T\n"
             " | Option -> Falsy\n"
             " | _ -> Truthy",
-            #{add_kind_libraries => true},
+            #{import_kind_libraries => true},
             fun(Err) -> [?testError({undefined_symbol_in_pattern, 'Option'}, Err)] end)}.
 
 call_qualified_symbol_with_args_test_() ->
@@ -580,7 +580,7 @@ call_qualified_symbol_with_args_test_() ->
      ?setup("import kind/prelude\n"
             "module test { Test }\n"
             "type Test -> kind/prelude/Option(Boolean/True)",
-            #{add_kind_libraries => true},
+            #{import_kind_libraries => true},
             fun({ok, _}) ->
                     Actual = test:'Test'(),
                     [?test(none, domain:diff({sum, ordsets:from_list(['Boolean/True', 'Option/Nil'])}, Actual))]
@@ -592,7 +592,7 @@ var_application_in_type_def_test_() ->
             "module test { Test }\n"
             "type Test a -> a.match(| True -> False\n"
             "                       | False -> True)",
-            #{add_kind_libraries => true},
+            #{import_kind_libraries => true},
             fun({ok, _}) ->
                     [?test('Boolean/False', test:'Test'('Boolean/True'))]
             end)}.
@@ -600,10 +600,10 @@ var_application_in_type_def_test_() ->
 pattern_type_application_test_() ->
     {"A type application inside a pattern is evaluated against the resulting domain",
      ?setup("module test { Test }\n"
-            "type Test _\n"
+            "type Test\n"
             "  | Boolean.Option  -> True\n"
             "  | _               -> False",
-            #{add_kind_libraries => true},
+            #{import_kind_libraries => true},
             fun({ok, _}) ->
                     [?test('Boolean/True', test:'Test'('Option/Nil')),
                      ?test('Boolean/True', test:'Test'('Boolean/True')),
@@ -614,9 +614,9 @@ pattern_type_application_test_() ->
 pattern_local_application_test_() ->
     {"Apply a local type constructor in a pattern should pattern match against the result",
      ?setup("type F a -> a\n"
-            "type Test a\n"
+            "type Test\n"
             "  | True.F -> True",
-            #{add_kind_libraries => true},
+            #{import_kind_libraries => true},
             fun(Err) ->
                     [?testError({local_type_in_pattern_application, 'F'}, Err)]
             end)}.
@@ -625,7 +625,7 @@ recursive_wrong_number_of_arguments_1_test_() ->
     {"A recursive type should be checked for number of arguments",
      ?setup("module test { Tree }
              import Tree/_
-             type Tree a -> Leaf | Node: {left: Tree(a), value: a, right: Tree(a)}",
+             type Tree a -> (Leaf | Node: {left: Tree(a), value: a, right: Tree(a)})",
             fun({ok, _}) ->
                     [?test({sum,['Tree/Leaf', {tagged,'Tree/Node',{recur,_}}]}, test:'Tree'('Int'))]
             end)}.
@@ -633,9 +633,18 @@ recursive_wrong_number_of_arguments_1_test_() ->
 recursive_wrong_number_of_arguments_2_test_() ->
     {"A recursive type should be checked for number of arguments",
      ?setup("module test { Tree }
-             type Tree a -> Leaf | Node: {left: Tree(a), value: a, right: Tree(a)}",
+             type Tree a -> (Leaf | Node: {left: Tree(a), value: a, right: Tree(a)})",
             fun({ok, _}) ->
                     [?test({sum,['Tree/Leaf', {tagged,'Tree/Node',{recur,_}}]}, test:'Tree'('Int'))]
+            end)}.
+
+param_pattern_test_() ->
+    {"Type constructors accept patterns for parameters",
+     ?setup("module test { T }
+             import erlang/+
+             type T {key1: a, key2: b} -> (a | b)",
+            fun({ok, _}) ->
+                    [?test({sum, [1, 2]}, test:'T'(#{key1 => 1, key2 => 2}))]
             end)}.
 
 %multiple_tagged_pair_in_pattern_test_() ->

@@ -5,7 +5,7 @@
 
 local_type_test_() ->
     Module = 
-    "def xor a b\n"
+    "def xor\n"
     " | True False -> True\n"
     " | False True -> True\n"
     " | _ _ -> False",
@@ -13,7 +13,7 @@ local_type_test_() ->
 
 undefined_local_type_test_() ->
     Module = 
-    "type Blup -> Blup | Blap\n"
+    "type Blup -> (Blup | Blap)\n"
     "import Blup/Blah",
     ?testError({undefined_local_type, 'Blup', 'Blah', ['Blup']}, parser:parse([{text, Module}])).
 
@@ -21,7 +21,7 @@ undefined_local_type_test_() ->
 local_type_alias_test_() ->
     Module = 
     "import kind/prelude/Boolean/{True: T, False: F}\n"
-    "def xor a b\n"
+    "def xor\n"
     " | T F -> T\n"
     " | F T -> T\n"
     " | _ _ -> F",
@@ -29,9 +29,9 @@ local_type_alias_test_() ->
 
 local_type_no_import_test_() ->
     Module = 
-    "type Boolean -> True | False\n"
+    "type Boolean -> (True | False)\n"
     "import Boolean/False\n"
-    "def xor a b\n"
+    "def xor\n"
     " | True False -> True\n"
     " | False True -> True\n"
     " | _ _ -> False",
@@ -39,9 +39,9 @@ local_type_no_import_test_() ->
 
 local_type_wildcard_test_() ->
     Module = 
-    "type Boolean -> True | False\n"
+    "type Boolean -> (True | False)\n"
     "import Boolean/_\n"
-    "def xor a b\n"
+    "def xor\n"
     " | True False -> True\n"
     " | False True -> True\n"
     " | _ _ -> False",
@@ -52,10 +52,10 @@ external_type_test_() ->
     "module blup {\n"
     "  Boolean\n"
     "}\n"
-    "type Boolean -> True | False\n",
+    "type Boolean -> (True | False)\n",
     Module2 =
     "import blup/Boolean/_\n"
-    "def xor a b\n"
+    "def xor\n"
     " | True False -> True\n"
     " | False True -> True\n"
     " | _ _ -> False",
@@ -66,7 +66,7 @@ undefined_external_type_test_() ->
     "module blup {\n"
     "  Boolean\n"
     "}\n"
-    "type Boolean -> True | False\n",
+    "type Boolean -> (True | False)\n",
     Module2 =
     "import blup/Blap/_",
     ?testError({nonexistent_module, 'blup/Blap'},
@@ -143,10 +143,10 @@ import_type_already_defined_test_() ->
     "module blip {\n"
     "  T\n"
     "}\n"
-    "type T -> A | B\n",
+    "type T -> (A | B)\n",
     Module2 =
     "import blip/_\n"
-    "type T -> Q | R",
+    "type T -> (Q | R)",
     ?testError({import_conflicts_with_local_def, 'T', 'blip/T'}, parser:parse([{text, Module2}, {text, Module1}])).
 
 import_alias_already_defined_test_() ->
@@ -174,30 +174,30 @@ qualified_beam_import_test_() ->
     "import lists/_\n"
     "def blap -> reverse",
     ?test({ok, [{ast, _, _, _,
-                 #{blap := {def, _, 'blap', [],
+                 #{blap := {def, _, 'blap',
                             {qualified_symbol, _, [lists], reverse}}}}]},
-          parser:parse([{text, Module}], #{add_kind_libraries => false})).
+          parser:parse([{text, Module}], #{import_kind_libraries => false})).
 
 qualified_source_import_test_() ->
     Module1 = 
     "module blip {T}\n"
-    "type T -> A | B\n",
+    "type T -> (A | B)\n",
     Module2 =
     "import blip/T\n"
     "def blap -> T/A",
     ?test({ok, [_,
                 {ast, _, _, _,
-                 #{blap := {def, _, 'blap', [],
+                 #{blap := {def, _, 'blap',
                             {qualified_symbol, _, [blip, 'T'], 'A'}}}}]},
-          parser:parse([{text, Module1}, {text, Module2}], #{add_kind_libraries => false})).
+          parser:parse([{text, Module1}, {text, Module2}], #{import_kind_libraries => false})).
 
 qualified_local_import_test_() ->
     Module = 
-    "type T -> A | B\n"
+    "type T -> (A | B)\n"
     "import T/A\n"
     "def blap -> A",
     ?test({ok, [{ast, _, _, _,
-                 #{blap := {def, _, 'blap', [],
+                 #{blap := {def, _, 'blap',
                             {type, _, 'A', ['T', 'A']}}}}]},
-          parser:parse([{text, Module}], #{add_kind_libraries => false})).
+          parser:parse([{text, Module}], #{import_kind_libraries => false})).
 

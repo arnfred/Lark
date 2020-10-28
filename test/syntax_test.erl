@@ -106,7 +106,7 @@ infix_4_test_() ->
 infix_5_test_() ->
     ?setup("module test { main }
             import erlang/{<,+}
-            def f n
+            def f
               | 'true' -> True
               | 'false' -> False
             def main a b -> (a < b).f",
@@ -115,9 +115,9 @@ infix_5_test_() ->
 infix_6_test_() ->
     ?setup("module test { main }
             import erlang/{<, +}
-            def f n q
+            def f
               | 'true' _ -> True
-              | 'false' _ -> q
+              | 'false' q -> q
             def main a b -> (a < b).f(a + b)",
            fun({ok, _}) -> ?test(9, test:main(5, 4)) end).
 
