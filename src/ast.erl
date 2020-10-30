@@ -32,6 +32,8 @@ climb({Pre, Post}, Type, Scope, Term) ->
         leave_intact                    -> run_post(Post, #{}, Type, Scope, Term);
         ok                              -> chew(Pre, Post, Type, Scope, Term);
         {ok, NewTerm}                   -> chew(Pre, Post, Type, Scope, NewTerm);
+        {ok, Key, NewTerm}              -> chew(Pre, Post, Type, maps:put(Key, NewTerm, Scope), NewTerm);
+        {ok, Key, Val, NewTerm}         -> chew(Pre, Post, Type, maps:put(Key, Val, Scope), NewTerm);
         {change, NewPost, NewTerm}      -> chew(Pre, NewPost, Type, Scope, NewTerm);
         Other                           -> error:format({unrecognized_pre_response, Other}, {ast, Term})
 
@@ -58,23 +60,23 @@ run_post(Post, Env, Type, Scope, Term) ->
         Other                       -> error:format({unrecognized_post_response, Other}, {ast, Term})
     end.
 
-step(Meta, top_level, Scope, {ast, Ctx, Modules, Imports, Defs}) ->
-    error:flatmap(map(Meta, top_level, Scope, Modules),
-                  fun({MEnvs, TModules}) ->
-                          NewScope = merge([Scope | MEnvs]),
-                          case map(Meta, top_level, NewScope, maps:values(Defs)) of
-                              {error, Errs}    -> {error, Errs};
-                              {ok, {DefEnvs, TDefs}} -> 
-                                  NewDefs = maps:from_list(lists:zip(maps:keys(Defs), TDefs)),
-                                  NewEnv = merge(DefEnvs ++ MEnvs),
-                                  {ok, {NewEnv, {ast, Ctx, TModules, Imports, NewDefs}}}
-                          end end);
-
-step(Meta, top_level, Scope, {module, Ctx, BeamName, KindName, Exports}) ->
-    case map(Meta, top_level, Scope, Exports) of
-        {error, Errs}                   -> {error, Errs};
-        {ok, {ExportEnvs, TExports}}    -> {ok, {merge(ExportEnvs), {module, Ctx, BeamName, KindName, TExports}}}
-    end;
+%step(Meta, top_level, Scope, {ast, Ctx, Modules, Imports, Defs}) ->
+%    error:flatmap(map(Meta, top_level, Scope, Modules),
+%                  fun({MEnvs, TModules}) ->
+%                          NewScope = merge([Scope | MEnvs]),
+%                          case map(Meta, top_level, NewScope, maps:values(Defs)) of
+%                              {error, Errs}    -> {error, Errs};
+%                              {ok, {DefEnvs, TDefs}} -> 
+%                                  NewDefs = maps:from_list(lists:zip(maps:keys(Defs), TDefs)),
+%                                  NewEnv = merge(DefEnvs ++ MEnvs),
+%                                  {ok, {NewEnv, {ast, Ctx, TModules, Imports, NewDefs}}}
+%                          end end);
+%
+%step(Meta, top_level, Scope, {module, Ctx, BeamName, KindName, Exports}) ->
+%    case map(Meta, top_level, Scope, Exports) of
+%        {error, Errs}                   -> {error, Errs};
+%        {ok, {ExportEnvs, TExports}}    -> {ok, {merge(ExportEnvs), {module, Ctx, BeamName, KindName, TExports}}}
+%    end;
 
 step(Meta, top_level, Scope, {def, Ctx, Name, Fun}) ->
     step(Meta, expr, Scope, {def, Ctx, Name, Fun});

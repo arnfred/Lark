@@ -14,7 +14,7 @@ loadFun(Code, Options) ->
                      % Only return scanner modules (e.g. modules starting with `types`)
                      {ok, [Mod || Mod <- Modules,
                                   Name <- [atom_to_list(Mod)],
-                                  string:find(Name, "types") =:= Name]}
+                                  string:find(Name, "domain") =:= Name]}
              end
     end.
 
@@ -30,11 +30,7 @@ sum_type_boolean_test_() ->
      said type",
     ?setup("type Boolean -> (True | False)",
            fun({ok, [Mod | _]}) ->
-                   Expected = {sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])},
-                   Actual = Mod:domain('Boolean'),
-                   Actual2 = Mod:'Boolean'(),
-                   [?test(none, domain:diff(Expected, Actual)),
-                    ?test(none, domain:diff(Expected, Actual2))]
+                   [?test({sum, ['Boolean/False', 'Boolean/True']}, Mod:'Boolean'())]
            end)}.
 
 product_type_test_() ->
@@ -42,11 +38,7 @@ product_type_test_() ->
      said type",
     ?setup("type P -> {a: A, b: B}",
            fun({ok, [Mod | _]}) ->
-                   Expected = #{a => 'P/A', b => 'P/B'},
-                   Actual = Mod:domain('P'),
-                   Actual2 = Mod:'P'(),
-                   [?test(none, domain:diff(Expected, Actual)),
-                    ?test(none, domain:diff(Expected, Actual2))]
+                   [?test(#{a := 'P/A', b := 'P/B'}, Mod:'P'())]
            end)}.
 
 tagged_type_test_() ->
@@ -54,11 +46,7 @@ tagged_type_test_() ->
      "said type",
      ?setup("type P -> K: {a: A, b: B}",
             fun({ok, [Mod | _]}) ->
-                    Expected = {tagged, 'P/K', #{a => 'P/A', b => 'P/B'}},
-                    Actual = Mod:domain('P'),
-                    Actual2 = Mod:'P'(),
-                    [?test(none, domain:diff(Expected, Actual)),
-                     ?test(none, domain:diff(Expected, Actual2))]
+                    [?test({tagged, 'P/K', #{a := 'P/A', b := 'P/B'}}, Mod:'P'())]
             end)}.
 
 type_parameter_test_() ->
@@ -67,9 +55,7 @@ type_parameter_test_() ->
      ?setup("type Id a -> a\n"
             "type T -> (A | B)",
             fun({ok, [Mod | _]}) -> 
-                    DomainFun = Mod:domain('Id'),
-                    [?test('T/A', Mod:'Id'('T/A')),
-                     ?test('T/B', DomainFun('T/B'))]
+                    [?test('T/A', Mod:'Id'('T/A'))]
             end)}.
 
 tagged_type_reuse_name_test_() ->
@@ -80,11 +66,7 @@ tagged_type_reuse_name_test_() ->
      "from accidentially swapping them",
      ?setup("type P -> P: Int",
             fun({ok, [Mod | _]}) ->
-                    Expected = {tagged, 'P', 'P/Int'},
-                    Actual = Mod:domain('P'),
-                    Actual2 = Mod:'P'(),
-                    [?test(none, domain:diff(Expected, Actual)),
-                     ?test(none, domain:diff(Expected, Actual2))]
+                    [?test({tagged, 'P', 'P/Int'}, Mod:'P'())]
             end)}.
 
 tagged_subtype_test_() ->
@@ -93,9 +75,8 @@ tagged_subtype_test_() ->
       aren't useful for the new domain.",
      ?setup("type TimeUnit -> (Hour: Int | Minute: Int | Second: Int)",
             fun({ok, [Mod | _]}) ->
-                    Expected = {tagged, 'TimeUnit/Minute', 'TimeUnit/Int'},
-                    Actual = Mod:domain('TimeUnit/Minute'),
-                    [?test(none, domain:diff(Expected, Actual))]
+                    [?test({tagged, 'TimeUnit/Minute', 'TimeUnit/Int'},
+                           Mod:'TimeUnit/Minute'('TimeUnit/Int'))]
             end)}.
 
 tagged_product_subset_test_() ->
@@ -104,9 +85,8 @@ tagged_product_subset_test_() ->
       `Time/Minute` and `Time/Second`",
      ?setup("type Time -> {hour: (Hour: Int), minute: (Minute: Int), second: (Second: Int)}",
             fun({ok, [Mod | _]}) ->
-                    Actual = Mod:domain('Time/Minute'),
-                    Expected = {tagged, 'Time/Minute', 'Time/Int'},
-                    [?test(none, domain:diff(Expected, Actual))]
+                    [?test({tagged, 'Time/Minute', 'Time/Int'},
+                           Mod:'Time/Minute'('Time/Int'))]
             end)}.
 
 sum_var_test_() ->
@@ -114,11 +94,8 @@ sum_var_test_() ->
      ?setup("type Boolean -> (True | False)\n"
             "type Option a -> (a | None)",
             fun({ok, [Mod | _]}) ->
-                    Expected = {sum, ordsets:from_list(['Boolean/True',
-                                                        'Boolean/False',
-                                                        'Option/None'])},
-                    Actual = Mod:'Option'({sum, ordsets:from_list(['Boolean/True', 'Boolean/False'])}),
-                    [?test(none, domain:diff(Expected, Actual))]
+                    [?test({sum, ['Boolean/False', 'Boolean/True', 'Option/None']},
+                           Mod:'Option'('Boolean'))]
             end)}.
 
 product_sum_test_() ->
@@ -127,9 +104,8 @@ product_sum_test_() ->
      ?setup("type Args -> (A | B | C)\n"
             "type Elems -> {elem: Args}",
             fun({ok, [Mod | _]}) ->
-                    Actual = Mod:domain('Elems'),
-                    Expected = #{elem => {sum, ['Args/A', 'Args/B', 'Args/C']}},
-                    [?test(none, domain:diff(Expected, Actual))]
+                    [?test(#{elem := {sum, ['Args/A', 'Args/B', 'Args/C']}},
+                           Mod:'Elems'())]
             end)}.
 
 buried_var_test_() ->
@@ -138,28 +114,19 @@ buried_var_test_() ->
      ?setup("type Buried a -> (Surface | Bottom: { var: a })\n"
             "type Hidden -> Treasure",
             fun({ok, [Mod | _]}) ->
-                    Expected = {tagged, 'Buried/Bottom', 
-                                #{var => 'Hidden/Treasure'}},
-                    DomainFun = Mod:domain('Buried/Bottom'),
-                    Actual = DomainFun('Hidden/Treasure'),
-                    [?test(none, domain:diff(Expected, Actual))]
+                    [?test({tagged, 'Buried/Bottom', #{var := 'Hidden/Treasure'}},
+                           Mod:'Buried/Bottom'('Hidden/Treasure'))]
             end)}.
 
 var_order_test_() ->
     {"The parameter order in a subtype constructor is ambigious. In kind it's
       defined as the order the type variables appear in in a left-biased depth
       first traversel (e.g. the order that you would read them in)",
-     ?setup("type Order a b c -> T: (C: c | B: b | A: a)\n"
+     ?setup("type Order a b c -> T: [c, b, a]\n"
             "type Args -> (A | B | C)",
             fun({ok, [Mod | _]}) ->
-                    Expected = {tagged, 'Order/T', 
-                                {sum, ordsets:from_list([
-                                                         {tagged, 'Order/C', 'Args/C'},
-                                                         {tagged, 'Order/A', 'Args/A'},
-                                                         {tagged, 'Order/B', 'Args/B'}])}},
-                    DomainFun = Mod:domain('Order/T'),
-                    Actual = DomainFun('Args/C', 'Args/B', 'Args/A'),
-                    [?test(none, domain:diff(Expected, Actual))]
+                    [?test({tagged, 'Order/T', ['Args/C', 'Args/B', 'Args/A']},
+                           Mod:'Order/T'('Args/C', 'Args/B', 'Args/A'))]
             end)}.
 
 application_top_level_f_test_() ->
@@ -167,32 +134,30 @@ application_top_level_f_test_() ->
      ?setup("type Option a -> (a | None)\n"
             "type BlahOption -> Option(Blah)",
             fun({ok, [Mod | _]}) ->
-                    Expected = {sum, ordsets:from_list(['BlahOption/Blah', 'Option/None'])},
-                    Actual = Mod:domain('BlahOption'),
-                    ?test(none, domain:diff(Expected, Actual))
+                    [?test({sum, ['BlahOption/Blah', 'Option/None']},
+                           Mod:'BlahOption'())]
             end)}.
 
 application_wrong_number_of_args_test_() ->
     {"Check that we see an error when the wrong number of arguments is given to a type constructor",
-     ?setup("type Option a -> (a | None)\n"
-            "type BlahOption -> Option(Option/None, Option/None)",
+     ?setup("module blah { BlahOption }
+             type Option a -> (a | None)
+             type BlahOption -> Option(Option/None, Option/None)",
             fun(Error) ->
-                    [?testError({wrong_number_of_arguments, 'Option', _, _}, Error)]
+                    [?testError({wrong_arity, 'Option', 2, 1}, Error)]
             end)}.
 
 application_inner_level_f_test_() ->
     {"Same as above for subtype constructor",
      ?setup("type Option a -> (P: {a: a} | None | O: P(a))\n",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('Option'),
-                    Actual = DomainFun('Option/None'),
-                    Expected = {sum, ordsets:from_list(['Option/None',
-                                                        {tagged, 'Option/P',
-                                                         #{a => 'Option/None'}},
-                                                        {tagged, 'Option/O',
-                                                         {tagged, 'Option/P',
-                                                          #{a => 'Option/None'}}}])},
-                    [?test(none, domain:diff(Expected, Actual))]
+                    [?test({sum, ['Option/None',
+                                  {tagged, 'Option/O',
+                                   {tagged, 'Option/P',
+                                    #{a := 'Option/None'}}},
+                                  {tagged, 'Option/P',
+                                   #{a := 'Option/None'}}]},
+                           Mod:'Option'('Option/None'))]
             end)}.
 
 application_first_order_type_test_() ->
@@ -201,18 +166,19 @@ application_first_order_type_test_() ->
             "type Option a -> (None | a)\n"
             "type AnyOption f a -> f(a)",
             fun({ok, [Mod | _]}) ->
-                    Actual = Mod:'AnyOption'(Mod:domain('Option'), 'Args/Arg1'),
-                    Expected = {sum, ordsets:from_list(['Option/None', 'Args/Arg1'])},
-                    [?test(none, domain:diff(Expected, Actual))]
+                    [?test({sum, ['Args/Arg1', 'Option/None']},
+                           % The anonymous function takes two arguments because
+                           % it's given the current domain stack as the first
+                           % parameter
+                           Mod:'AnyOption'(fun Mod:'Option'/1, 'Args/Arg1'))]
             end)}.
 
 application_first_order_called_by_type_test_() ->
-    {"Call type with another type constructor as function and have that applied to third type"
-     "Mostly applications to do with Types are of term type
-     'type_application', but when a type variable containing a type
-     constructor is used, it's a normal application with the domain of a type
-     function, namely `Function` and so I want to make sure that it
-     works",
+    {"Call type with another type constructor as function and have that applied
+     to third type" "Mostly applications to do with Types are clearly a type
+     constructor application, but when a type variable containing a type
+     constructor is used instead, it's indistinguishable from a normal
+     application.",
      ?setup("type Args -> (Arg1 | Arg2)\n"
     	    "type Switch\n"
     	    " | Args/Arg1 -> Args/Arg2\n"
@@ -220,7 +186,7 @@ application_first_order_called_by_type_test_() ->
     	    "type Apply f a -> f(a)\n"
     	    "type Test -> Apply(Switch, Args/Arg1)",
     	    fun({ok, [Mod | _]}) ->
-                [?test('Args/Arg2', Mod:domain('Test'))]
+                [?test('Args/Arg2', Mod:'Test'())]
             end)}.
 
 application_product_test_() ->
@@ -229,7 +195,7 @@ application_product_test_() ->
             "type Test -> P(A, B)",
             fun({ok, [Mod | _]}) ->
                     Expected = #{a => 'Test/A', b => 'Test/B'},
-                    [?test(Expected, Mod:domain('Test'))]
+                    [?test(Expected, Mod:'Test'())]
             end)}.
 
 
@@ -240,8 +206,7 @@ recursion_top_level_f_test_() ->
       function which can be evaluated to traverse the structure.",
      ?setup("type List a -> (Nil | Cons: {head: a, tail: List(a)})",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('List'),
-                    Actual = DomainFun('List/Nil'),
+                    Actual = Mod:'List'('List/Nil'),
                     {_, [_, {_, _, {recur, ProductMap}}]} = Actual,
                     [?test({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, Actual),
                      ?test('List/Nil', maps:get(head, ProductMap())),
@@ -253,7 +218,7 @@ recursion_top_level_non_function_test_() ->
     ?setup("type Args -> (A | B | C)\n"
            "type List -> (Nil | Cons: {elem: Args, tail: List})",
            fun({ok, [Mod | _]}) ->
-                   Actual = Mod:domain('List'),
+                   Actual = Mod:'List'(),
                    {_, [_, {_, _, {recur, ProductMap}}]} = Actual,
                    [?test({sum, ['List/Nil', {tagged, 'List/Cons', {recur, _}}]}, Actual),
                     ?test({sum, ['Args/A', 'Args/B', 'Args/C']}, maps:get(elem, ProductMap())),
@@ -266,7 +231,7 @@ pattern_then_type_parse_test_() ->
             " | A -> A\n"
             "type Test -> T(T/A)",
             fun({ok, [Mod | _]}) ->
-                    [?test('T/A', Mod:domain('Test'))]
+                    [?test('T/A', Mod:'Test'())]
             end)}.
 
 pattern_type_test_() ->
@@ -276,9 +241,8 @@ pattern_type_test_() ->
             " | B -> C\n"
             " | C -> A",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('F'),
-                    Actual = DomainFun('F/A'),
-                    [?test('F/B', Actual)]
+                    [?test('F/B', Mod:'F'('F/A')),
+                     ?test({sum, ['F/A', 'F/B', 'F/C']}, Mod:'F'('any'))]
             end)}.
 
 pattern_variable1_test_() ->
@@ -287,9 +251,8 @@ pattern_variable1_test_() ->
             " | T -> T\n"
             " | t -> {t: t}",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('X'),
-                    [?test('X/T', DomainFun('X/T')),
-                     ?test(none, domain:diff(#{t => 'S'}, DomainFun('S')))]
+                    [?test('X/T', Mod:'X'('X/T')),
+                     ?test(#{t := 'S'}, Mod:'X'('S'))]
             end)}.
 
 pattern_variable2_test_() ->
@@ -299,9 +262,8 @@ pattern_variable2_test_() ->
             " | Args/A -> Args/B\n"
             " | (t: Args) -> t",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('X'),
-                    [?test('Args/B', DomainFun('Args/A')),
-                     ?test('Args/C', DomainFun('Args/C'))]
+                    [?test('Args/B', Mod:'X'('Args/A')),
+                     ?test('Args/C', Mod:'X'('Args/C'))]
             end)}.
 
 pattern_dict_test_() ->
@@ -310,14 +272,13 @@ pattern_dict_test_() ->
             "type Test\n"
             " | {a, b} -> (a | b)",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('Test'),
                     Input1 = #{a => 'Args/A', b => 'Args/B'},
-                    Actual1 = DomainFun(Input1),
+                    Actual1 = Mod:'Test'(Input1),
                     Expected1 = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
 
                     % Test behavior with unused key
                     Input2 = #{a => 'Args/A', b => 'Args/B', c => 'Args/C'},
-                    Actual2 = DomainFun(Input2),
+                    Actual2 = Mod:'Test'(Input2),
                     Expected2 = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
                     [?test(none, domain:diff(Expected1, Actual1)),
                      ?test(none, domain:diff(Expected2, Actual2))]
@@ -333,9 +294,8 @@ pattern_dict_pair_test_() ->
             "type Test\n"
             " | {a: s, b} -> (s | b)",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('Test'),
                     Input = #{a => 'Args/A', b => 'Args/B', c => 'Args/C'},
-                    Actual = DomainFun(Input),
+                    Actual = Mod:'Test'(Input),
                     Expected = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
                     [?test(none, domain:diff(Expected, Actual))]
             end)}.
@@ -347,17 +307,16 @@ pattern_dict_dict_test_() ->
             " | {a, b: Args/C} -> a\n"
             " | {a: {a}, b} -> (a | b)",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('Test'),
                     Input1 = #{a => #{a => 'Args/A'}, 
                                         b => 'Args/B', 
                                         c => 'Args/C'},
-                    Actual1 = DomainFun(Input1),
+                    Actual1 = Mod:'Test'(Input1),
                     Expected1 = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
 
                     Input2 = #{a => 'Args/A', 
                                         b => 'Args/C'},
                     [?test(none, domain:diff(Expected1, Actual1)),
-                     ?test('Args/A', DomainFun(Input2))]
+                     ?test('Args/A', Mod:'Test'(Input2))]
             end)}.
 
 pattern_dict_sum_test_() ->
@@ -369,17 +328,16 @@ pattern_dict_sum_test_() ->
             " | {a, b: (Args/A | Args/B)} -> a\n"
             " | (t: {a, b: Args}) -> t",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('Test'),
                     Input1 = #{a => 'Args/A', 
                                         b => 'Args/B'},
-                    Actual1 = DomainFun(Input1),
+                    Actual1 = Mod:'Test'(Input1),
                     Expected1 = 'Args/A',
 
                     Input2 = #{a => 'Args/A', 
                                         b => 'Args/C'},
                     Expected2 = Input2,%{sum, ordsets:from_list(['Args/A', 'Args/C'])},
                     [?test(none, domain:diff(Expected1, Actual1)),
-                     ?test(none, domain:diff(Expected2, DomainFun(Input2)))]
+                     ?test(none, domain:diff(Expected2, Mod:'Test'(Input2)))]
             end)}.
 
 pattern_tagged_test_() ->
@@ -388,8 +346,7 @@ pattern_tagged_test_() ->
             "type Test\n"
             " | (Args/T: {a: s, b}) -> (s | b)",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('Test'),
-                    Actual = DomainFun(Mod:domain('Args')),
+                    Actual = Mod:'Test'('Args'),
                     Expected = {sum, ordsets:from_list(['Args/A', 'Args/B'])},
                     [?test(none, domain:diff(Expected, Actual))]
             end)}.
@@ -399,9 +356,7 @@ pattern_no_matching_test_() ->
      ?setup("type Test\n"
             " | T -> (T | S)",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('Test'),
-                    Actual = DomainFun('Test/S'),
-                    [?testError({no_matching_pattern, ['Test/S']}, Actual)]
+                    [?testError({domains_do_not_intersect, 'Test/T', 'Test/S'}, Mod:'Test'('Test/S'))]
             end)}.
 
 pattern_sum_test_() ->
@@ -411,11 +366,10 @@ pattern_sum_test_() ->
             " | Args -> Matched\n"
             " | _ -> Unmatched",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('Test'),
-                    [?test('Test/Matched', DomainFun('Args/A')),
-                     ?test('Test/Matched', DomainFun('Args/B')),
-                     ?test('Test/Matched', DomainFun('Args/C')),
-                     ?test('Test/Unmatched', DomainFun('Test/Matched'))]
+                    [?test('Test/Matched', Mod:'Test'('Args/A')),
+                     ?test('Test/Matched', Mod:'Test'('Args/B')),
+                     ?test('Test/Matched', Mod:'Test'('Args/C')),
+                     ?test('Test/Unmatched', Mod:'Test'('Test/Matched'))]
             end)}.
 
 pattern_sum_tagged_test_() ->
@@ -426,11 +380,10 @@ pattern_sum_tagged_test_() ->
             " | (Args/A: {c}) -> c\n"
             " | _ -> Unmatched",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('Test'),
-                    [?test('Args/B', DomainFun({tagged, 'Args/A', #{b => 'Args/B'}})),
-                     ?test('Args/C', DomainFun({tagged, 'Args/A', #{c => 'Args/C'}})),
-                     ?test('Test/Unmatched', DomainFun({tagged, 'Args/A', #{a => 'Args/A'}})),
-                     ?test('Test/Unmatched', DomainFun({tagged, 'Args/B', #{b => 'Args/B'}}))]
+                    [?test('Args/B', Mod:'Test'({tagged, 'Args/A', #{b => 'Args/B'}})),
+                     ?test('Args/C', Mod:'Test'({tagged, 'Args/A', #{c => 'Args/C'}})),
+                     ?test('Test/Unmatched', Mod:'Test'({tagged, 'Args/A', #{a => 'Args/A'}})),
+                     ?test('Test/Unmatched', Mod:'Test'({tagged, 'Args/B', #{b => 'Args/B'}}))]
             end)}.
 
 pattern_product_sum_test_() ->
@@ -441,12 +394,11 @@ pattern_product_sum_test_() ->
             " | P -> Matched\n"
             " | _ -> Unmatched",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('Test'),
-                    [?test('Test/Matched', DomainFun(#{x => 'X/Y', xx => 'X/Y'})),
-                     ?test('Test/Matched', DomainFun(#{x => 'X/Z', xx => 'X/Y'})),
-                     ?test('Test/Matched', DomainFun(#{x => 'X/Y', xx => 'X/Z'})),
-                     ?test('Test/Matched', DomainFun(#{x => 'X/Z', xx => 'X/Z'})),
-                     ?test('Test/Unmatched', DomainFun('Test/Matched'))]
+                    [?test('Test/Matched', Mod:'Test'(#{x => 'X/Y', xx => 'X/Y'})),
+                     ?test('Test/Matched', Mod:'Test'(#{x => 'X/Z', xx => 'X/Y'})),
+                     ?test('Test/Matched', Mod:'Test'(#{x => 'X/Y', xx => 'X/Z'})),
+                     ?test('Test/Matched', Mod:'Test'(#{x => 'X/Z', xx => 'X/Z'})),
+                     ?test('Test/Unmatched', Mod:'Test'('Test/Matched'))]
             end)}.
 
 pattern_tagged_pair_test_() ->
@@ -457,9 +409,8 @@ pattern_tagged_pair_test_() ->
             " | (a: Args/A) -> a\n"
             " | (a: Args/B) -> Args/C",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('Test'),
-                    [?test('Args/A', DomainFun('Args/A')),
-                     ?test('Args/C', DomainFun('Args/B'))]
+                    [?test('Args/A', Mod:'Test'('Args/A')),
+                     ?test('Args/C', Mod:'Test'('Args/B'))]
             end)}.
 
 pattern_tagged_sum_list_test_() ->
@@ -470,9 +421,8 @@ pattern_tagged_sum_list_test_() ->
             " | (a: (Args/A | Args/B)) -> a\n"
             " | (a: Args/C) -> Args/B",
             fun({ok, [Mod | _]}) ->
-                    DomainFun = Mod:domain('Test'),
-                    [?test('Args/A', DomainFun('Args/A')),
-                     ?test('Args/B', DomainFun('Args/C'))]
+                    [?test('Args/A', Mod:'Test'('Args/A')),
+                     ?test('Args/B', Mod:'Test'('Args/C'))]
             end)}.
 
 % Disabling: I'm not sure I see a need to support subtype application
@@ -484,7 +434,7 @@ tagged_pair_in_pattern_test_() ->
             fun({ok, [Mod | _]}) ->
                     Expected = {tagged, 'Blip/Blop',
                                 #{key => 'Test/T'}},
-                    [?test(none, domain:diff(Expected, Mod:domain('Test')))]
+                    [?test(none, domain:diff(Expected, Mod:'Test'()))]
             end)}.
 
 module_type_test_() ->
@@ -519,12 +469,12 @@ unused_type_parameter_test_() ->
 type_redefinition_test_() ->
     {"When we redefine one type as another type, the new type returns the function domain: "
      "`F(args)` where `F(args)` is the function of the original type", 
-     ?setup("module test { RedefOption }\n"
-            "type Option a -> (a | None)\n"
-            "type RedefOption -> Option",
+     ?setup("module test { Test }
+            type Option a -> (a | None)
+            type RedefOption -> Option
+            type Test -> RedefOption(T)",
             fun({ok, [Mod | _]}) ->
-                    RedefOption = Mod:'RedefOption'(),
-                    [?test('Option/None', RedefOption('Option/None'))]
+                    [?test({sum, ['Option/None', 'Test/T']}, Mod:'Test'())]
             end)}.
 
 type_redefinition_args_test_() ->
@@ -567,11 +517,14 @@ qualified_symbol_pattern_sum_test_() ->
 
 qualified_symbol_undefined_arity_pattern_test_() ->
     {"type constructors that take one or more arguments can't be used as patterns on their own",
-     ?setup("type T\n"
-            " | Option -> Falsy\n"
-            " | _ -> Truthy",
+     ?setup("module test { T }
+             type T
+              | Option -> Falsy
+              | Truthy -> Truthy",
             #{import_kind_libraries => true},
-            fun(Err) -> [?testError({undefined_symbol_in_pattern, 'Option'}, Err)] end)}.
+            fun({ok, _}) ->
+                    [?testError({wrong_arity, 'kind/prelude', 'Option', 0, 1}, test_domain:'T'('T/Falsy'))]
+            end)}.
 
 call_qualified_symbol_with_args_test_() ->
     {"A qualified type can be evaluated alone and as part of a type
@@ -613,12 +566,13 @@ pattern_type_application_test_() ->
 
 pattern_local_application_test_() ->
     {"Apply a local type constructor in a pattern should pattern match against the result",
-     ?setup("type F a -> a\n"
-            "type Test\n"
-            "  | True.F -> True",
+     ?setup("module test { Test }
+             type F a -> a
+             type Test
+               | True.F -> True",
             #{import_kind_libraries => true},
-            fun(Err) ->
-                    [?testError({local_type_in_pattern_application, 'F'}, Err)]
+            fun({ok, [Mod | _]}) ->
+                    [?test('Boolean/True', test_domain:'Test'('Boolean/True'))]
             end)}.
 
 recursive_wrong_number_of_arguments_1_test_() ->
@@ -645,6 +599,30 @@ param_pattern_test_() ->
              type T {key1: a, key2: b} -> (a | b)",
             fun({ok, _}) ->
                     [?test({sum, [1, 2]}, test:'T'(#{key1 => 1, key2 => 2}))]
+            end)}.
+
+top_level_function_call_in_type_test_() ->
+    {"A variable referencing a top-level function should not be treated as a free variable",
+     ?setup("module test { T}
+             def t -> 'literal'
+             type T -> t",
+            fun({ok, _}) ->
+                    [?test('literal', test:'T'())]
+            end)}.
+
+
+fake_pair_test_() ->
+    {"It should be possible to construct the tagged type using a type function",
+     ?setup("module test { main }
+             import symbol/{tag, ctx}
+             import erlang/{list_to_tuple: tuple}
+
+             macro :- t1 t2 -> ['tagged', ctx(t1), [tag(t1)], t2].tuple
+             type T -> Tag :- {key1: T1, key2: T2}
+
+             def main -> T",
+            fun({ok, _}) ->
+                    [?test({tagged, 'T/Tag', #{key1 := 'T/T1', key2 := 'T/T2'}}, test:main())]
             end)}.
 
 %multiple_tagged_pair_in_pattern_test_() ->

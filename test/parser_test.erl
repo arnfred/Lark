@@ -17,6 +17,17 @@ undefined_local_type_test_() ->
     "import Blup/Blah",
     ?testError({undefined_local_type, 'Blup', 'Blah', ['Blup']}, parser:parse([{text, Module}])).
 
+nested_local_type_test_() ->
+    Module =
+    "type Blup -> (Blip | Blap)
+     import Blup/_
+     type Flup -> (Flip | Blap)
+     def main -> Flup/Blap",
+    ?test({ok, [{ast, _, _, _,
+                 #{main := {def, _, 'main',
+                            {type, _, 'Blap', ['Blup', 'Blap']}}}}]},
+          parser:parse([{text, Module}], #{import_kind_libraries => false})).
+
 
 local_type_alias_test_() ->
     Module = 
@@ -139,6 +150,17 @@ import_already_defined_test_() ->
     ?testError({import_conflicts_with_local_def, 'identity', 'blip/identity'}, parser:parse([{text, Module2}, {text, Module1}])).
 
 import_type_already_defined_test_() ->
+    Module1 = 
+    "module blip {\n"
+    "  T\n"
+    "}\n"
+    "type T -> (A | B)\n",
+    Module2 =
+    "import blip/T\n"
+    "type T -> (Q | R)",
+    ?testError({import_conflicts_with_local_def, 'T', 'blip/T'}, parser:parse([{text, Module2}, {text, Module1}])).
+
+wildcard_import_type_already_defined_test_() ->
     Module1 = 
     "module blip {\n"
     "  T\n"

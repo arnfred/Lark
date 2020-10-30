@@ -34,6 +34,9 @@ gen_expr(expr, _, {list, _, Elements}) ->
 % the pair of `k: a` in the form {k: a, ...}
 gen_expr(expr, _, {dict_pair, _, K, V}) -> {ok, cerl:c_map_pair(K, V)};
 
+% the pair of `k: a` outside a dictionary
+gen_expr(expr, _, {pair, _, K, _}) -> {ok, K};
+
 % TODO: What does a dictionary value look like? -- Two approaches:
 % 1. A dictionary is a fixed datatype (like javascript)
 % 2. a dictionary is an interface that different datatypes can implement to inherit the dict syntax
@@ -71,13 +74,9 @@ gen_expr(expr, _, {qualified_application, _, ModulePath, Name, Args}) ->
 % expr of form: T
 gen_expr(expr, Scope, {type, _, _, Path} = Term) ->
     Tag = symbol:tag(Term),
-    DomainForm = cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)]),
-    NewScope = maps:remove(Path, Scope), % Avoid recursion for atomic terms
-    case maps:get(Path, Scope, undefined) of
-        undefined               -> {ok, Tag, cerl:c_atom(Tag)};
-        {type_def, _, _, _, _}  -> {ok, DomainForm};
-        {tagged, _, Path, _}    -> {ok, cerl:c_fname(symbol:tag(Path), 0)};
-        T                       -> traverse_term(NewScope, T, Tag)
+    case maps:get(Tag, Scope, undefined) of
+        undefined               -> {ok, cerl:c_atom(Tag)};
+        T                       -> {ok, T}
     end;
 
 % expr of form: kind/prelude/Boolean or kind/prelude/match
@@ -110,13 +109,10 @@ gen_expr(expr, _, {clause, _, Patterns, Expr}) ->
 
 % expr of form `(<Pattern> -> <Expr>)` which encodes an anonymous function
 gen_expr(expr, _, {'fun', Ctx, ClauseList}) ->
-    Clauses = lists:flatten(ClauseList),
-    case Clauses of
-        []              -> error:format({empty_pattern}, {expr_gen, Ctx});
-        [Clause | _]    -> Args = [cerl:c_var(S) || _ <- lists:seq(1, cerl:clause_arity(Clause)),
-                                                     S <- [symbol:id('')]],
-                           {ok, cerl:c_fun(Args, cerl:c_case(cerl:c_values(Args), Clauses ++ [catchall(Args)]))}
-    end;
+    ([Clause | _] = Clauses) = lists:flatten(ClauseList),
+    Args = [cerl:c_var(S) || _ <- lists:seq(1, cerl:clause_arity(Clause)),
+                             S <- [symbol:id('')]],
+    {ok, cerl:c_fun(Args, cerl:c_case(cerl:c_values(Args), Clauses ++ [catchall(Args, Ctx)]))};
 
 % expr of form `(<Pattern> = Expr, Other expression)`
 gen_expr(expr, _, {'let', _, Patterns, Expr, Acc}) ->
@@ -128,14 +124,14 @@ gen_expr(expr, _, {seq, _, Expr, Acc}) -> {ok, cerl:c_seq(Expr, Acc)};
 % expr of form: `"test string"` or `1.32`
 gen_expr(expr, _, {value, _, _, Val}) -> {ok, cerl:abstract(Val)}.
 
-catchall(Args) ->
+catchall(Args, Ctx) ->
     Error = cerl:c_tuple([cerl:c_atom(error),
                           cerl:make_list(
                             [cerl:c_tuple(
                                [cerl:c_tuple(
                                   [cerl:c_atom(no_matching_pattern),
                                    cerl:make_list(Args)]),
-                                cerl:c_tuple([cerl:c_atom(no_context)])])])]),
+                                cerl:c_tuple([cerl:c_atom(expr_gen), cerl:abstract(Ctx)])])])]),
     cerl:c_clause([cerl:c_var(symbol:id('_')) || _ <- lists:seq(1, length(Args))], Error).
 
 call_type_domain(ExprForm, ArgForms) -> cerl:c_apply(ExprForm, ArgForms).

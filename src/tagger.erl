@@ -38,9 +38,30 @@ merge_scopes(LocalScope, ImportScope) ->
                                      {tagger, Import})
                 end
         end,
+
+    % If a local type has been imported, we want the qualified name to refer to the import,
+    % rather than the local name. For example:
+    %
+    % ```
+    % type A -> B | C
+    % import A/_
+    % type T -> R | B
+    % def f -> T/B
+    % ```
+    %
+    % Here we want `f` to return `A/B` instead of `T/B`, because in the
+    % definition of `T`, the type `B` refers to the imported type and not a
+    % fresh type
+    R = fun(V, ImportScope) -> Name = symbol:name(V),
+                               case maps:is_key(Name, ImportScope) of
+                                   true     -> replace(ImportScope, Name, V);
+                                   false    -> V
+                               end end,
+    Scope = maps:from_list([{K, R(V, ImportScope)} || {K, V} <- maps:to_list(LocalScope)]),
+
     case error:collect([F(Alias, Term) || {Alias, Term} <- maps:to_list(ImportScope)]) of
         {error, Errs}   -> {error, Errs};
-        {ok, Imports}   -> {ok, maps:merge(LocalScope, maps:from_list(Imports))}
+        {ok, Imports}   -> {ok, maps:merge(Scope, maps:from_list(Imports))}
     end.
 
 % Step 1: Tag all macros
@@ -145,9 +166,9 @@ tag_symbols_and_types(Type, Scope, Term) -> tag_types(Type, Scope, Term).
 path({symbol, _, _, S} = Term) -> lists:reverse([S | ast:get_tag(path, Term)]).
 
 
-replace(Scope, Key, {symbol, Ctx, _, _})            -> 
+replace(Scope, Key, {_, Ctx, _, _})            -> 
     NewCtx = maps:merge(element(2, maps:get(Key, Scope)), Ctx),
     setelement(2, maps:get(Key, Scope), NewCtx);
-replace(Scope, Key, {qualified_symbol, Ctx, _})     -> 
+replace(Scope, Key, {_, Ctx, _})     -> 
     NewCtx = maps:merge(element(2, maps:get(Key, Scope)), Ctx),
     setelement(2, maps:get(Key, Scope), NewCtx).

@@ -6,24 +6,31 @@
 % TODO: test with tagged import and type_def with no arguments
 % TODO: test with recursive type
 gen_pattern(pattern, Scope, {qualified_symbol, Ctx, ModulePath, Name}) ->
-    ModuleName = module:beam_name(ModulePath),
-    case erlang:function_exported(ModuleName, Name, 0) of
-        false   -> error:format({undefined_symbol_in_pattern, Name}, {pattern_gen, Ctx});
-        true    -> Domain = erlang:apply(ModuleName, Name, []),
-                   traverse_domain(Scope, Domain, Ctx)
+    case typecheck:qualified_apply(lenient, Scope, [], Ctx, ModulePath, Name, []) of
+        {error, Errs}       -> {error, Errs};
+        {ok, {_, Domain}}   -> traverse_domain(Scope, Domain, Ctx)
+    end;
+
+% Pattern of shape: module/T(a, b)
+gen_pattern(pattern, Scope, {qualified_application, Ctx, ModulePath, Name, Args}) ->
+    case error:collect([to_domain(Scope, A) || A <- Args]) of
+        {error, Errs}       -> {error, Errs};
+        {ok, ArgDomains}    -> 
+            case typecheck:qualified_apply(lenient, Scope, [], Ctx, ModulePath, Name, ArgDomains) of
+                {error, Errs}       -> {error, Errs};
+                {ok, {_, Domain}}   -> traverse_domain(Scope, Domain, Ctx)
+            end
     end;
 
 % Pattern of shape: a
 gen_pattern(pattern, _, {variable, _, _, _} = Term) -> {ok, [cerl:c_var(symbol:tag(Term))]};
 
 % Pattern of shape: T
-gen_pattern(pattern, Scope, {type, _, _, Path} = Term) ->
+gen_pattern(pattern, Scope, {type, Ctx, _, Path} = Term) ->
     Tag = symbol:tag(Term),
-    NewEnv = maps:remove(Path, Scope), % Avoid recursion for atomic terms
-    case maps:get(Path, Scope, undefined) of
+    case maps:get(Tag, Scope, undefined) of
         undefined       -> {ok, [cerl:c_atom(Tag)]};
-        {type, _, _, _} -> {ok, [cerl:c_atom(Tag)]};
-        T               -> traverse_term(NewEnv, T)
+        Form            -> unpack_type(Tag, Form, Scope, Ctx)
     end;
 
 % Key like 'k' in '{k: a}'
@@ -58,20 +65,6 @@ gen_pattern(pattern, _, {list, _, ElemList}) ->
     Ls = [cerl:make_list(Elems) || Elems <- utils:combinations(ElemList)],
     Ts = [cerl:c_tuple(Elems) || Elems <- utils:combinations(ElemList)],
     {ok, Ls ++ Ts};
-
-% Pattern of shape: module/T(a, b)
-gen_pattern(pattern, Scope, {qualified_application, Ctx, ModulePath, Name, Args}) ->
-    case error:collect([to_domain(Scope, A) || A <- Args]) of
-        {error, Errs}       -> {error, Errs};
-        {ok, ArgDomains}    -> 
-            ModuleName = module:beam_name(ModulePath),
-            case erlang:function_exported(ModuleName, Name, length(Args)) of
-                false   -> error:format({undefined_type_in_pattern, ModulePath, {Name, 2}},
-                                        {pattern_gen, Ctx});
-                true    -> ResDomain = erlang:apply(ModuleName, Name, ArgDomains),
-                           traverse_domain(Scope, ResDomain, Ctx)
-            end
-    end;
 
 % Pattern of shape: T where T is recursive
 gen_pattern(pattern, _Scope, {recursive_type, Ctx, Name, _}) ->
@@ -150,3 +143,22 @@ gen_domain(pattern, Scope, {type, _, _, Path} = Term) ->
         {type, _, _, _} -> {ok, [cerl:c_atom(Tag)]};
         T               -> {ok, T}
     end.
+
+unpack_type(Tag, Fun, Scope,Ctx) ->
+    case cerl:is_c_fun(Fun) of
+        false   -> error:format({malformed_type_form, Tag, Fun}, {pattern_gen, Ctx});
+        true    -> Call = cerl:fun_body(Fun),
+                   case cerl:is_c_call(Call) of
+                       false    -> error:format({malformed_type_form, Tag, Fun}, {pattern_gen, Ctx});
+                       true     -> Arity = cerl:call_arity(Call),
+                                   Module = cerl:concrete(cerl:call_module(Call)),
+                                   Name = cerl:concrete(cerl:call_name(Call)),
+                                   case Arity of
+                                       0    -> error:format({malformed_type_form, Tag, Fun}, {pattern_gen, Ctx});
+                                       1    -> traverse_domain(Scope, erlang:apply(Module, Name, [lenient]), Ctx);
+                                       _    -> error:format({local_type_in_pattern_application, Tag}, {pattern_gen, Ctx})
+                                   end
+                   end
+    end.
+
+

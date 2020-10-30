@@ -11,7 +11,8 @@ expand({ast, Ctx, Modules, Imports, Defs} = AST) ->
         0   -> {ok, AST};
         _N  ->
             Module = symbol:id('macros'),
-            MacroAST = {ast, Ctx, [{module, Ctx, [Module], Macros}], Imports, Macros},
+            Exports = maps:from_list([{Name, {export, Ctx, [Name], none}} || Name <- maps:keys(Macros)]),
+            MacroAST = {ast, Ctx, [{module, Ctx, [Module], Exports}], Imports, Macros},
             case kind:type_compile_load(MacroAST, #{}) of
                 {error, Errs}       -> {error, Errs};
                 {ok, LoadedModules} -> 

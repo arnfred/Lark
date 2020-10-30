@@ -133,7 +133,7 @@ union_recur_recur_sum_sum_test_() ->
 union_recur_constant_test_() ->
     R = fun R() -> {sum, ordsets:from_list([a, b, {recur, R}])} end,
     Actual = domain:union({recur, R}, blip),
-    Expected = {sum, ordsets:from_list([blip, a, b, {recur, R}])},
+    Expected = blip,
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 union_recur_recur_sum_sum_sum_test_() ->
@@ -146,21 +146,19 @@ union_recur_recur_sum_sum_sum_test_() ->
     [?_assertEqual(none, domain:diff(Expected(), Actual)),
      ?_assertMatch({sum, [a, b, c, d, {recur, _}]}, Actual)].
 
-union_merge_recur_products_test() ->
+union_merge_recur_products_test_() ->
     P1 = fun P1() -> #{c => 2, b => {recur, P1}} end,
     P2 = fun P2() -> #{c => 2, b => {recur, P2}} end,
     Actual = domain:union(P1(), P2()),
-    io:format("Actual: ~p~n", domain:expand(10, [Actual])),
     Expected = #{c => 2, b => {sum, ordsets:from_list([{recur, P1}, {recur, P2}])}},
-    ?assertEqual(none, domain:diff(Expected, Actual)).
+    ?_assertEqual(none, domain:diff(Expected, Actual)).
 
-union_merge_recur_products_with_single_key_test() ->
+union_merge_recur_products_with_single_key_test_() ->
     P1 = fun P1() -> #{r => {recur, P1}} end,
     P2 = fun P2() -> #{r => {recur, P2}} end,
     Actual = domain:union(P1(), P2()),
-    io:format("Actual: ~p~n", domain:expand(10, [Actual])),
     Expected = #{r => {sum, ordsets:from_list([{recur, P1}, {recur, P2}])}},
-    ?assertEqual(none, domain:diff(Expected, Actual)).
+    ?_assertEqual(none, domain:diff(Expected, Actual)).
 
 list_equal_length_test_() ->
     L1 = [a, b],

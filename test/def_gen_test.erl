@@ -221,29 +221,24 @@ type_parameter_pattern_test_() ->
              
 unexported_type_availability_test_() ->
     {"A type which isn't exported in a module shouldn't be callable from
-      outside the module. All types should be part of the domain function
-      though",
+      outside the module. Same is true for the domain module.",
      ?setup("module test { Exported }\n"
             "type Exported -> True\n"
             "type UnExported -> False",
             fun({ok, _}) ->
                     [?test('Boolean/True', test:'Exported'()),
-                     ?test('Boolean/False', test:domain('UnExported')),
-                     ?test(false, lists:member({'Test', 0}, proplists:get_value(exports, erlang:get_module_info(test))))]
+                     ?test(false, lists:member({'Test', 0}, proplists:get_value(exports, erlang:get_module_info(test)))),
+                     ?test(false, lists:member({'Test', 0}, proplists:get_value(exports, erlang:get_module_info(test_domain))))]
             end)}.
 
 tagged_constructor_test_() ->
     {"To construct tagged values we can call a tagged type constructor",
      ?setup("module test { Test/T, main }
              type Test -> T: ({a: Boolean, b: 4} | {c: Boolean, d: Boolean})
-             def main -> Test/T(False, True)",
+             def main -> Test/T({c: False, d: True})",
             fun({ok, _}) ->
-                    [?test({tagged, 'Test/T', #{a := 'Boolean/True', b := 4}},
-                           test:'T'('Boolean/True')),
-                     ?test({tagged, 'Test/T', #{c := 'Boolean/True', d := 'Boolean/False'}},
-                            test:'T'('Boolean/True', 'Boolean/False')),
-                     ?test({tagged, 'Test/T', #{c := 'Boolean/False', d := 'Boolean/True'}},
-                            test:main())]
+                    [?test({tagged, 'Test/T', #{c := 'Boolean/False', d := 'Boolean/True'}},
+                           test:main())]
             end)}.
 
 assignment_test_() ->

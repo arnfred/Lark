@@ -7,7 +7,7 @@ compact({sum, S}) -> compact_sum({sum, S});
 compact(Map) when is_map(Map) -> compact_product(Map);
 compact({tagged, Tag, Domain}) -> {tagged, Tag, compact(Domain)};
 compact(L) when is_list(L) -> [compact(E) || E <- L];
-compact(F) when is_function(F) -> domain_util:mapfun(fun(D) -> compact(D) end, F);
+compact(F) when is_function(F) -> utils:mapfun(fun(D) -> compact(D) end, F);
 compact({recur, D}) -> {recur, fun() -> compact(D()) end};
 compact(T) -> T.
 
@@ -97,7 +97,7 @@ list_to_sum(Domain) -> Domain.
 % the union of the last key.
 % 
 % The algorihm does this by picking out a pivot: the key with the smallest
-% range of domains. All products are then grouped based on the domain of the
+% number of domains. All products are then grouped based on the domain of the
 % pivot. If the pivot isn't part of a product, it's grouped by the domain
 % `undefined. For each group we drop the pivot key from the product. If there
 % is just one unique key left, we take the union of the rest of the domains.
@@ -144,4 +144,4 @@ compact_lists([]) -> [];
 compact_lists([L]) -> [L];
 compact_lists(Lists) ->
     Grouped = utils:group_by(fun(L) -> length(L) end, Lists),
-    [domain:union(Group) || {Domain, Group} <- Grouped].
+    [domain:union(Group) || {_Domain, Group} <- Grouped].

@@ -1,6 +1,6 @@
 -module(error).
 
--export([collect/1, map/2, map2/3, flatmap/2, flatmap2/3, leftbias/2, format/2, format/1]).
+-export([collect/1, map/2, map2/3, flatmap/2, flatmap2/3, leftbias/2, format/2, format/1, match/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -41,6 +41,9 @@ collect_error([], Ret) -> {error, utils:unique(lists:reverse(lists:flatten(Ret))
 collect_error([{error, Err} | Tail], Ret) -> collect_error(Tail, [Err | Ret]);
 collect_error([{ok, _} | Tail], Ret) -> collect_error(Tail, Ret);
 collect_error([_ | Tail], Ret) -> collect_error(Tail, Ret).
+
+match({error, _}) -> true;
+match(_) -> false.
 
 
 -ifdef(TEST).

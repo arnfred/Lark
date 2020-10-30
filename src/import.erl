@@ -1,5 +1,5 @@
 -module(import).
--export([import/3, import/4]).
+-export([import/3, import/4, is_whitelisted/2]).
 
 import(Import, SourceMap, LocalTypes) -> import(Import, SourceMap, LocalTypes, false).
 import({import, _, ImportPath} = Import, SourceMap, LocalTypes, Sandboxed) ->
@@ -63,12 +63,21 @@ import_module(ImportPath, SourceMap, LocalTypes, ImportTerm, Sandboxed) ->
                      _  -> [T || {symbol, _, _, T} <- Type]
                  end,
 
+    % When importing `module/T`, we import both all type members of `T` (`T/A`,
+    % `T/B`, etc) and also the root type `T` itself
+    RootSymbol = {qualified_symbol, #{import => ImportTerm}, [P || {symbol, _, _, P} <- Module], symbol:tag(ModulePath)},
+    RootType = case Type of
+                   [] -> [];
+                   _ -> [{alias, element(2, ImportTerm), symbol:tag(ModulePath), RootSymbol}]
+               end,
+
+    % We call `import_def` to create aliases for all members of `ModulePath`
     case error:collect(import_def('_', '_', ImportPath, SourceMap, LocalTypes, ImportTerm, Sandboxed)) of
         {error, Errs}   -> {error, Errs};
         {ok, Imports}   -> Aliases = [{alias, Ctx, symbol:tag(ModulePath ++ [Alias]), Term} || 
                                       {alias, Ctx, Alias, Term} <- Imports],
                            Other = [Imp || Imp <- Imports, not(element(1, Imp) =:= alias)],
-                           {ok, Aliases ++ Other}
+                           {ok, RootType ++ Aliases ++ Other}
     end.
 
 import_def(Name, Alias, ImportPath, SourceMap, LocalTypes, Term, Sandboxed) ->
@@ -141,7 +150,7 @@ loaded_module_function(ModulePath, Name, Alias, Term, Sandboxed) ->
     Module = module:beam_name(ModulePath),
     ImportPath = ModulePath ++ [Name],
     ImportName = module:kind_name(ImportPath),
-    Exports = erlang:apply(Module, module_info, [exports]),
+    Exports = erlang:get_module_info(Module, exports),
     TypeAliases = beam_subtypes(ImportPath, Alias, Term, Sandboxed),
     case Sandboxed andalso not(is_whitelisted(Module, Name)) of
         true    -> [error:format({function_not_whitelisted, Module, Name}, {import, Term})];
@@ -153,10 +162,18 @@ loaded_module_function(ModulePath, Name, Alias, Term, Sandboxed) ->
             end
     end.
 
-% To expose the compiler online, I maintain a whitelist of erlang modules that
-% are safe to call. It's not impossible that I've overlooked something, but if
-% you're here looking for a way to compromise this project, then maybe just
-% submit a PR with your findings instead?
+% This is a whitelist of functions without side-effects. It serves two
+% functions:
+%
+% - To expose the compiler online, I need to know what erlang modules are
+%   safe to call
+% - When I try to establish the domain of a function applications of literals,
+%   I check if a function is whitelisted before I call it to make sure to not
+%   make destructive changes while typechecking.
+%
+% It's not impossible that I've overlooked something, but if you're here
+% looking for a way to compromise this project, then maybe just submit a PR
+% with your findings instead?
 is_whitelisted(Module, Name) ->
     % Whitelist is written in the format 'module' => ['exception'] Modules not
     % on the list are not whitelisted. Any members in list of exceptions is not
@@ -183,7 +200,6 @@ is_whitelisted(Module, Name) ->
                   'sets' => [],
                   'sofs' => [],
                   'string' => [],
-                  'timer' => [exit_after, kill_after, apply_after],
                   'unicode' => [],
                   'uri_string' => [],
                   'atomics' => [],

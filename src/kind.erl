@@ -5,29 +5,37 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
-run(Code, Args) -> run(Code, Args, #{sandboxed => true}).
-run(Code, Args, Options) ->
-    case load(Code, Options) of
+run(Sources, Args) -> run(Sources, Args, #{sandboxed => true}).
+run([S | _] = Sources, Args, Options) when is_list(S) ->
+    case load(Sources, Options) of
         {error, Errs}   -> {error, Errs};
         {ok, Mods} -> 
-            case [M || M <- Mods, erlang:function_exported(M, main, length(Args))] of
-                []          -> error:format({no_main_function_for_arity, length(Args)}, {kind});
+            case [M || M <- Mods,
+                       erlang:function_exported(M, main, length(Args)),
+                       string:slice(atom_to_list(M), 0, 5) =:= "main_"] of
+                []          -> 
+                    unload_modules(Mods),
+                    error:format({no_main_function_for_arity, length(Args)}, {kind});
                 [Module]    ->
                     Out = case catch erlang:apply(Module, main, Args) of
                               {'EXIT', Err}     -> error:format({main_throw, Err}, {kind});
                               {error, Errs}     -> {error, Errs};
                               Res               -> {ok, Res}
                           end,
-                    clean(Mods),
+                    unload_modules(Mods),
                     Out;
-               Modules      -> error:format({multiple_main_functions_for_arity, length(Args), Modules}, {kind})
+               Modules      -> 
+                    unload_modules(Mods),
+                    error:format({multiple_main_functions_for_arity, length(Args), Modules}, {kind})
             end
-    end.
+    end;
+run(Code, Args, Options) -> run([Code], Args, Options).
 
 
-load(Code) -> load(Code, #{}).
-load(Code, Options) ->
-    case parser:parse([{text, Code}], Options) of
+
+load(Sources) -> load(Sources, #{}).
+load([C | _] = Sources, Options) when is_list(C) ->
+    case parser:parse([{text, S} || S <- Sources], Options) of
         {error, Errs}   -> {error, Errs};
         {ok, ASTs}     ->
             case error:collect([macros:expand(AST) || AST <- ASTs]) of
@@ -38,14 +46,16 @@ load(Code, Options) ->
                         {ok, Modules}       -> {ok, lists:flatten(Modules)}
                     end
             end
-    end.
+    end;
+load(Code, Options) -> load([Code], Options).
 
 type_compile_load(AST, Options) ->
     case typer:type(AST, Options) of
         {error, Errs}                                   -> {error, Errs};
-        {ok, {TypedAST, TypesEnv, Types, TypeModules}}  ->
-            case def_gen:gen(TypesEnv, Types, TypedAST) of
-                {error, Errs}       -> {error, Errs};
+        {ok, {TypedAST, TypesEnv, TypeModules}}  ->
+            case def_gen:gen(TypesEnv, TypedAST) of
+                {error, Errs}       -> unload_modules(TypeModules),
+                                       {error, Errs};
                 {ok, Forms}         ->
                     case compile(Forms) of
                         {error, Errs}       -> {error, Errs};
@@ -68,7 +78,7 @@ compile_form(Form, Options) ->
     ModuleName = cerl:atom_val(cerl:module_name(Form)),
     case compile:forms(Form, Options) of
         {ok, ModuleName, Bin}   -> {ok, {ModuleName, Bin}};
-        Error                   -> error:format({compile_error, Error}, {kind, ModuleName})
+        Error                   -> error:format({compile_error, Error, ModuleName, Form}, {kind})
     end.
 
 load_binary(ModuleName, Bin) ->
@@ -78,7 +88,7 @@ load_binary(ModuleName, Bin) ->
         {error, Err}            -> error:format({loading_error, Err}, {kind, ModuleName})
     end.
 
-clean(Modules) ->
+unload_modules(Modules) ->
     F = fun(M) -> true = code:soft_purge(M),
                   true = code:delete(M)
         end,
@@ -127,8 +137,10 @@ main_throw_test_() ->
     
 multiple_main_error_test_() ->
     {"When calling kind:run, the code can't contain or export more than one single main function",
-     ?setup("module test { main }\n"
-            "def main -> False",
+     ?setup(["module test1 { main }\n"
+             "def main -> False",
+             "module test1 { main }\n"
+             "def main -> False"],
             [],
             fun(Res) -> [?testError({multiple_main_functions_for_arity, 0, _}, Res)] end)}.
 

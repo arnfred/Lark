@@ -24,19 +24,19 @@ prepare(FileName, Code, Types) ->
     Imports = [I || I = {import, _, _} <- Code],
     Defs = maps:from_list([{Name, T} || T = {Type, _, Name, _} <- Code,
                                         Type == type_def orelse Type == def orelse Type == macro]),
-    case error:collect([handle_modules(M, Defs, Types) || M <- Modules]) of
+    case error:collect([parse_modules(M, Defs, Types) || M <- Modules]) of
         {error, Errs}   -> {error, Errs};
         {ok, Mods}      -> {ok, {FileName, {ast, #{filename => FileName}, Mods, Imports, Defs}}}
     end.
 
-handle_modules({module, ModuleCtx, Path, Exports}, Defs, Types) ->
+parse_modules({module, ModuleCtx, Path, Exports}, Defs, Types) ->
     F = fun
             % blah: T
             Make_export({pair, Ctx, K, V}) ->
                 error:map(Make_export(K), fun({Export, _, Key, none}) ->
                                                   {Export, Ctx, Key, V} end);
             % Boolean/True
-            Make_export({qualified_symbol, Ctx, Symbols} = Elem) ->
+            Make_export({qualified_symbol, Ctx, Symbols} = Elem) when (length(Symbols) == 2) ->
                 [P, T] = [S || {symbol, _, _, S} <- Symbols],
                 case maps:is_key(P, Defs) andalso 
                      maps:is_key(P, Types) andalso
@@ -47,6 +47,11 @@ handle_modules({module, ModuleCtx, Path, Exports}, Defs, Types) ->
                                  true   -> error:format({export_already_defined, symbol:tag([P, T]), T}, {module, Elem})
                              end
                 end;
+            % Unsupported qualified symbol
+            Make_export({qualified_symbol, Ctx, Symbols} = Elem) ->
+                error:format({export_unsupported, kind_name([S || {_, _, _, S} <- Symbols])},
+                             {module, Elem});
+
             % blah
             Make_export({symbol, Ctx, _, Val} = Elem) ->
                 case maps:is_key(symbol:tag(Elem), Defs) of
@@ -60,7 +65,6 @@ handle_modules({module, ModuleCtx, Path, Exports}, Defs, Types) ->
         {ok, ExportTerms}   -> ExportMap = maps:from_list(ExportTerms),
                                {ok, {module, ModuleCtx, Name, ExportMap}}
     end.
-
 
 beam_name(Path) ->
     PathString = [atom_to_list(A) || A <- lists:join('_', Path)],

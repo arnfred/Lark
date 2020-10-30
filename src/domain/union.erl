@@ -4,7 +4,8 @@
 union(Ds) when is_list(Ds) -> lists:foldl(fun(D1, D2) -> union(D1, D2) end, none, Ds).
 
 union({recur, S}, {recur, T}) -> {recur, fun() -> union(S(), T()) end};
-union({recur, S}, D) -> {recur, fun() -> union(S(), D) end};
+union({recur, S}, none) -> {recur, S};
+union({recur, S}, D) -> D;
 union(D, {recur, S}) -> union({recur, S}, D);
 
 union(D, D) -> D;
@@ -24,8 +25,8 @@ union(D1, D2) when is_map(D1), is_map(D2) ->
 union(L1, L2) when is_list(L1) andalso is_list(L2) andalso length(L1) =:= length(L2) -> 
     [union(E1, E2) || {E1, E2} <- lists:zip(L1, L2)];
 union(F1, F2) when is_function(F1), is_function(F2) -> 
-    case {domain_util:get_arity(F1), domain_util:get_arity(F2)} of
-        {N, N} -> domain_util:mapfun(fun(Res1, Res2) -> union(Res1, Res2) end, F1, F2);
+    case {utils:get_arity(F1), utils:get_arity(F2)} of
+        {N, N} -> utils:mapfun(fun(Res1, Res2) -> domain:union(Res1, Res2) end, F1, F2);
         _ -> {sum, ordsets:from_list([F1, F2])}
     end;
 union(D1, D2) -> {sum, ordsets:from_list([D1, D2])}.

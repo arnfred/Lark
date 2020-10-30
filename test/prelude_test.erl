@@ -26,6 +26,20 @@ compare_test_() ->
                      ?test('Compare/EQ', test:main([1, 2], [1, 2]))]
             end)}.
 
+quicksort_test_() ->
+    {"basic implementation of quicksort",
+     ?setup("module test { main }
+             def quicksort
+               | []          -> []
+               | [p :: ns]   -> (val lesser = ns.filter(n -> n < p)
+                                 val greater = ns.filter(n -> n >= p)
+                                 lesser.quicksort ++ [p] ++ greater.quicksort)
+
+             def main n -> [6,4,3,1,n,5,2].quicksort",
+            fun({ok, _}) ->
+                    [?test([1,2,3,4,5,6,7], test:main(7))]
+            end)}.
+
 tagged_test_() ->
     {"get inner value from tagged function",
      ?setup("module test { Test, main }\n"

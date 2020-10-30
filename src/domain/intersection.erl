@@ -16,12 +16,14 @@ intersection(_, {error, _} = E) -> E;
 
 intersection(any, D) -> D;
 intersection(D, any) -> D;
+intersection('Domain/Any', D) -> D;
+intersection(D, 'Domain/Any') -> D;
 intersection(none, _) -> none;
 intersection(_, none) -> none;
 
 intersection(F1, F2) when is_function(F1), is_function(F2) -> 
-    case {domain_util:get_arity(F1), domain_util:get_arity(F2)} of
-        {N, N} -> domain_util:mapfun(fun(Res1, Res2) -> intersection(Res1, Res2) end, F1, F2);
+    case {utils:get_arity(F1), utils:get_arity(F2)} of
+        {N, N} -> utils:mapfun(fun(Res1, Res2) -> domain:intersection(Res1, Res2) end, F1, F2);
         _ -> none
     end;
 
@@ -32,7 +34,7 @@ intersection({sum, D1}, D) ->
 intersection(D, {sum, D1}) -> intersection({sum, D1}, D);
 
 intersection(L1, L2) when is_list(L1) andalso is_list(L2) andalso length(L1) =:= length(L2) ->
-    [intersection(E1, E2) || {E1, E2} <- lists:zip(L1, L2)];
+    propagate_none([intersection(E1, E2) || {E1, E2} <- lists:zip(L1, L2)]);
 
 intersection({tagged, Tag, D1}, {tagged, Tag, D2}) -> 
     propagate_none({tagged, Tag, intersection(D1, D2)});
@@ -44,6 +46,11 @@ propagate_none(Map) when is_map(Map) ->
     case lists:member(none, maps:values(Map)) of
         true -> none;
         false -> Map
+    end;
+propagate_none(List) when is_list(List) -> 
+    case lists:member(none, List) of
+        true -> none;
+        false -> List
     end;
 propagate_none({tagged, T, Map}) when is_map(Map) -> 
     case lists:member(none, maps:values(Map)) of
