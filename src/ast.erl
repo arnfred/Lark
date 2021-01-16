@@ -134,23 +134,23 @@ step(Meta, expr, Scope, {match, Ctx, Expr, Clauses}) when is_list(Clauses) ->
                        {merge([ExprEnv | ClauseEnvs]), {match, Ctx, TExpr, TClauses}} end);
 
 step(Meta, Type, Scope, {application, Ctx, Expr, Args}) ->
-    error:map2(map(Meta, Type, Scope, Args),
+    error:map2(map(Meta, expr, Scope, Args),
                climb(Meta, Type, Scope, Expr),
                fun({ArgsEnvs, TArgs}, {ExprEnv, TExpr}) -> 
                        {merge([ExprEnv | ArgsEnvs]), {application, Ctx, TExpr, TArgs}} end);
 
 step(Meta, Type, Scope, {qualified_application, Ctx, ModulePath, Name, Args}) ->
-    error:map(map(Meta, Type, Scope, Args),
+    error:map(map(Meta, expr, Scope, Args),
               fun({ArgsEnvs, TArgs}) -> 
                       {merge(ArgsEnvs), {qualified_application, Ctx, ModulePath, Name, TArgs}} end);
 
 step(Meta, Type, Scope, {recursive_type_application, Ctx, Tag, Args}) ->
-    error:map(map(Meta, Type, Scope, Args),
+    error:map(map(Meta, expr, Scope, Args),
 	      fun({ArgsEnvs, TArgs}) -> 
                        {merge(ArgsEnvs), {recursive_type_application, Ctx, Tag, TArgs}} end);
 
 step(Meta, Type, Scope, {macro_application, Ctx, Name, Args}) ->
-    error:map(map(Meta, Type, Scope, Args),
+    error:map(map(Meta, expr, Scope, Args),
               fun({ArgsEnvs, TArgs}) -> 
                       {merge(ArgsEnvs), {macro_application, Ctx, Name, TArgs}} end);
 

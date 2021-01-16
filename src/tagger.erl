@@ -139,11 +139,7 @@ tag_symbols(Type, Scope, {symbol, Ctx, variable, S} = Term) ->
     case {Type, maps:is_key(S, Scope)} of
         {expr, false}    -> error:format({undefined_variable, S}, {tagger, Type, Term});
         {expr, true}     -> {ok, replace(Scope, S, Term)};
-        {pattern, false} -> {ok, S, {variable, Ctx, S, symbol:id(path(Term))}};
-        {pattern, true}  -> case atom_to_list(S) of
-                                "_" -> {ok, S, {variable, Ctx, S, symbol:id(path(Term))}};
-                                _   -> error:format({symbol_in_pattern_already_defined, S}, {tagger, Type, Term})
-                            end
+        {pattern, _}     -> {ok, S, {variable, Ctx, S, symbol:id(path(Term))}}
     end;
 tag_symbols(Type, Scope, {symbol, _, SymbolType, T} = Term) ->
     case maps:is_key(T, Scope) of

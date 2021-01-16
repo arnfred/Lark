@@ -554,7 +554,7 @@ pattern_type_application_test_() ->
     {"A type application inside a pattern is evaluated against the resulting domain",
      ?setup("module test { Test }\n"
             "type Test\n"
-            "  | Boolean.Option  -> True\n"
+            "  | Option(Boolean) -> True\n"
             "  | _               -> False",
             #{import_kind_libraries => true},
             fun({ok, _}) ->
@@ -571,8 +571,21 @@ pattern_local_application_test_() ->
              type Test
                | True.F -> True",
             #{import_kind_libraries => true},
-            fun({ok, [Mod | _]}) ->
+            fun({ok, _}) ->
                     [?test('Boolean/True', test_domain:'Test'('Boolean/True'))]
+            end)}.
+
+pattern_variable_application_test_() ->
+    {"Apply a type constructor to a variable should create a pattern based on this variable",
+     ?setup("module test { Test }
+             type Test a b -> a.match(
+               | Option(b)  -> True
+               | False      -> False)",
+            #{import_kind_libraries => true},
+            fun({ok, _}) ->
+                    [?test('Boolean/True', test_domain:'Test'({sum, ['Boolean/True', 'Option/Nil']}, 'Boolean/True')),
+                     ?test('Boolean/True', test_domain:'Test'({sum, ['Boolean/False', 'Option/Nil']}, 'Boolean/False')),
+                     ?test('Boolean/False', test_domain:'Test'('Boolean/False', 'Boolean/True'))]
             end)}.
 
 recursive_wrong_number_of_arguments_1_test_() ->

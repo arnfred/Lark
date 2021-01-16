@@ -98,15 +98,6 @@ erlang_module_call_no_dot_notation_test_() ->
            "def test a -> erlang/atom_to_list(a)",
            fun({ok, _}) -> ?test("another_atom", kind_test:test('another_atom')) end).
 
-shadow_variable_test_() ->
-    {"Test how we handle variable reuse",
-     ?setup("module kind/test { test }\n"
-            "def test\n"
-            " | a -> a.match(| a -> a)",
-            fun(Error) -> 
-                    [?testError({symbol_in_pattern_already_defined, a}, Error)]
-            end)}.
-
 top_level_type_import_test_() ->
     {"Test if we can use Boolean as defined in the prelude",
      ?setup("module kind/test { Test }\n"

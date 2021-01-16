@@ -23,6 +23,9 @@ Rules.
 \}                          : {token, {curly_close,         #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \[                          : {token, {square_open,         #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \]                          : {token, {square_close,        #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s]+\(                     : {token, {space_open,          #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s]+\{                     : {token, {space_curly_open,    #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s]+\[                     : {token, {space_square_open,   #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \|                          : {token, {pipe,                #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \/                          : {token, {slash,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \:                          : {token, {colon,               #{line => TokenLine}, list_to_atom(TokenChars)}}.

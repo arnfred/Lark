@@ -5,6 +5,7 @@ Terminals
     minus_operator div_operator caret_operator other_operator
     value
     open close square_open square_close curly_open curly_close
+    space_open space_square_open space_curly_open
     apply comma newlines assign
     module_keyword import_keyword
     pipe right_arrow slash colon.
@@ -126,6 +127,7 @@ import -> import_keyword qualified_symbol               : {import, ctx('$1'), un
 % -----------
 
 expression -> open expression close         : '$2'. % ( ... )
+expression -> space_open expression close   : '$2'. % ( ... )
 expression -> application                   : '$1'.  % f(a)
 expression -> fun                           : '$1'.  % | a -> a + 2
 expression -> pair                          : '$1'.  % a: T                
@@ -151,13 +153,14 @@ expressions -> expression separator expressions  : ['$1' | '$3'].
 % * a.f(b -> False)
 
 % Things that can be called before the dot in an application
-noun -> open expression close   : '$2'.
-noun -> application             : '$1'.
-noun -> collection              : '$1'.
-noun -> sequence                : '$1'.
-noun -> symbol                  : '$1'.
-noun -> qualified_symbol        : '$1'.
-noun -> literal                 : '$1'.
+noun -> open expression close       : '$2'.
+noun -> space_open expression close : '$2'.
+noun -> application                 : '$1'.
+noun -> collection                  : '$1'.
+noun -> sequence                    : '$1'.
+noun -> symbol                      : '$1'.
+noun -> qualified_symbol            : '$1'.
+noun -> literal                     : '$1'.
 
 % Things that can be called after the dot in an application
 verb -> open expression close   : '$2'.
@@ -189,19 +192,20 @@ rightbias_infix -> noun rightbias_operator infix    : {application, ctx('$2'), m
 
 pair -> pair_key colon pair_val : {pair, ctx('$1'), '$1', '$3'}.
 
-pair_key -> application             : '$1'.
-pair_key -> collection              : '$1'.
-pair_key -> symbol                  : '$1'.
-pair_key -> qualified_symbol        : '$1'.
-pair_key -> literal                 : '$1'.
+pair_key -> application                 : '$1'.
+pair_key -> collection                  : '$1'.
+pair_key -> symbol                      : '$1'.
+pair_key -> qualified_symbol            : '$1'.
+pair_key -> literal                     : '$1'.
 
-pair_val -> sum_list                : '$1'.
-pair_val -> application             : '$1'.
-pair_val -> collection              : '$1'.
-pair_val -> symbol                  : '$1'.
-pair_val -> qualified_symbol        : '$1'.
-pair_val -> literal                 : '$1'.
-pair_val -> open expression close   : '$2'.
+pair_val -> sum_list                    : '$1'.
+pair_val -> application                 : '$1'.
+pair_val -> collection                  : '$1'.
+pair_val -> symbol                      : '$1'.
+pair_val -> qualified_symbol            : '$1'.
+pair_val -> literal                     : '$1'.
+pair_val -> open expression close       : '$2'.
+pair_val -> space_open expression close : '$2'.
 
 
 
@@ -222,26 +226,27 @@ fun -> pipe clauses                         : {'fun', ctx('$1'), '$2'}.
 % Patterns
 % --------
 
-patterns -> pattern                     : ['$1'].
-patterns -> pattern patterns            : ['$1' | '$2'].
+patterns -> pattern                         : ['$1'].
+patterns -> pattern patterns                : ['$1' | '$2'].
 
-pattern -> open braced_pattern close    : '$2'. % (...)
-pattern -> pattern_application          : '$1'.   % T.A(S)
-pattern -> collection                   : '$1'.   % {a, b: T}
-pattern -> symbol                       : '$1'.   % a
-pattern -> qualified_symbol             : '$1'.   % a/b/T
-pattern -> literal                      : '$1'.   % 2
-pattern -> sum_list                     : '$1'.   % (A | B | C)
+pattern -> symbol                           : '$1'.   % a
+pattern -> pattern_application              : '$1'.   % T.A(S)
+pattern -> space_open braced_pattern close  : '$2'.   % (...)
+pattern -> collection                       : '$1'.   % {a, b: T}
+pattern -> qualified_symbol                 : '$1'.   % a/b/T
+pattern -> literal                          : '$1'.   % 2
+pattern -> sum_list                         : '$1'.   % (A | B | C)
 
 braced_pattern -> pair          : '$1'.
 braced_pattern -> application   : '$1'.
 braced_pattern -> pattern       : '$1'.
 
+pattern_application -> pattern_verb arguments             : {application, ctx('$1'), '$1', '$2'}.
 pattern_application -> noun apply pattern_verb            : {application, ctx('$1'), '$3', ['$1']}.
 pattern_application -> noun apply pattern_verb arguments  : {application, ctx('$1'), '$3', ['$1' | '$4']}.
 
 pattern_verb -> qualified_symbol : '$1'.
-pattern_verb -> type_symbol : make_symbol('$1').
+pattern_verb -> symbol : '$1'.
 
 
 
@@ -260,6 +265,13 @@ dict -> curly_open curly_close                               : {dict, ctx('$1'),
 dict -> curly_open dict_elements curly_close                 : {dict, ctx('$1'), '$2'}.
 dict -> curly_open newlines dict_elements curly_close        : {dict, ctx('$1'), '$3'}.
 
+list -> space_square_open square_close                             : {list, ctx('$1'), []}.
+list -> space_square_open expressions square_close                 : {list, ctx('$1'), '$2'}.
+list -> space_square_open newlines expressions square_close        : {list, ctx('$1'), '$3'}.
+dict -> space_curly_open curly_close                               : {dict, ctx('$1'), []}.
+dict -> space_curly_open dict_elements curly_close                 : {dict, ctx('$1'), '$2'}.
+dict -> space_curly_open newlines dict_elements curly_close        : {dict, ctx('$1'), '$3'}.
+
 dict_element -> pair : '$1'.
 dict_element -> noun : '$1'.
 
@@ -276,9 +288,9 @@ separator -> newlines       : '$1'.
 % Sequence
 % --------
 
-sequence -> open close                      : {tuple, ctx('$1'), []}.
-sequence -> open elements close             : {tuple, ctx('$1'), '$2'}.
-sequence -> open newlines elements close    : {tuple, ctx('$1'), '$3'}.
+sequence -> space_open close                      : {tuple, ctx('$1'), []}.
+sequence -> space_open elements close             : {tuple, ctx('$1'), '$2'}.
+sequence -> space_open newlines elements close    : {tuple, ctx('$1'), '$3'}.
 
 elements -> element separator element   : ['$1', '$3'].
 elements -> element separator elements  : ['$1' | '$3'].
@@ -294,21 +306,24 @@ element -> function             : '$1'.
 % Sum or Expression
 % -----------------
 
-sum_list -> open sum_terms close                    : {sum, ctx('$1'), '$2'}.
-sum_list -> open newlines sum_terms close           : {sum, ctx('$1'), '$3'}.
+sum_list -> space_open sum_terms close                      : {sum, ctx('$1'), '$2'}.
+sum_list -> open sum_terms close                            : {sum, ctx('$1'), '$2'}.
+sum_list -> space_open newlines sum_terms close             : {sum, ctx('$1'), '$3'}.
+sum_list -> open newlines sum_terms close                   : {sum, ctx('$1'), '$3'}.
 
 sum_terms -> sum_elem secondary_separator sum_elem          : ['$1', '$3'].
 sum_terms -> sum_elem secondary_separator sum_elem newlines : ['$1', '$3'].
 sum_terms -> sum_elem secondary_separator sum_terms         : ['$1' | '$3'].
 
-sum_elem -> open expression close   : '$2'.
-sum_elem -> application             : '$1'.
-sum_elem -> pair                    : '$1'.
-sum_elem -> collection              : '$1'.
-sum_elem -> sequence                : '$1'.
-sum_elem -> symbol                  : '$1'.
-sum_elem -> qualified_symbol        : '$1'.
-sum_elem -> literal                 : '$1'.
+sum_elem -> open expression close       : '$2'.
+sum_elem -> space_open expression close : '$2'.
+sum_elem -> application                 : '$1'.
+sum_elem -> pair                        : '$1'.
+sum_elem -> collection                  : '$1'.
+sum_elem -> sequence                    : '$1'.
+sum_elem -> symbol                      : '$1'.
+sum_elem -> qualified_symbol            : '$1'.
+sum_elem -> literal                     : '$1'.
 
 secondary_separator -> newlines : '$1'.
 secondary_separator -> pipe newlines : '$1'.

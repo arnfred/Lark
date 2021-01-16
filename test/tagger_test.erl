@@ -178,11 +178,6 @@ undefined_variable_test_() ->
     Code = "def test -> a",
     ?testError({undefined_variable, a}, get_AST(Code)).
 
-symbol_already_defined_test_() ->
-    Code = "def test\n"
-           " | a -> | a -> a",
-    ?testError({symbol_in_pattern_already_defined, a}, get_AST(Code)).
-
 undefined_qualified_symbol_test_() ->
     Code = "def test -> T/T",
     ?testError({undefined_symbol, 'T/T'}, get_AST(Code)).
