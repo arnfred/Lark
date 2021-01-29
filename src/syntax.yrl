@@ -12,7 +12,7 @@ Terminals
 
 Nonterminals
     literal
-    all statements statement
+    all statements statement module_statements
     assignment function newtype module import newmacro
     implies
     pattern patterns pattern_application pattern_verb braced_pattern
@@ -115,8 +115,13 @@ qualified_symbol -> symbol slash qualified_symbol  : {qualified_symbol, ctx('$1'
 % Module
 % ------
 
-module -> module_keyword var_symbol dict                : {module, ctx('$1'), [make_symbol('$2')], unwrap('$3')}.
-module -> module_keyword qualified_symbol dict          : {module, ctx('$1'), unwrap('$2'), unwrap('$3')}.
+module -> module_keyword symbol dict                                : {module, ctx('$1'), ['$2'], unwrap('$3'), []}.
+module -> module_keyword qualified_symbol dict                      : {module, ctx('$1'), unwrap('$2'), unwrap('$3'), []}.
+module -> module_keyword symbol dict module_statements              : {module, ctx('$1'), ['$2'], unwrap('$3'), '$4'}.
+module -> module_keyword qualified_symbol dict module_statements    : {module, ctx('$1'), unwrap('$2'), unwrap('$3'), '$4'}.
+
+module_statements -> space_open newlines statements close     : '$3'.
+module_statements -> space_open          statements close     : '$2'.
 
 import -> import_keyword symbol                         : {import, ctx('$1'), ['$2']}.
 import -> import_keyword qualified_symbol               : {import, ctx('$1'), unwrap('$2')}.

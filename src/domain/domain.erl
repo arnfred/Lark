@@ -68,6 +68,7 @@ is_literal(TypesEnv, {pair, _, _, Val})         -> is_literal(TypesEnv, Val);
 is_literal(TypesEnv, {dict_pair, _, _, Val})    -> is_literal(TypesEnv, Val);
 is_literal(TypesEnv, {tagged, _, _, Val})       -> is_literal(TypesEnv, Val);
 is_literal(TypesEnv, {type, _, _, _} = T)       -> not(maps:is_key(symbol:tag(T), TypesEnv));
+is_literal(TypesEnv, {symbol, _, _, _} = T)     -> not(maps:is_key(symbol:tag(T), TypesEnv));
 is_literal(TypesEnv, {qualified_symbol, Ctx, ModulePath, Name}) -> 
     case module:kind_name(ModulePath) of
         'kind/domain/Domain' -> false;

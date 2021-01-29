@@ -20,7 +20,7 @@ tag({tagged, _, Symbols, _}) -> tag(Symbols);
 tag({symbol, _, _, S}) -> S;
 tag({variable, _, _, Tag}) -> Tag;
 tag({key, _, K}) -> K;
-tag(Term) -> list_to_atom("expr" ++ integer_to_list(erlang:phash2(Term))).
+tag(Term) -> list_to_atom("expr_" ++ integer_to_list(erlang:phash2(Term))).
 
 ctx(Term) -> element(2, Term).
 

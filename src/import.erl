@@ -18,7 +18,8 @@ import({import, _, ImportPath} = Import, SourceMap, LocalTypes, Sandboxed) ->
         %                                  {kind/prelude/True, kind/prelude/True},
         %                                  ...]
         % import test/_                -> [{Test, test/Test},
-        %                                  {blah, test/blah}]
+        %                                  {blah, test/blah}
+        %                                  ...]
         [{symbol, _, _, Name} | T]     ->
             ModulePath = [P || {symbol, _, _, P} <- ImportPath],
             ModuleName = module:beam_name(ModulePath),

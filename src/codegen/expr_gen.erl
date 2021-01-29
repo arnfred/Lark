@@ -9,7 +9,13 @@ gen_expr(expr, _, {def, _, Name, Expr}) ->
                    {ok, Name, {FName, cerl:c_fun([], Expr)}}
     end;
 
-gen_expr(expr, _, {type_def, _, Name, Expr}) -> {ok, Name, Expr};
+gen_expr(expr, _, {type_def, _, Name, Expr}) ->
+    case cerl:is_c_fun(Expr) of
+        true    -> FName = cerl:c_fname(Name, cerl:fun_arity(Expr)),
+                   {ok, Name, {FName, Expr}};
+        false   -> FName = cerl:c_fname(Name, 0),
+                   {ok, Name, {FName, cerl:c_fun([], Expr)}}
+    end;
 
 % type expr of form: T: ...
 gen_expr(expr, _, {tagged, Ctx, _, Val} = Term) ->

@@ -6,25 +6,14 @@
 -include_lib("eunit/include/eunit.hrl").
 
 traverse(Pre, Post, Scope, ASTs) when is_list(ASTs) -> map_asts(Pre, Post, Scope, ASTs);
-traverse(Pre, Post, Scope, AST)                     -> traverse_ast(Pre, Post, Scope, AST).
+traverse(Pre, Post, Scope, AST)                     -> step({Pre, Post}, top_level, Scope, AST).
 traverse(Pre, Post, ASTs) when is_list(ASTs)        -> map_asts(Pre, Post, #{}, ASTs);
-traverse(Pre, Post, AST)                            -> traverse_ast(Pre, Post, #{}, AST).
+traverse(Pre, Post, AST)                            -> step({Pre, Post}, top_level, #{}, AST).
 traverse(Post, ASTs) when is_list(ASTs)             -> map_asts(fun(_,_,_) -> ok end, Post, #{}, ASTs);
-traverse(Post, AST)                                 -> traverse_ast(fun(_, _, _) -> ok end, Post, #{}, AST).
+traverse(Post, AST)                                 -> step({fun(_, _, _) -> ok end, Post}, top_level, #{}, AST).
 
 traverse_term(Type, Pre, Post, Scope, Term)         -> climb({Pre, Post}, Type, Scope, Term).
 
-traverse_ast(Pre, Post, Scope, {ast, Ctx, Modules, Imports, Defs}) ->
-    case map({Pre, Post}, top_level, Scope, maps:values(Defs)) of
-        {error, Errs}    -> {error, Errs};
-        {ok, {DefEnvs, TDefs}} ->
-            NewDefs = maps:from_list(lists:zip(maps:keys(Defs), TDefs)),
-            NewEnv = merge(DefEnvs),
-            {ok, {NewEnv, {ast, Ctx, Modules, Imports, NewDefs}}}
-    end.
-
-climb(_, top_level, _, {import, _, _} = Term) -> {ok, {#{}, Term}};
-climb(_, top_level, _, {module, _, _, _} = Term) -> {ok, {#{}, Term}};
 climb({Pre, Post}, Type, Scope, Term) ->
     case Pre(Type, Scope, Term) of
         {error, Errs}                   -> {error, Errs};
@@ -60,24 +49,22 @@ run_post(Post, Env, Type, Scope, Term) ->
         Other                       -> error:format({unrecognized_post_response, Other}, {ast, Term})
     end.
 
-%step(Meta, top_level, Scope, {ast, Ctx, Modules, Imports, Defs}) ->
-%    error:flatmap(map(Meta, top_level, Scope, Modules),
-%                  fun({MEnvs, TModules}) ->
-%                          NewScope = merge([Scope | MEnvs]),
-%                          case map(Meta, top_level, NewScope, maps:values(Defs)) of
-%                              {error, Errs}    -> {error, Errs};
-%                              {ok, {DefEnvs, TDefs}} -> 
-%                                  NewDefs = maps:from_list(lists:zip(maps:keys(Defs), TDefs)),
-%                                  NewEnv = merge(DefEnvs ++ MEnvs),
-%                                  {ok, {NewEnv, {ast, Ctx, TModules, Imports, NewDefs}}}
-%                          end end);
-%
-%step(Meta, top_level, Scope, {module, Ctx, BeamName, KindName, Exports}) ->
-%    case map(Meta, top_level, Scope, Exports) of
-%        {error, Errs}                   -> {error, Errs};
-%        {ok, {ExportEnvs, TExports}}    -> {ok, {merge(ExportEnvs), {module, Ctx, BeamName, KindName, TExports}}}
-%    end;
-
+step(Meta, _Type, Scope, {module, Ctx, Path, Exports, Defs}) ->
+    case map(Meta, top_level, Scope, Defs) of
+        {error, Errs}    -> {error, Errs};
+        {ok, {DefEnvs, NewDefs}} ->
+            NewEnv = merge(DefEnvs),
+            {ok, {NewEnv, {module, Ctx, Path, Exports, NewDefs}}}
+    end;
+step(Meta, _Type, Scope, {module, Ctx, Path, Imports, Exports, Defs, Types}) ->
+    case map(Meta, top_level, Scope, maps:values(Defs)) of
+        {error, Errs}    -> {error, Errs};
+        {ok, {DefEnvs, TDefs}} ->
+            NewDefs = maps:from_list(lists:zip(maps:keys(Defs), TDefs)),
+            NewEnv = merge(DefEnvs),
+            {ok, {NewEnv, {module, Ctx, Path, Imports, Exports, NewDefs, Types}}}
+    end;
+step(Meta, _Type, Scope, {import, _, _} = Term) -> {ok, {#{}, Term}};
 step(Meta, top_level, Scope, {def, Ctx, Name, Fun}) ->
     step(Meta, expr, Scope, {def, Ctx, Name, Fun});
 step(Meta, top_level, Scope, {type_def, Ctx, Name, Fun}) ->
@@ -139,17 +126,17 @@ step(Meta, Type, Scope, {application, Ctx, Expr, Args}) ->
                fun({ArgsEnvs, TArgs}, {ExprEnv, TExpr}) -> 
                        {merge([ExprEnv | ArgsEnvs]), {application, Ctx, TExpr, TArgs}} end);
 
-step(Meta, Type, Scope, {qualified_application, Ctx, ModulePath, Name, Args}) ->
+step(Meta, _Type, Scope, {qualified_application, Ctx, ModulePath, Name, Args}) ->
     error:map(map(Meta, expr, Scope, Args),
               fun({ArgsEnvs, TArgs}) -> 
                       {merge(ArgsEnvs), {qualified_application, Ctx, ModulePath, Name, TArgs}} end);
 
-step(Meta, Type, Scope, {recursive_type_application, Ctx, Tag, Args}) ->
+step(Meta, _Type, Scope, {recursive_type_application, Ctx, Tag, Args}) ->
     error:map(map(Meta, expr, Scope, Args),
 	      fun({ArgsEnvs, TArgs}) -> 
                        {merge(ArgsEnvs), {recursive_type_application, Ctx, Tag, TArgs}} end);
 
-step(Meta, Type, Scope, {macro_application, Ctx, Name, Args}) ->
+step(Meta, _Type, Scope, {macro_application, Ctx, Name, Args}) ->
     error:map(map(Meta, expr, Scope, Args),
               fun({ArgsEnvs, TArgs}) -> 
                       {merge(ArgsEnvs), {macro_application, Ctx, Name, TArgs}} end);
@@ -289,7 +276,9 @@ with_tag(Key, Tag, {A, B, C}) ->
 with_tag(Key, Tag, {A, B, C, D}) ->
     {A, add_tag(Key, Tag, B), add_tag(Key, Tag, C), add_tag(Key, Tag, D)};
 with_tag(Key, Tag, {A, B, C, D, E}) ->
-    {A, add_tag(Key, Tag, B), add_tag(Key, Tag, C), add_tag(Key, Tag, D), add_tag(Key, Tag, E)}.
+    {A, add_tag(Key, Tag, B), add_tag(Key, Tag, C), add_tag(Key, Tag, D), add_tag(Key, Tag, E)};
+with_tag(Key, Tag, {A, B, C, D, E, F}) ->
+    {A, add_tag(Key, Tag, B), add_tag(Key, Tag, C), add_tag(Key, Tag, D), add_tag(Key, Tag, E), add_tag(Key, Tag, F)}.
 
 add_tag(Key, Tag, Elements) when is_list(Elements) ->
     [add_tag(Key, Tag, Elem) || Elem <- Elements];

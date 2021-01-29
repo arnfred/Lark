@@ -1,6 +1,6 @@
 -module(syntax).
 -export([parse/1, parse_and_scan/1, format_error/1]).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 334).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 339).
 
 unpack_sum([T]) -> T;
 unpack_sum([T | _] = Terms) -> {sum, ctx(T), Terms}.
@@ -218,7 +218,7 @@ yeccpars2(10=S, Cat, Ss, Stack, T, Ts, Tzr) ->
 yeccpars2(11=S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_9(S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccpars2(12=S, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_12(S, Cat, Ss, Stack, T, Ts, Tzr);
+ yeccpars2_9(S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccpars2(13=S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_13(S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccpars2(14=S, Cat, Ss, Stack, T, Ts, Tzr) ->
@@ -731,32 +731,46 @@ yeccpars2(256=S, Cat, Ss, Stack, T, Ts, Tzr) ->
 %%  yeccpars2_267(S, Cat, Ss, Stack, T, Ts, Tzr);
 %% yeccpars2(268=S, Cat, Ss, Stack, T, Ts, Tzr) ->
 %%  yeccpars2_268(S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccpars2(269=S, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_269(S, Cat, Ss, Stack, T, Ts, Tzr);
+%% yeccpars2(269=S, Cat, Ss, Stack, T, Ts, Tzr) ->
+%%  yeccpars2_269(S, Cat, Ss, Stack, T, Ts, Tzr);
 %% yeccpars2(270=S, Cat, Ss, Stack, T, Ts, Tzr) ->
 %%  yeccpars2_270(S, Cat, Ss, Stack, T, Ts, Tzr);
-%% yeccpars2(271=S, Cat, Ss, Stack, T, Ts, Tzr) ->
-%%  yeccpars2_271(S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccpars2(271=S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_271(S, Cat, Ss, Stack, T, Ts, Tzr);
 %% yeccpars2(272=S, Cat, Ss, Stack, T, Ts, Tzr) ->
-%%  yeccpars2_15(S, Cat, Ss, Stack, T, Ts, Tzr);
-%% yeccpars2(273=S, Cat, Ss, Stack, T, Ts, Tzr) ->
-%%  yeccpars2_273(S, Cat, Ss, Stack, T, Ts, Tzr);
+%%  yeccpars2_272(S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccpars2(273=S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_13(S, Cat, Ss, Stack, T, Ts, Tzr);
 %% yeccpars2(274=S, Cat, Ss, Stack, T, Ts, Tzr) ->
 %%  yeccpars2_274(S, Cat, Ss, Stack, T, Ts, Tzr);
-%% yeccpars2(275=S, Cat, Ss, Stack, T, Ts, Tzr) ->
-%%  yeccpars2_275(S, Cat, Ss, Stack, T, Ts, Tzr);
-%% yeccpars2(276=S, Cat, Ss, Stack, T, Ts, Tzr) ->
-%%  yeccpars2_15(S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccpars2(275=S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_275(S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccpars2(276=S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_276(S, Cat, Ss, Stack, T, Ts, Tzr);
 %% yeccpars2(277=S, Cat, Ss, Stack, T, Ts, Tzr) ->
-%%  yeccpars2_43(S, Cat, Ss, Stack, T, Ts, Tzr);
+%%  yeccpars2_277(S, Cat, Ss, Stack, T, Ts, Tzr);
 %% yeccpars2(278=S, Cat, Ss, Stack, T, Ts, Tzr) ->
 %%  yeccpars2_278(S, Cat, Ss, Stack, T, Ts, Tzr);
 %% yeccpars2(279=S, Cat, Ss, Stack, T, Ts, Tzr) ->
-%%  yeccpars2_279(S, Cat, Ss, Stack, T, Ts, Tzr);
+%%  yeccpars2_15(S, Cat, Ss, Stack, T, Ts, Tzr);
 %% yeccpars2(280=S, Cat, Ss, Stack, T, Ts, Tzr) ->
 %%  yeccpars2_280(S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccpars2(281=S, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_281(S, Cat, Ss, Stack, T, Ts, Tzr);
+%% yeccpars2(281=S, Cat, Ss, Stack, T, Ts, Tzr) ->
+%%  yeccpars2_281(S, Cat, Ss, Stack, T, Ts, Tzr);
+%% yeccpars2(282=S, Cat, Ss, Stack, T, Ts, Tzr) ->
+%%  yeccpars2_282(S, Cat, Ss, Stack, T, Ts, Tzr);
+%% yeccpars2(283=S, Cat, Ss, Stack, T, Ts, Tzr) ->
+%%  yeccpars2_15(S, Cat, Ss, Stack, T, Ts, Tzr);
+%% yeccpars2(284=S, Cat, Ss, Stack, T, Ts, Tzr) ->
+%%  yeccpars2_43(S, Cat, Ss, Stack, T, Ts, Tzr);
+%% yeccpars2(285=S, Cat, Ss, Stack, T, Ts, Tzr) ->
+%%  yeccpars2_285(S, Cat, Ss, Stack, T, Ts, Tzr);
+%% yeccpars2(286=S, Cat, Ss, Stack, T, Ts, Tzr) ->
+%%  yeccpars2_286(S, Cat, Ss, Stack, T, Ts, Tzr);
+%% yeccpars2(287=S, Cat, Ss, Stack, T, Ts, Tzr) ->
+%%  yeccpars2_287(S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccpars2(288=S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_288(S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccpars2(Other, _, _, _, _, _, _) ->
  erlang:error({yecc_bug,"1.4",{missing_state_in_action_table, Other}}).
 
@@ -791,7 +805,7 @@ yeccpars2_2(S, macro, Ss, Stack, T, Ts, Tzr) ->
 yeccpars2_2(S, module_keyword, Ss, Stack, T, Ts, Tzr) ->
  yeccpars1(S, 12, Ss, Stack, T, Ts, Tzr);
 yeccpars2_2(S, newlines, Ss, Stack, T, Ts, Tzr) ->
- yeccpars1(S, 281, Ss, Stack, T, Ts, Tzr);
+ yeccpars1(S, 288, Ss, Stack, T, Ts, Tzr);
 yeccpars2_2(S, type, Ss, Stack, T, Ts, Tzr) ->
  yeccpars1(S, 14, Ss, Stack, T, Ts, Tzr);
 yeccpars2_2(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
@@ -852,14 +866,7 @@ yeccpars2_cont_9(_, _, _, _, T, _, _) ->
 
 %% yeccpars2_11: see yeccpars2_9
 
-yeccpars2_12(S, rightbias_operator, Ss, Stack, T, Ts, Tzr) ->
- yeccpars1(S, 25, Ss, Stack, T, Ts, Tzr);
-yeccpars2_12(S, type_symbol, Ss, Stack, T, Ts, Tzr) ->
- yeccpars1(S, 26, Ss, Stack, T, Ts, Tzr);
-yeccpars2_12(S, var_symbol, Ss, Stack, T, Ts, Tzr) ->
- yeccpars1(S, 269, Ss, Stack, T, Ts, Tzr);
-yeccpars2_12(S, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_cont_9(S, Cat, Ss, Stack, T, Ts, Tzr).
+%% yeccpars2_12: see yeccpars2_9
 
 yeccpars2_13(S, def, Ss, Stack, T, Ts, Tzr) ->
  yeccpars1(S, 9, Ss, Stack, T, Ts, Tzr);
@@ -4459,11 +4466,10 @@ yeccpars2_266(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  NewStack = yeccpars2_266_(Stack),
  yeccgoto_all(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
 
--dialyzer({nowarn_function, yeccpars2_267/7}).
 yeccpars2_267(S, slash, Ss, Stack, T, Ts, Tzr) ->
  yeccpars1(S, 126, Ss, Stack, T, Ts, Tzr);
-yeccpars2_267(_, _, _, _, T, _, _) ->
- yeccerror(T).
+yeccpars2_267(S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_268(S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccpars2_268/7}).
 yeccpars2_268(S, curly_open, Ss, Stack, T, Ts, Tzr) ->
@@ -4473,65 +4479,104 @@ yeccpars2_268(S, space_curly_open, Ss, Stack, T, Ts, Tzr) ->
 yeccpars2_268(_, _, _, _, T, _, _) ->
  yeccerror(T).
 
-yeccpars2_269(S, curly_open, Ss, Stack, T, Ts, Tzr) ->
- yeccpars1(S, 51, Ss, Stack, T, Ts, Tzr);
-yeccpars2_269(S, space_curly_open, Ss, Stack, T, Ts, Tzr) ->
- yeccpars1(S, 55, Ss, Stack, T, Ts, Tzr);
+yeccpars2_269(S, space_open, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars1(S, 271, Ss, Stack, T, Ts, Tzr);
 yeccpars2_269(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ [_,_|Nss] = Ss,
  NewStack = yeccpars2_269_(Stack),
- yeccgoto_symbol(hd(Ss), Cat, Ss, NewStack, T, Ts, Tzr).
+ yeccgoto_module(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
 
 yeccpars2_270(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- [_,_|Nss] = Ss,
+ [_,_,_|Nss] = Ss,
  NewStack = yeccpars2_270_(Stack),
  yeccgoto_module(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
 
-yeccpars2_271(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- [_,_|Nss] = Ss,
- NewStack = yeccpars2_271_(Stack),
- yeccgoto_module(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
+yeccpars2_271(S, def, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars1(S, 9, Ss, Stack, T, Ts, Tzr);
+yeccpars2_271(S, newlines, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars1(S, 273, Ss, Stack, T, Ts, Tzr);
+yeccpars2_271(S, type, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars1(S, 14, Ss, Stack, T, Ts, Tzr);
+yeccpars2_271(S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_cont_0(S, Cat, Ss, Stack, T, Ts, Tzr).
 
-%% yeccpars2_272: see yeccpars2_15
+-dialyzer({nowarn_function, yeccpars2_272/7}).
+yeccpars2_272(S, close, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars1(S, 276, Ss, Stack, T, Ts, Tzr);
+yeccpars2_272(_, _, _, _, T, _, _) ->
+ yeccerror(T).
 
-yeccpars2_273(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- [_,_|Nss] = Ss,
- NewStack = yeccpars2_273_(Stack),
- yeccgoto_newmacro(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
+%% yeccpars2_273: see yeccpars2_13
 
-yeccpars2_274(S, slash, Ss, Stack, T, Ts, Tzr) ->
- yeccpars1(S, 126, Ss, Stack, T, Ts, Tzr);
-yeccpars2_274(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- [_|Nss] = Ss,
- NewStack = yeccpars2_274_(Stack),
- yeccgoto_import(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
+-dialyzer({nowarn_function, yeccpars2_274/7}).
+yeccpars2_274(S, close, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars1(S, 275, Ss, Stack, T, Ts, Tzr);
+yeccpars2_274(_, _, _, _, T, _, _) ->
+ yeccerror(T).
 
 yeccpars2_275(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- [_|Nss] = Ss,
+ [_,_,_|Nss] = Ss,
  NewStack = yeccpars2_275_(Stack),
- yeccgoto_import(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
+ yeccgoto_module_statements(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
 
-%% yeccpars2_276: see yeccpars2_15
+yeccpars2_276(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ [_,_|Nss] = Ss,
+ NewStack = yeccpars2_276_(Stack),
+ yeccgoto_module_statements(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
 
-%% yeccpars2_277: see yeccpars2_43
+yeccpars2_277(S, space_open, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars1(S, 271, Ss, Stack, T, Ts, Tzr);
+yeccpars2_277(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ [_,_|Nss] = Ss,
+ NewStack = yeccpars2_277_(Stack),
+ yeccgoto_module(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
 
 yeccpars2_278(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- [_,_|Nss] = Ss,
- NewStack = yeccpars2_278_(Stack),
- yeccgoto_function(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
-
-yeccpars2_279(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  [_,_,_|Nss] = Ss,
- NewStack = yeccpars2_279_(Stack),
- yeccgoto_function(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
+ NewStack = yeccpars2_278_(Stack),
+ yeccgoto_module(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
+
+%% yeccpars2_279: see yeccpars2_15
 
 yeccpars2_280(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- [_|Nss] = Ss,
+ [_,_|Nss] = Ss,
  NewStack = yeccpars2_280_(Stack),
- yeccgoto_statements(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
+ yeccgoto_newmacro(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
 
+yeccpars2_281(S, slash, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars1(S, 126, Ss, Stack, T, Ts, Tzr);
 yeccpars2_281(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  [_|Nss] = Ss,
  NewStack = yeccpars2_281_(Stack),
+ yeccgoto_import(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
+
+yeccpars2_282(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ [_|Nss] = Ss,
+ NewStack = yeccpars2_282_(Stack),
+ yeccgoto_import(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
+
+%% yeccpars2_283: see yeccpars2_15
+
+%% yeccpars2_284: see yeccpars2_43
+
+yeccpars2_285(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ [_,_|Nss] = Ss,
+ NewStack = yeccpars2_285_(Stack),
+ yeccgoto_function(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
+
+yeccpars2_286(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ [_,_,_|Nss] = Ss,
+ NewStack = yeccpars2_286_(Stack),
+ yeccgoto_function(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
+
+yeccpars2_287(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ [_|Nss] = Ss,
+ NewStack = yeccpars2_287_(Stack),
+ yeccgoto_statements(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
+
+yeccpars2_288(_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ [_|Nss] = Ss,
+ NewStack = yeccpars2_288_(Stack),
  yeccgoto_statement(hd(Nss), Cat, Nss, NewStack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_all/7}).
@@ -4629,11 +4674,11 @@ yeccgoto_application(251=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_50(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_application(263=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_72(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_application(272=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_application(279=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_50(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_application(276=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_application(283=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_50(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_application(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_application(284=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_72(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_arguments/7}).
@@ -4683,9 +4728,9 @@ yeccgoto_clause(75, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_49(49, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_clause(251, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_49(49, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_clause(272, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_clause(279, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_49(49, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_clause(276, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_clause(283, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_49(49, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_clause_separator/7}).
@@ -4693,9 +4738,9 @@ yeccgoto_clause_separator(15, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_48(48, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_clause_separator(49, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_48(251, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_clause_separator(272, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_clause_separator(279, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_48(48, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_clause_separator(276, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_clause_separator(283, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_48(48, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_clauses/7}).
@@ -4707,9 +4752,9 @@ yeccgoto_clauses(75=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_153(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_clauses(251=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_253(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_clauses(272=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_clauses(279=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_47(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_clauses(276=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_clauses(283=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_47(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_collection/7}).
@@ -4803,20 +4848,20 @@ yeccgoto_collection(251=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_46(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_collection(263=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_71(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_collection(272=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_collection(279=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_46(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_collection(276=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_collection(283=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_46(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_collection(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_collection(284=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_71(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_def_fun/7}).
 yeccgoto_def_fun(15=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_45(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_def_fun(272=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_273(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_def_fun(276=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_278(_S, Cat, Ss, Stack, T, Ts, Tzr).
+yeccgoto_def_fun(279=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_280(_S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_def_fun(283=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_285(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_dict/7}).
 yeccgoto_dict(15=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
@@ -4911,15 +4956,15 @@ yeccgoto_dict(251=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_44(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_dict(263=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_44(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_dict(268=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_271(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_dict(269=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_270(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_dict(272=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_dict(267, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_277(277, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_dict(268, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_269(269, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_dict(279=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_44(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_dict(276=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_dict(283=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_44(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_dict(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_dict(284=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_44(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_dict_element/7}).
@@ -5047,8 +5092,8 @@ yeccgoto_expression(224, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_102(102, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_expression(263=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_264(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_expression(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_279(_S, Cat, Ss, Stack, T, Ts, Tzr).
+yeccgoto_expression(284=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_286(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_expressions/7}).
 yeccgoto_expressions(57, Cat, Ss, Stack, T, Ts, Tzr) ->
@@ -5123,7 +5168,7 @@ yeccgoto_expressions(210, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_68(_S, Cat, Ss, Stack, T, Ts, Tzr);
 'yeccgoto_\'fun\''(263=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_68(_S, Cat, Ss, Stack, T, Ts, Tzr);
-'yeccgoto_\'fun\''(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+'yeccgoto_\'fun\''(284=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_68(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_function/7}).
@@ -5152,7 +5197,11 @@ yeccgoto_function(172=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
 yeccgoto_function(204=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_86(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_function(224=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_86(_S, Cat, Ss, Stack, T, Ts, Tzr).
+ yeccpars2_86(_S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_function(271=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_7(_S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_function(273=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_7(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_implies/7}).
 yeccgoto_implies(15, Cat, Ss, Stack, T, Ts, Tzr) ->
@@ -5161,10 +5210,10 @@ yeccgoto_implies(34, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_43(263, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_implies(134, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_43(135, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_implies(272, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_implies(279, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_43(135, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_implies(276, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_43(277, Cat, Ss, Stack, T, Ts, Tzr).
+yeccgoto_implies(283, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_43(284, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_import/7}).
 yeccgoto_import(0=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
@@ -5172,6 +5221,10 @@ yeccgoto_import(0=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
 yeccgoto_import(2=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_6(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_import(13=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_6(_S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_import(271=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_6(_S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_import(273=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_6(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_infix/7}).
@@ -5265,11 +5318,11 @@ yeccgoto_infix(251, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_42(42, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_infix(263, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_42(42, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_infix(272, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_infix(279, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_42(42, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_infix(276, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_infix(283, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_42(42, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_infix(277, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_infix(284, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_42(42, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_leftbias_infix/7}).
@@ -5363,11 +5416,11 @@ yeccgoto_leftbias_infix(251=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_41(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_leftbias_infix(263=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_41(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_leftbias_infix(272=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_leftbias_infix(279=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_41(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_leftbias_infix(276=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_leftbias_infix(283=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_41(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_leftbias_infix(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_leftbias_infix(284=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_41(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_list/7}).
@@ -5461,11 +5514,11 @@ yeccgoto_list(251=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_40(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_list(263=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_40(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_list(272=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_list(279=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_40(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_list(276=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_list(283=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_40(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_list(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_list(284=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_40(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_literal/7}).
@@ -5563,11 +5616,11 @@ yeccgoto_literal(256=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_182(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_literal(263=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_67(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_literal(272=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_literal(279=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_39(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_literal(276=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_literal(283=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_39(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_literal(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_literal(284=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_67(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_module/7}).
@@ -5576,7 +5629,17 @@ yeccgoto_module(0=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
 yeccgoto_module(2=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_5(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_module(13=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_5(_S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_module(271=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_5(_S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_module(273=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_5(_S, Cat, Ss, Stack, T, Ts, Tzr).
+
+-dialyzer({nowarn_function, yeccgoto_module_statements/7}).
+yeccgoto_module_statements(269=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_270(_S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_module_statements(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_278(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_newmacro/7}).
 yeccgoto_newmacro(0=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
@@ -5584,6 +5647,10 @@ yeccgoto_newmacro(0=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
 yeccgoto_newmacro(2=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_4(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_newmacro(13=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_4(_S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_newmacro(271=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_4(_S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_newmacro(273=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_4(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_newtype/7}).
@@ -5612,7 +5679,11 @@ yeccgoto_newtype(172=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
 yeccgoto_newtype(204=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_84(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_newtype(224=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_84(_S, Cat, Ss, Stack, T, Ts, Tzr).
+ yeccpars2_84(_S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_newtype(271=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_3(_S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_newtype(273=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_3(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_noun/7}).
 yeccgoto_noun(15, Cat, Ss, Stack, T, Ts, Tzr) ->
@@ -5705,11 +5776,11 @@ yeccgoto_noun(251, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_38(38, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_noun(263, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_66(66, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_noun(272, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_noun(279, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_38(38, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_noun(276, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_noun(283, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_38(38, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_noun(277, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_noun(284, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_66(66, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_operator/7}).
@@ -5837,11 +5908,11 @@ yeccgoto_operator(256=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_16(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_operator(263=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_16(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_operator(272=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_operator(279=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_16(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_operator(276=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_operator(283=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_16(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_operator(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_operator(284=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_16(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_pair/7}).
@@ -5915,7 +5986,7 @@ yeccgoto_pair(247=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_228(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_pair(263=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_65(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_pair(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_pair(284=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_65(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_pair_key/7}).
@@ -5989,7 +6060,7 @@ yeccgoto_pair_key(247, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_64(64, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_pair_key(263, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_64(64, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_pair_key(277, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_pair_key(284, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_64(64, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_pair_val/7}).
@@ -6013,9 +6084,9 @@ yeccgoto_pattern(224=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_218(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_pattern(251, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_37(37, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_pattern(272, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_pattern(279, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_37(37, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_pattern(276, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_pattern(283, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_37(37, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_pattern_application/7}).
@@ -6035,9 +6106,9 @@ yeccgoto_pattern_application(224=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_36(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_pattern_application(251=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_36(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_pattern_application(272=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_pattern_application(279=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_36(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_pattern_application(276=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_pattern_application(283=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_36(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_pattern_verb/7}).
@@ -6059,9 +6130,9 @@ yeccgoto_pattern_verb(251, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_28(35, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_pattern_verb(256=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_259(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_pattern_verb(272, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_pattern_verb(279, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_28(35, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_pattern_verb(276, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_pattern_verb(283, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_28(35, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_patterns/7}).
@@ -6075,14 +6146,14 @@ yeccgoto_patterns(75, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_34(34, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_patterns(251, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_34(34, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_patterns(272, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_patterns(279, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_34(34, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_patterns(276, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_patterns(283, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_34(34, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_qualified_symbol/7}).
 yeccgoto_qualified_symbol(10=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_275(_S, Cat, Ss, Stack, T, Ts, Tzr);
+ yeccpars2_282(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_qualified_symbol(12, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_268(268, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_qualified_symbol(15=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
@@ -6181,11 +6252,11 @@ yeccgoto_qualified_symbol(256=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_258(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_qualified_symbol(263=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_63(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_qualified_symbol(272=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_qualified_symbol(279=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_33(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_qualified_symbol(276=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_qualified_symbol(283=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_33(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_qualified_symbol(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_qualified_symbol(284=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_63(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_rightbias_infix/7}).
@@ -6279,11 +6350,11 @@ yeccgoto_rightbias_infix(251=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_32(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_rightbias_infix(263=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_32(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_rightbias_infix(272=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_rightbias_infix(279=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_32(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_rightbias_infix(276=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_rightbias_infix(283=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_32(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_rightbias_infix(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_rightbias_infix(284=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_32(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_secondary_separator/7}).
@@ -6393,11 +6464,11 @@ yeccgoto_sequence(251=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_31(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_sequence(263=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_62(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_sequence(272=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_sequence(279=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_31(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_sequence(276=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_sequence(283=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_31(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_sequence(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_sequence(284=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_62(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_statement/7}).
@@ -6406,15 +6477,23 @@ yeccgoto_statement(0, Cat, Ss, Stack, T, Ts, Tzr) ->
 yeccgoto_statement(2, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_2(2, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_statement(13, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_2(2, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_statement(271, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_2(2, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_statement(273, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_2(2, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_statements/7}).
 yeccgoto_statements(0=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_1(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_statements(2=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_280(_S, Cat, Ss, Stack, T, Ts, Tzr);
+ yeccpars2_287(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_statements(13=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_266(_S, Cat, Ss, Stack, T, Ts, Tzr).
+ yeccpars2_266(_S, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_statements(271, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_272(272, Cat, Ss, Stack, T, Ts, Tzr);
+yeccgoto_statements(273, Cat, Ss, Stack, T, Ts, Tzr) ->
+ yeccpars2_274(274, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_sum_elem/7}).
 yeccgoto_sum_elem(53, Cat, Ss, Stack, T, Ts, Tzr) ->
@@ -6513,11 +6592,11 @@ yeccgoto_sum_list(251=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_30(_S, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_sum_list(263=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_61(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_sum_list(272=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_sum_list(279=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_30(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_sum_list(276=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_sum_list(283=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_30(_S, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_sum_list(277=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_sum_list(284=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_61(_S, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_sum_terms/7}).
@@ -6548,11 +6627,11 @@ yeccgoto_sum_terms(224, Cat, Ss, Stack, T, Ts, Tzr) ->
 
 -dialyzer({nowarn_function, yeccgoto_symbol/7}).
 yeccgoto_symbol(9, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_15(276, Cat, Ss, Stack, T, Ts, Tzr);
+ yeccpars2_15(283, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_symbol(10, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_274(274, Cat, Ss, Stack, T, Ts, Tzr);
+ yeccpars2_281(281, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_symbol(11, Cat, Ss, Stack, T, Ts, Tzr) ->
- yeccpars2_15(272, Cat, Ss, Stack, T, Ts, Tzr);
+ yeccpars2_15(279, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_symbol(12, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_267(267, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_symbol(14, Cat, Ss, Stack, T, Ts, Tzr) ->
@@ -6655,11 +6734,11 @@ yeccgoto_symbol(256, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_257(257, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_symbol(263, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_60(60, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_symbol(272, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_symbol(279, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_29(29, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_symbol(276, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_symbol(283, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_29(29, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_symbol(277, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_symbol(284, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_60(60, Cat, Ss, Stack, T, Ts, Tzr).
 
 -dialyzer({nowarn_function, yeccgoto_verb/7}).
@@ -6757,11 +6836,11 @@ yeccgoto_verb(256, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_179(179, Cat, Ss, Stack, T, Ts, Tzr);
 yeccgoto_verb(263, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_28(28, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_verb(272, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_verb(279, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_28(28, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_verb(276, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_verb(283, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_28(28, Cat, Ss, Stack, T, Ts, Tzr);
-yeccgoto_verb(277, Cat, Ss, Stack, T, Ts, Tzr) ->
+yeccgoto_verb(284, Cat, Ss, Stack, T, Ts, Tzr) ->
  yeccpars2_28(28, Cat, Ss, Stack, T, Ts, Tzr).
 
 -compile({inline,yeccpars2_2_/1}).
@@ -6861,7 +6940,7 @@ yeccpars2_27_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_37_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 225).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 230).
 yeccpars2_37_(__Stack0) ->
  [__1 | __Stack] = __Stack0,
  [begin
@@ -6877,7 +6956,7 @@ yeccpars2_45_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_47_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 216).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 221).
 yeccpars2_47_(__Stack0) ->
  [__1 | __Stack] = __Stack0,
  [begin
@@ -6885,7 +6964,7 @@ yeccpars2_47_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_49_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 213).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 218).
 yeccpars2_49_(__Stack0) ->
  [__1 | __Stack] = __Stack0,
  [begin
@@ -6893,7 +6972,7 @@ yeccpars2_49_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_70_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 137).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 142).
 yeccpars2_70_(__Stack0) ->
  [__1 | __Stack] = __Stack0,
  [begin
@@ -6901,7 +6980,7 @@ yeccpars2_70_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_77_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 257).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 262).
 yeccpars2_77_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -6909,7 +6988,7 @@ yeccpars2_77_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_93_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 287).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 292).
 yeccpars2_93_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -6925,7 +7004,7 @@ yeccpars2_101_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_103_apply/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_103_apply(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -6933,7 +7012,7 @@ yeccpars2_103_apply(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_103_caret_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_103_caret_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -6941,7 +7020,7 @@ yeccpars2_103_caret_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_103_comp_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_103_comp_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -6949,7 +7028,7 @@ yeccpars2_103_comp_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_103_div_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_103_div_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -6957,7 +7036,7 @@ yeccpars2_103_div_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_103_eq_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_103_eq_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -6965,7 +7044,7 @@ yeccpars2_103_eq_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_103_minus_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_103_minus_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -6973,7 +7052,7 @@ yeccpars2_103_minus_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_103_mult_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_103_mult_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -6981,7 +7060,7 @@ yeccpars2_103_mult_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_103_other_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_103_other_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -6989,7 +7068,7 @@ yeccpars2_103_other_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_103_plus_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_103_plus_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -6997,7 +7076,7 @@ yeccpars2_103_plus_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_103_rightbias_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_103_rightbias_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7005,7 +7084,7 @@ yeccpars2_103_rightbias_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_103_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 126).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 131).
 yeccpars2_103_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7013,7 +7092,7 @@ yeccpars2_103_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_103_comma/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 126).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 131).
 yeccpars2_103_comma(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7021,7 +7100,7 @@ yeccpars2_103_comma(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_103_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 315).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 320).
 yeccpars2_103_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7029,7 +7108,7 @@ yeccpars2_103_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_121_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 289).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 294).
 yeccpars2_121_(__Stack0) ->
  [__4,__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7037,7 +7116,7 @@ yeccpars2_121_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_122_apply/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_122_apply(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7045,7 +7124,7 @@ yeccpars2_122_apply(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_122_caret_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_122_caret_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7053,7 +7132,7 @@ yeccpars2_122_caret_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_122_comp_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_122_comp_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7061,7 +7140,7 @@ yeccpars2_122_comp_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_122_div_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_122_div_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7069,7 +7148,7 @@ yeccpars2_122_div_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_122_eq_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_122_eq_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7077,7 +7156,7 @@ yeccpars2_122_eq_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_122_minus_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_122_minus_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7085,7 +7164,7 @@ yeccpars2_122_minus_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_122_mult_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_122_mult_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7093,7 +7172,7 @@ yeccpars2_122_mult_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_122_other_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_122_other_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7101,7 +7180,7 @@ yeccpars2_122_other_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_122_plus_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_122_plus_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7109,7 +7188,7 @@ yeccpars2_122_plus_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_122_rightbias_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_122_rightbias_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7117,7 +7196,7 @@ yeccpars2_122_rightbias_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_122_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 315).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 320).
 yeccpars2_122_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7125,7 +7204,7 @@ yeccpars2_122_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_124_apply/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_124_apply(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7133,7 +7212,7 @@ yeccpars2_124_apply(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_124_caret_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_124_caret_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7141,7 +7220,7 @@ yeccpars2_124_caret_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_124_comp_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_124_comp_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7149,7 +7228,7 @@ yeccpars2_124_comp_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_124_div_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_124_div_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7157,7 +7236,7 @@ yeccpars2_124_div_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_124_eq_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_124_eq_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7165,7 +7244,7 @@ yeccpars2_124_eq_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_124_minus_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_124_minus_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7173,7 +7252,7 @@ yeccpars2_124_minus_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_124_mult_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_124_mult_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7181,7 +7260,7 @@ yeccpars2_124_mult_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_124_other_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_124_other_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7189,7 +7268,7 @@ yeccpars2_124_other_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_124_plus_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_124_plus_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7197,7 +7276,7 @@ yeccpars2_124_plus_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_124_rightbias_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_124_rightbias_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7205,7 +7284,7 @@ yeccpars2_124_rightbias_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_124_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 314).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 319).
 yeccpars2_124_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7213,7 +7292,7 @@ yeccpars2_124_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_124_newlines/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 314).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 319).
 yeccpars2_124_newlines(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7221,7 +7300,7 @@ yeccpars2_124_newlines(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_124_pipe/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 314).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 319).
 yeccpars2_124_pipe(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7229,7 +7308,7 @@ yeccpars2_124_pipe(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_124_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 162).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 167).
 yeccpars2_124_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7237,7 +7316,7 @@ yeccpars2_124_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_125_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 308).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 313).
 yeccpars2_125_(__Stack0) ->
  [__4,__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7269,7 +7348,7 @@ yeccpars2_129_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_apply/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_130_apply(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7277,7 +7356,7 @@ yeccpars2_130_apply(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_caret_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_130_caret_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7285,7 +7364,7 @@ yeccpars2_130_caret_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_comp_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_130_comp_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7293,7 +7372,7 @@ yeccpars2_130_comp_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_div_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_130_div_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7301,7 +7380,7 @@ yeccpars2_130_div_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_eq_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_130_eq_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7309,7 +7388,7 @@ yeccpars2_130_eq_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_minus_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_130_minus_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7317,7 +7396,7 @@ yeccpars2_130_minus_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_mult_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_130_mult_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7325,7 +7404,7 @@ yeccpars2_130_mult_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_other_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_130_other_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7333,7 +7412,7 @@ yeccpars2_130_other_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_plus_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_130_plus_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7341,7 +7420,7 @@ yeccpars2_130_plus_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_rightbias_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_130_rightbias_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7349,7 +7428,7 @@ yeccpars2_130_rightbias_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 125).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 130).
 yeccpars2_130_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7357,7 +7436,7 @@ yeccpars2_130_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_comma/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 125).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 130).
 yeccpars2_130_comma(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7365,7 +7444,7 @@ yeccpars2_130_comma(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_newlines/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 314).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 319).
 yeccpars2_130_newlines(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7373,7 +7452,7 @@ yeccpars2_130_newlines(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_pipe/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 314).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 319).
 yeccpars2_130_pipe(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7381,7 +7460,7 @@ yeccpars2_130_pipe(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_130_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 162).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 167).
 yeccpars2_130_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7389,7 +7468,7 @@ yeccpars2_130_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_131_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 306).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 311).
 yeccpars2_131_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7397,7 +7476,7 @@ yeccpars2_131_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_133_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 307).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 312).
 yeccpars2_133_(__Stack0) ->
  [__4,__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7413,7 +7492,7 @@ yeccpars2_136_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_139_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 293).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 298).
 yeccpars2_139_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7421,7 +7500,7 @@ yeccpars2_139_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_140_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 279).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 284).
 yeccpars2_140_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7429,7 +7508,7 @@ yeccpars2_140_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_141_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 292).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 297).
 yeccpars2_141_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7437,7 +7516,7 @@ yeccpars2_141_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_142_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 291).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 296).
 yeccpars2_142_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7445,7 +7524,7 @@ yeccpars2_142_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_143_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 288).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 293).
 yeccpars2_143_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7453,7 +7532,7 @@ yeccpars2_143_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,'yeccpars2_144_\'$end\''/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 126).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 131).
 'yeccpars2_144_\'$end\''(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7461,7 +7540,7 @@ yeccpars2_143_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_144_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 126).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 131).
 yeccpars2_144_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7469,7 +7548,7 @@ yeccpars2_144_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_144_comma/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 126).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 131).
 yeccpars2_144_comma(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7477,7 +7556,7 @@ yeccpars2_144_comma(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_144_def/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 126).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 131).
 yeccpars2_144_def(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7485,7 +7564,7 @@ yeccpars2_144_def(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_144_import_keyword/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 126).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 131).
 yeccpars2_144_import_keyword(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7493,7 +7572,7 @@ yeccpars2_144_import_keyword(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_144_macro/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 126).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 131).
 yeccpars2_144_macro(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7501,7 +7580,7 @@ yeccpars2_144_macro(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_144_module_keyword/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 126).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 131).
 yeccpars2_144_module_keyword(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7509,7 +7588,7 @@ yeccpars2_144_module_keyword(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_144_newlines/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 126).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 131).
 yeccpars2_144_newlines(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7517,7 +7596,7 @@ yeccpars2_144_newlines(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_144_square_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 126).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 131).
 yeccpars2_144_square_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7525,7 +7604,7 @@ yeccpars2_144_square_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_144_type/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 126).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 131).
 yeccpars2_144_type(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7533,7 +7612,7 @@ yeccpars2_144_type(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_144_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_144_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7541,7 +7620,7 @@ yeccpars2_144_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_148_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 325).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 330).
 yeccpars2_148_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7549,7 +7628,7 @@ yeccpars2_148_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_149_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 312).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 317).
 yeccpars2_149_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7557,7 +7636,7 @@ yeccpars2_149_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_150_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 310).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 315).
 yeccpars2_150_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7565,7 +7644,7 @@ yeccpars2_150_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_151_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 311).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 316).
 yeccpars2_151_(__Stack0) ->
  [__4,__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7573,7 +7652,7 @@ yeccpars2_151_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_152_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 305).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 310).
 yeccpars2_152_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7581,7 +7660,7 @@ yeccpars2_152_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_153_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 218).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 223).
 yeccpars2_153_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7589,7 +7668,7 @@ yeccpars2_153_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,'yeccpars2_155_\'$end\''/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 125).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 130).
 'yeccpars2_155_\'$end\''(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7597,7 +7676,7 @@ yeccpars2_153_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 125).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 130).
 yeccpars2_155_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7605,7 +7684,7 @@ yeccpars2_155_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_comma/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 125).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 130).
 yeccpars2_155_comma(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7613,7 +7692,7 @@ yeccpars2_155_comma(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_def/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 125).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 130).
 yeccpars2_155_def(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7621,7 +7700,7 @@ yeccpars2_155_def(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_import_keyword/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 125).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 130).
 yeccpars2_155_import_keyword(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7629,7 +7708,7 @@ yeccpars2_155_import_keyword(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_macro/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 125).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 130).
 yeccpars2_155_macro(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7637,7 +7716,7 @@ yeccpars2_155_macro(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_module_keyword/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 125).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 130).
 yeccpars2_155_module_keyword(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7645,7 +7724,7 @@ yeccpars2_155_module_keyword(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_newlines/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 125).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 130).
 yeccpars2_155_newlines(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7653,7 +7732,7 @@ yeccpars2_155_newlines(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_square_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 125).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 130).
 yeccpars2_155_square_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7661,7 +7740,7 @@ yeccpars2_155_square_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_type/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 125).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 130).
 yeccpars2_155_type(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7669,7 +7748,7 @@ yeccpars2_155_type(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_apply/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_155_apply(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7677,7 +7756,7 @@ yeccpars2_155_apply(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_caret_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_155_caret_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7685,7 +7764,7 @@ yeccpars2_155_caret_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_comp_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_155_comp_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7693,7 +7772,7 @@ yeccpars2_155_comp_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_div_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_155_div_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7701,7 +7780,7 @@ yeccpars2_155_div_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_eq_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_155_eq_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7709,7 +7788,7 @@ yeccpars2_155_eq_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_minus_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_155_minus_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7717,7 +7796,7 @@ yeccpars2_155_minus_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_mult_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_155_mult_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7725,7 +7804,7 @@ yeccpars2_155_mult_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_other_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_155_other_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7733,7 +7812,7 @@ yeccpars2_155_other_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_plus_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_155_plus_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7741,7 +7820,7 @@ yeccpars2_155_plus_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_rightbias_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_155_rightbias_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7749,7 +7828,7 @@ yeccpars2_155_rightbias_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_155_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 162).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 167).
 yeccpars2_155_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7757,7 +7836,7 @@ yeccpars2_155_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_157_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 259).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 264).
 yeccpars2_157_(__Stack0) ->
  [__4,__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7765,7 +7844,7 @@ yeccpars2_157_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_159_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 138).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 143).
 yeccpars2_159_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7773,7 +7852,7 @@ yeccpars2_159_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_160_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 139).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 144).
 yeccpars2_160_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7781,7 +7860,7 @@ yeccpars2_160_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_161_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 258).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 263).
 yeccpars2_161_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7789,7 +7868,7 @@ yeccpars2_161_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_167_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 180).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 185).
 yeccpars2_167_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7797,7 +7876,7 @@ yeccpars2_167_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_169_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 181).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 186).
 yeccpars2_169_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7805,7 +7884,7 @@ yeccpars2_169_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_174_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_174_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7813,7 +7892,7 @@ yeccpars2_174_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,'yeccpars2_176_\'$end\''/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 'yeccpars2_176_\'$end\''(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7821,7 +7900,7 @@ yeccpars2_174_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_apply/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_apply(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7829,7 +7908,7 @@ yeccpars2_176_apply(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_caret_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_caret_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7837,7 +7916,7 @@ yeccpars2_176_caret_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7845,7 +7924,7 @@ yeccpars2_176_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_colon/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_colon(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7853,7 +7932,7 @@ yeccpars2_176_colon(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_comma/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_comma(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7861,7 +7940,7 @@ yeccpars2_176_comma(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_comp_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_comp_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7869,7 +7948,7 @@ yeccpars2_176_comp_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_curly_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_curly_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7877,7 +7956,7 @@ yeccpars2_176_curly_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_def/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_def(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7885,7 +7964,7 @@ yeccpars2_176_def(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_div_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_div_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7893,7 +7972,7 @@ yeccpars2_176_div_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_eq_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_eq_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7901,7 +7980,7 @@ yeccpars2_176_eq_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_import_keyword/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_import_keyword(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7909,7 +7988,7 @@ yeccpars2_176_import_keyword(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_macro/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_macro(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7917,7 +7996,7 @@ yeccpars2_176_macro(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_minus_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_minus_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7925,7 +8004,7 @@ yeccpars2_176_minus_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_module_keyword/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_module_keyword(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7933,7 +8012,7 @@ yeccpars2_176_module_keyword(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_mult_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_mult_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7941,7 +8020,7 @@ yeccpars2_176_mult_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_newlines/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_newlines(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7949,7 +8028,7 @@ yeccpars2_176_newlines(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_other_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_other_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7957,7 +8036,7 @@ yeccpars2_176_other_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_pipe/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_pipe(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7965,7 +8044,7 @@ yeccpars2_176_pipe(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_plus_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_plus_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7973,7 +8052,7 @@ yeccpars2_176_plus_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_rightbias_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_rightbias_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7981,7 +8060,7 @@ yeccpars2_176_rightbias_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_square_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_square_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7989,7 +8068,7 @@ yeccpars2_176_square_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_type/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_176_type(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -7997,7 +8076,7 @@ yeccpars2_176_type(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_176_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 162).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 167).
 yeccpars2_176_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8005,7 +8084,7 @@ yeccpars2_176_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_178_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 179).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 184).
 yeccpars2_178_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8013,7 +8092,7 @@ yeccpars2_178_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_179_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 168).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 173).
 yeccpars2_179_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8021,7 +8100,7 @@ yeccpars2_179_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_185_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 162).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 167).
 yeccpars2_185_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8029,7 +8108,7 @@ yeccpars2_185_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_186_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 169).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 174).
 yeccpars2_186_(__Stack0) ->
  [__4,__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8037,7 +8116,7 @@ yeccpars2_186_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_189_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 172).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 177).
 yeccpars2_189_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8045,7 +8124,7 @@ yeccpars2_189_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_192_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 174).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 179).
 yeccpars2_192_(__Stack0) ->
  [__4,__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8053,7 +8132,7 @@ yeccpars2_192_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_193_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 173).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 178).
 yeccpars2_193_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8061,7 +8140,7 @@ yeccpars2_193_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_194_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 178).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 183).
 yeccpars2_194_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8069,7 +8148,7 @@ yeccpars2_194_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_199_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 189).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 194).
 yeccpars2_199_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8077,7 +8156,7 @@ yeccpars2_199_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,'yeccpars2_206_\'$end\''/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 204).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 209).
 'yeccpars2_206_\'$end\''(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8085,7 +8164,7 @@ yeccpars2_199_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_206_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 204).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 209).
 yeccpars2_206_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8093,7 +8172,7 @@ yeccpars2_206_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_206_comma/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 204).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 209).
 yeccpars2_206_comma(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8101,7 +8180,7 @@ yeccpars2_206_comma(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_206_curly_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 204).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 209).
 yeccpars2_206_curly_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8109,7 +8188,7 @@ yeccpars2_206_curly_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_206_def/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 204).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 209).
 yeccpars2_206_def(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8117,7 +8196,7 @@ yeccpars2_206_def(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_206_import_keyword/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 204).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 209).
 yeccpars2_206_import_keyword(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8125,7 +8204,7 @@ yeccpars2_206_import_keyword(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_206_macro/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 204).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 209).
 yeccpars2_206_macro(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8133,7 +8212,7 @@ yeccpars2_206_macro(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_206_module_keyword/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 204).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 209).
 yeccpars2_206_module_keyword(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8141,7 +8220,7 @@ yeccpars2_206_module_keyword(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_206_newlines/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 204).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 209).
 yeccpars2_206_newlines(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8149,7 +8228,7 @@ yeccpars2_206_newlines(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_206_pipe/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 204).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 209).
 yeccpars2_206_pipe(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8157,7 +8236,7 @@ yeccpars2_206_pipe(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_206_square_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 204).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 209).
 yeccpars2_206_square_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8165,7 +8244,7 @@ yeccpars2_206_square_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_206_type/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 204).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 209).
 yeccpars2_206_type(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8173,7 +8252,7 @@ yeccpars2_206_type(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_206_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 153).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 158).
 yeccpars2_206_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8181,7 +8260,7 @@ yeccpars2_206_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,'yeccpars2_208_\'$end\''/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 203).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 208).
 'yeccpars2_208_\'$end\''(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8189,7 +8268,7 @@ yeccpars2_206_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 203).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 208).
 yeccpars2_208_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8197,7 +8276,7 @@ yeccpars2_208_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_comma/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 203).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 208).
 yeccpars2_208_comma(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8205,7 +8284,7 @@ yeccpars2_208_comma(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_curly_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 203).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 208).
 yeccpars2_208_curly_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8213,7 +8292,7 @@ yeccpars2_208_curly_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_def/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 203).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 208).
 yeccpars2_208_def(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8221,7 +8300,7 @@ yeccpars2_208_def(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_import_keyword/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 203).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 208).
 yeccpars2_208_import_keyword(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8229,7 +8308,7 @@ yeccpars2_208_import_keyword(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_macro/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 203).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 208).
 yeccpars2_208_macro(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8237,7 +8316,7 @@ yeccpars2_208_macro(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_module_keyword/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 203).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 208).
 yeccpars2_208_module_keyword(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8245,7 +8324,7 @@ yeccpars2_208_module_keyword(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_newlines/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 203).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 208).
 yeccpars2_208_newlines(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8253,7 +8332,7 @@ yeccpars2_208_newlines(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_pipe/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 203).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 208).
 yeccpars2_208_pipe(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8261,7 +8340,7 @@ yeccpars2_208_pipe(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_square_close/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 203).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 208).
 yeccpars2_208_square_close(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8269,7 +8348,7 @@ yeccpars2_208_square_close(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_type/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 203).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 208).
 yeccpars2_208_type(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8277,7 +8356,7 @@ yeccpars2_208_type(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_apply/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_208_apply(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8285,7 +8364,7 @@ yeccpars2_208_apply(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_caret_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_208_caret_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8293,7 +8372,7 @@ yeccpars2_208_caret_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_comp_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_208_comp_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8301,7 +8380,7 @@ yeccpars2_208_comp_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_div_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_208_div_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8309,7 +8388,7 @@ yeccpars2_208_div_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_eq_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_208_eq_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8317,7 +8396,7 @@ yeccpars2_208_eq_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_minus_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_208_minus_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8325,7 +8404,7 @@ yeccpars2_208_minus_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_mult_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_208_mult_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8333,7 +8412,7 @@ yeccpars2_208_mult_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_other_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_208_other_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8341,7 +8420,7 @@ yeccpars2_208_other_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_plus_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_208_plus_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8349,7 +8428,7 @@ yeccpars2_208_plus_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_rightbias_operator/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 152).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 157).
 yeccpars2_208_rightbias_operator(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8357,7 +8436,7 @@ yeccpars2_208_rightbias_operator(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_208_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 162).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 167).
 yeccpars2_208_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8365,7 +8444,7 @@ yeccpars2_208_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_211_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 264).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 269).
 yeccpars2_211_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8373,7 +8452,7 @@ yeccpars2_211_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_213_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 266).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 271).
 yeccpars2_213_(__Stack0) ->
  [__4,__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8381,7 +8460,7 @@ yeccpars2_213_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_214_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 265).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 270).
 yeccpars2_214_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8389,7 +8468,7 @@ yeccpars2_214_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_225_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 230).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 235).
 yeccpars2_225_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8397,7 +8476,7 @@ yeccpars2_225_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_232_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 274).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 279).
 yeccpars2_232_(__Stack0) ->
  [__1 | __Stack] = __Stack0,
  [begin
@@ -8405,7 +8484,7 @@ yeccpars2_232_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_235_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 267).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 272).
 yeccpars2_235_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8413,7 +8492,7 @@ yeccpars2_235_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_238_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 269).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 274).
 yeccpars2_238_(__Stack0) ->
  [__4,__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8421,7 +8500,7 @@ yeccpars2_238_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_240_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 275).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 280).
 yeccpars2_240_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8429,7 +8508,7 @@ yeccpars2_240_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_241_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 276).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 281).
 yeccpars2_241_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8437,7 +8516,7 @@ yeccpars2_241_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_242_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 268).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 273).
 yeccpars2_242_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8453,7 +8532,7 @@ yeccpars2_243_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_244_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 211).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 216).
 yeccpars2_244_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8461,7 +8540,7 @@ yeccpars2_244_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_246_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 260).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 265).
 yeccpars2_246_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8469,7 +8548,7 @@ yeccpars2_246_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_249_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 262).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 267).
 yeccpars2_249_(__Stack0) ->
  [__4,__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8477,7 +8556,7 @@ yeccpars2_249_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_250_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 261).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 266).
 yeccpars2_250_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8485,7 +8564,7 @@ yeccpars2_250_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_252_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 214).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 219).
 yeccpars2_252_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8493,7 +8572,7 @@ yeccpars2_252_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_253_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 215).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 220).
 yeccpars2_253_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8501,7 +8580,7 @@ yeccpars2_253_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_254_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 217).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 222).
 yeccpars2_254_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8517,7 +8596,7 @@ yeccpars2_255_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_259_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 241).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 246).
 yeccpars2_259_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8525,7 +8604,7 @@ yeccpars2_259_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_260_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 242).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 247).
 yeccpars2_260_(__Stack0) ->
  [__4,__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8533,7 +8612,7 @@ yeccpars2_260_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_261_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 226).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 231).
 yeccpars2_261_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8541,7 +8620,7 @@ yeccpars2_261_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_262_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 240).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 245).
 yeccpars2_262_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8549,7 +8628,7 @@ yeccpars2_262_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_264_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 212).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 217).
 yeccpars2_264_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8557,7 +8636,7 @@ yeccpars2_264_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_265_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 167).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 172).
 yeccpars2_265_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
@@ -8573,84 +8652,108 @@ yeccpars2_266_(__Stack0) ->
   end | __Stack].
 
 -compile({inline,yeccpars2_269_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 89).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 115).
 yeccpars2_269_(__Stack0) ->
- [__1 | __Stack] = __Stack0,
+ [__3,__2,__1 | __Stack] = __Stack0,
  [begin
-   make_symbol ( __1 )
+   { module , ctx ( __1 ) , unwrap ( __2 ) , unwrap ( __3 ) , [ ] }
   end | __Stack].
 
 -compile({inline,yeccpars2_270_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 114).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 117).
 yeccpars2_270_(__Stack0) ->
- [__3,__2,__1 | __Stack] = __Stack0,
+ [__4,__3,__2,__1 | __Stack] = __Stack0,
  [begin
-   { module , ctx ( __1 ) , [ make_symbol ( __2 ) ] , unwrap ( __3 ) }
+   { module , ctx ( __1 ) , unwrap ( __2 ) , unwrap ( __3 ) , __4 }
   end | __Stack].
 
--compile({inline,yeccpars2_271_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 115).
-yeccpars2_271_(__Stack0) ->
- [__3,__2,__1 | __Stack] = __Stack0,
+-compile({inline,yeccpars2_275_/1}).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 119).
+yeccpars2_275_(__Stack0) ->
+ [__4,__3,__2,__1 | __Stack] = __Stack0,
  [begin
-   { module , ctx ( __1 ) , unwrap ( __2 ) , unwrap ( __3 ) }
+   __3
   end | __Stack].
 
--compile({inline,yeccpars2_273_/1}).
+-compile({inline,yeccpars2_276_/1}).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 120).
+yeccpars2_276_(__Stack0) ->
+ [__3,__2,__1 | __Stack] = __Stack0,
+ [begin
+   __2
+  end | __Stack].
+
+-compile({inline,yeccpars2_277_/1}).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 114).
+yeccpars2_277_(__Stack0) ->
+ [__3,__2,__1 | __Stack] = __Stack0,
+ [begin
+   { module , ctx ( __1 ) , [ __2 ] , unwrap ( __3 ) , [ ] }
+  end | __Stack].
+
+-compile({inline,yeccpars2_278_/1}).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 116).
+yeccpars2_278_(__Stack0) ->
+ [__4,__3,__2,__1 | __Stack] = __Stack0,
+ [begin
+   { module , ctx ( __1 ) , [ __2 ] , unwrap ( __3 ) , __4 }
+  end | __Stack].
+
+-compile({inline,yeccpars2_280_/1}).
 -file("/Users/arnfred/workspace/kind/src/syntax.yrl", 80).
-yeccpars2_273_(__Stack0) ->
+yeccpars2_280_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
    { macro , ctx ( __1 ) , unwrap ( __2 ) , __3 }
   end | __Stack].
 
--compile({inline,yeccpars2_274_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 117).
-yeccpars2_274_(__Stack0) ->
+-compile({inline,yeccpars2_281_/1}).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 122).
+yeccpars2_281_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
    { import , ctx ( __1 ) , [ __2 ] }
   end | __Stack].
 
--compile({inline,yeccpars2_275_/1}).
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 118).
-yeccpars2_275_(__Stack0) ->
+-compile({inline,yeccpars2_282_/1}).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 123).
+yeccpars2_282_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
    { import , ctx ( __1 ) , unwrap ( __2 ) }
   end | __Stack].
 
--compile({inline,yeccpars2_278_/1}).
+-compile({inline,yeccpars2_285_/1}).
 -file("/Users/arnfred/workspace/kind/src/syntax.yrl", 76).
-yeccpars2_278_(__Stack0) ->
+yeccpars2_285_(__Stack0) ->
  [__3,__2,__1 | __Stack] = __Stack0,
  [begin
    { def , ctx ( __1 ) , unwrap ( __2 ) , __3 }
   end | __Stack].
 
--compile({inline,yeccpars2_279_/1}).
+-compile({inline,yeccpars2_286_/1}).
 -file("/Users/arnfred/workspace/kind/src/syntax.yrl", 77).
-yeccpars2_279_(__Stack0) ->
+yeccpars2_286_(__Stack0) ->
  [__4,__3,__2,__1 | __Stack] = __Stack0,
  [begin
    { def , ctx ( __1 ) , unwrap ( __2 ) , __4 }
   end | __Stack].
 
--compile({inline,yeccpars2_280_/1}).
+-compile({inline,yeccpars2_287_/1}).
 -file("/Users/arnfred/workspace/kind/src/syntax.yrl", 63).
-yeccpars2_280_(__Stack0) ->
+yeccpars2_287_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
    [ __1 | __2 ]
   end | __Stack].
 
--compile({inline,yeccpars2_281_/1}).
+-compile({inline,yeccpars2_288_/1}).
 -file("/Users/arnfred/workspace/kind/src/syntax.yrl", 65).
-yeccpars2_281_(__Stack0) ->
+yeccpars2_288_(__Stack0) ->
  [__2,__1 | __Stack] = __Stack0,
  [begin
    __1
   end | __Stack].
 
 
--file("/Users/arnfred/workspace/kind/src/syntax.yrl", 351).
+-file("/Users/arnfred/workspace/kind/src/syntax.yrl", 356).

@@ -4,55 +4,57 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
-form(TypesEnv, {tagged, _, _, Val} = Term) ->
-    Tag = symbol:tag(Term),
-    case domain:is_literal(TypesEnv, Val) of
-        true    ->
-            % For literals we generate a function with no arguments that return the domain
-            case gen_expr(TypesEnv, Term) of
-                {error, Errs}   -> {error, Errs};
-                {ok, Body}      -> {ok, {cerl:c_fname(Tag, 0), cerl:c_fun([], Body)}}
-            end;
-        false   ->
-            % For non literals, we replace the non-literal components with function arguments
-            Substituted = term(TypesEnv, Term),
-            case ast:traverse_term(expr, fun code_gen:pre_gen/3, fun code_gen:gen/3, TypesEnv, Substituted) of
-                {error, Errs}       -> {error, Errs};
-                {ok, {_, Form}}     -> {ok, {cerl:c_fname(Tag, arity(Substituted)), Form}}
-            end
+form(TypesEnv, Term) ->
+    Substituted = term(TypesEnv, Term),
+    case ast:traverse_term(expr, fun code_gen:pre_gen/3, fun code_gen:gen/3, TypesEnv, Substituted) of
+        {error, Errs}       -> {error, Errs};
+        {ok, {_, Form}}     -> {ok, Form}
     end.
 
-term(TypesEnv, {tagged, Ctx, Path, Val} = Term) ->
-    Tag = symbol:tag(Term),
-    case domain:is_literal(TypesEnv, Val) of
+term(TypesEnv, {tagged, Ctx, Path, Val}) -> tagged(Path, Ctx, term(TypesEnv, symbol:tag(Path), Val));
+term(TypesEnv, Term) -> term(TypesEnv, symbol:tag(Term), Term).
+
+term(TypesEnv, Tag, Term) ->
+    Ctx = element(2, Term),
+    case domain:is_literal(TypesEnv, Term) of
         % For literals we generate a function with no arguments that return the domain
         true    -> {type_def, Ctx, Tag, Term};
         % For non literals, we replace the non-literal components with function arguments
-        false   -> {type_def, Ctx, Tag, tagged(TypesEnv, Ctx, Path, Val)}
+        false   -> {type_def, Ctx, Tag, sub(TypesEnv, Ctx, Term)}
     end.
 
-tagged(TypesEnv, Ctx, Path, {list, ListCtx, Elems}) -> 
-    {Args, Patterns, Terms} = substitute_domains(TypesEnv, Elems),
-    {'fun', Ctx, [{clause, Ctx, patterns(Args, Patterns, Ctx), {tagged, Ctx, Path, {list, ListCtx, Terms}}}]};
 
-tagged(TypesEnv, Ctx, Path, {dict, DictCtx, Elems}) -> 
+sub(TypesEnv, Ctx, {list, ListCtx, Elems}) -> 
     {Args, Patterns, Terms} = substitute_domains(TypesEnv, Elems),
-    {'fun', Ctx, [{clause, Ctx, patterns(Args, Patterns, Ctx), {tagged, Ctx, Path, {dict, DictCtx, Terms}}}]};
+    {'fun', Ctx, [{clause, Ctx, patterns(Args, Patterns, Ctx), {list, ListCtx, Terms}}]};
 
-tagged(_TypesEnv, Ctx, Path, {sum, SumCtx, Elems}) -> 
+sub(TypesEnv, Ctx, {dict, DictCtx, Elems}) -> 
+    {Args, Patterns, Terms} = substitute_domains(TypesEnv, Elems),
+    {'fun', Ctx, [{clause, Ctx, patterns(Args, Patterns, Ctx), {dict, DictCtx, Terms}}]};
+
+sub(_TypesEnv, Ctx, {sum, SumCtx, Elems}) -> 
 	Arg = {variable, Ctx, arg(1), arg(1)},
     Defs = [{[Arg], [E], Arg} || E <- Elems],
     MakeClause = fun(Args, Patterns, Body) -> 
-						 {clause, SumCtx, patterns(Args, Patterns, Ctx), {tagged, Ctx, Path, Body}}
+						 {clause, SumCtx, patterns(Args, Patterns, Ctx), Body}
                  end,
     Clauses = [MakeClause(Args, Patterns, Body) || {Args, Patterns, Body} <- Defs],
     {'fun', Ctx, Clauses};
 
-tagged(_, Ctx, Path, Term) ->
+sub(_, Ctx, Term) ->
     TermCtx = element(2, Term),
     Var = symbol:id(substituted),
     VarTerm = {variable, TermCtx, Var, Var},
-    {'fun', Ctx, [{clause, Ctx, patterns([VarTerm], [Term], Ctx), {tagged, Ctx, Path, VarTerm}}]}.
+    {'fun', Ctx, [{clause, Ctx, patterns([VarTerm], [Term], Ctx), VarTerm}]}.
+
+tagged(Path, TagCtx, {type_def, Ctx, Name, Term}) -> {type_def, Ctx, Name, tagged(Path, TagCtx, Term)};
+
+tagged(Path, TagCtx, {'fun', Ctx, Clauses}) ->
+    {'fun', Ctx, [tagged(Path, TagCtx, Clause) || Clause <- Clauses]};
+
+tagged(Path, TagCtx, {clause, Ctx, Patterns, Body}) -> {clause, Ctx, Patterns, {tagged, TagCtx, Path, Body}};
+
+tagged(Path, TagCtx, Term) -> {tagged, TagCtx, Path, Term}.
 
 patterns(Args, Patterns, Ctx) -> [{pair, Ctx, A, P} || {A, P} <- lists:zip(Args, Patterns)].
 
@@ -83,9 +85,6 @@ substitute_domains(TypesEnv, [Term | Rest], N, Args, Patterns, NewTerms) ->
     end.
 
 arg(N) -> list_to_atom("substituted_" ++ integer_to_list(N)).
-
-arity({type_def, _, _, {'fun', _, [{clause, _, Ps, _} | _]}}) -> length(Ps);
-arity({type_def, _, _, _}) -> 0.
 
 gen_expr(TypesEnv, Term) ->
     case ast:traverse_term(expr, fun code_gen:pre_gen/3, fun code_gen:gen/3, TypesEnv, Term) of
@@ -268,6 +267,12 @@ multi_var_sum_test_() ->
                            tagged:t('T/A'))]
             end)}.
 
+non_tagged_term_test_() ->
+    {"Substitute non-literals for variables in a term which isn't a tagged value",
+     ?setup({variable, #{}, a, a},
+            fun({ok, _}) ->
+                    [?test(blah, tagged:a(blah))]
+            end)}.
 
 
 

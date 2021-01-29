@@ -11,7 +11,8 @@ preen(FileName, AST) ->
             case dict_keys(DetupledAST) of
                 {error, Errs}         -> {error, Errs};
                 {ok, {_, KeyedAST}}   -> {ok, {_, PathAST}} = add_filename(FileName, KeyedAST),
-                                         {ok, PathAST}
+                                         {ok, {_, TaggedAST}} = tagged_values(PathAST),
+                                         {ok, TaggedAST}
             end
     end.
 
@@ -62,6 +63,22 @@ add_filename(FileName, AST) ->
     TagId = fun(_, _, Term) -> {ok, ast:tag(source_path, Term, FileName)} end,
     Skip = fun(_, _, _) -> ok end,
     ast:traverse(TagId, Skip, AST).
+
+tagged_pre(top_level, _, {type_def, _, Name, _} = Term) -> 
+    {ok, ast:tag(parent, Term, Name)};
+tagged_pre(top_level, _, {def, _, Name, _} = Term) -> 
+    {ok, ast:tag(parent, Term, Name)};
+tagged_pre(top_level, _, _)  -> ok;
+tagged_pre(_, _, Term) -> {ok, ast:tag(parent, Term)}.
+tagged_post(expr, _, {pair, Ctx, {symbol, _, _, Name}, Val} = Term) ->
+    Parent = ast:get_tag(parent, Term),
+    {ok, {tagged, Ctx, [Parent, Name], Val}};
+tagged_post(pattern, _, {pair, Ctx, {symbol, _, type, Name}, Val} = Term) ->
+    Parent = ast:get_tag(parent, Term),
+    {ok, {tagged, Ctx, [Parent, Name], Val}};
+tagged_post(_, _, _) -> ok.
+tagged_values(AST) ->
+    ast:traverse(fun tagged_pre/3, fun tagged_post/3, AST).
 
 -ifdef(TEST).
 
@@ -132,8 +149,7 @@ translate_typedefs_to_let_type_statements_test_() ->
                          {sum, _,
                           [{symbol, _, _, 'A'},
                            {symbol, _, _, b}]}}]}},
-                     {pair, _,
-                      {symbol, _, _, a},
+                     {tagged, _, [test, a],
                       {application, _,
                        {symbol, _, _, 'T'},
                        [{symbol, _, _, a}]}}}}]}}]}, do_preen(Code)).
@@ -179,8 +195,7 @@ pair_expr_test_() ->
     ?test({ok, [{def, _, _,
                  {'fun', _,
                   [{clause, _, _,
-                    {pair, _,
-                     {symbol, _, _, a},
+                    {tagged, _, [test, a],
                      {dict, _,
                       [{pair, _, {key, _, a}, {symbol, _, _, a}},
                        {key, _, b}]}}}]}}]}, do_preen(Code)).

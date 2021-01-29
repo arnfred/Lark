@@ -1,5 +1,5 @@
 -module(parser).
--export([parse/1, parse/2]).
+-export([parse/1, parse/2, to_ast/2]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
@@ -30,18 +30,21 @@ parse(Inputs, Options) ->
             case error:collect([to_ast(Id, T) || {Id, T} <- Texts]) of
                 {error, Errs}   -> {error, Errs};
                 {ok, Sources}      ->
-                    ImportPrelude = maps:get(import_prelude, Options, true)
-                                    andalso maps:get(import_kind_libraries, Options, true),
-                    case format(Sources, ImportPrelude, Options) of
+                    case module:parse(Sources) of
                         {error, Errs}   -> {error, Errs};
-                        {ok, Formatted} ->
-                            {DepList, TaggedASTs} = lists:unzip(Formatted),
-                            case topological_sort(lists:flatten(DepList)) of
+                        {ok, ModuleMap} ->
+                            F = fun(Module) -> import_and_tag(Module, ModuleMap, Options) end,
+                            case error:collect([F(M) || M <- maps:values(ModuleMap)]) of
                                 {error, Errs}   -> {error, Errs};
-                                {ok, Order}     -> 
-                                    {Paths, _} = lists:unzip(Sources),
-                                    TaggedSources = lists:zip(Paths, TaggedASTs),
-                                    {ok, reorder_asts(Order, TaggedSources)}
+                                {ok, Formatted} ->
+                                    {DepList, TaggedASTs} = lists:unzip(Formatted),
+                                    case topological_sort(lists:flatten(DepList)) of
+                                        {error, Errs}   -> {error, Errs};
+                                        {ok, Order}     -> 
+                                            {Paths, _} = lists:unzip(Sources),
+                                            TaggedSources = lists:zip(Paths, TaggedASTs),
+                                            {ok, reorder_asts(Order, TaggedSources)}
+                                    end
                             end
                     end
             end
@@ -52,40 +55,6 @@ load(FileName) ->
         {error, Errs}   -> {error, Errs};
         {ok, Files}     -> error:collect([load_source(F) || F <- Files])
     end.
-
-format(Sources, ImportPrelude, Options) ->
-    case error:collect([types(FileName, AST) || {FileName, AST} <- Sources]) of
-        {error, Errs}   -> {error, Errs};
-        {ok, TypeList}  ->
-            Types = maps:from_list(TypeList),
-            case module:format(Sources, Types) of
-                {error, Errs}   -> {error, Errs};
-                {ok, ParsedSources}    ->
-                    ModuleList = [{FileName, Modules} || {FileName, {ast, _, Modules, _, _}} <- ParsedSources],
-                    SourceDefList = [{FileName, M} || {FileName, Modules} <- ModuleList, 
-                                                      {module, _, _, _} = M <- Modules],
-                    SourceTypeList = [{FileName, TypeModule} || 
-                                      {FileName, Mods}  <- ModuleList,
-                                      Module            <- Mods,
-                                      TypeModule        <- type_modules(Module, maps:get(FileName, Types))],
-
-                    SourceList = SourceDefList ++ SourceTypeList,
-                    SourceMap = maps:from_list([{module:beam_name(ModulePath), Module} || 
-                                                    {_, {module, _, ModulePath, _} = Module} <- SourceList]),
-                    ModuleMap = maps:from_list([{ModulePath, FileName}
-                                                || {FileName, {module, _, ModulePath, _}} <- SourceList]),
-
-                    error:collect([import_and_tag(FileName,
-                                                  AST,
-                                                  SourceMap,
-                                                  maps:get(FileName, Types),
-                                                  ModuleMap,
-                                                  ImportPrelude,
-                                                  Options) || {FileName, AST} <- ParsedSources])
-            end
-    end.
-
-
 
 traverse(FileName) ->
     case {filelib:is_dir(FileName), filelib:is_file(FileName)} of
@@ -172,13 +141,13 @@ to_ast(FileName, Text) ->
             end
     end.
 
-import_and_tag(FileName,
-               {ast, _, Modules, ImportClauses, _} = AST,
-               SourceMap,
-               LocalTypes,
+import_and_tag({module, ModuleCtx, ModulePath, Imports, Exports, DefMap, Types},
                ModuleMap,
-               ImportPrelude,
                Options) ->
+
+    % Make sure to import prelude only if we're both importing prelude and all
+    % kind libraries in general
+    ImportPrelude = maps:get(import_prelude, Options, true) andalso maps:get(import_kind_libraries, Options, true),
 
 	% make sure to include if we're running imports in sandboxed mode where
 	% only some erlang functions are allowed
@@ -186,32 +155,29 @@ import_and_tag(FileName,
 
     % Make sure not to import prelude if this is the prelude
     PreludePath = [{symbol, #{}, variable, kind}, {symbol, #{}, variable, prelude}, {symbol, #{}, variable, '_'}],
-    PreludeImports = case {ImportPrelude, Modules} of
-                         {false, _} -> [];
-                         {_, [{module, _, [kind, prelude], _}]} -> [];
-                         {_, _} -> import:import({import, #{}, PreludePath}, SourceMap, LocalTypes, Sandboxed)
+    PreludeImports = case {ImportPrelude, ModulePath} of
+                         {false, _}             -> [];
+                         {_, [kind, prelude]}   -> [];
+                         {_, _}                 -> import:import({import, #{}, PreludePath}, ModuleMap, Types, Sandboxed)
                      end,
 
-    F = fun(Import) -> import:import(Import, SourceMap, LocalTypes, Sandboxed) end,
-    case error:collect([F(Clause) || Clause <- ImportClauses] ++ [PreludeImports]) of
+    F = fun(Import) -> import:import(Import, ModuleMap, Types, Sandboxed) end,
+    case error:collect([F(I) || I <- Imports] ++ [PreludeImports]) of
         {error, Errs} -> {error, Errs};
-        {ok, NestedImports} ->
-            Imports = lists:flatten(NestedImports),
+        {ok, ImportList} ->
+            Imports = lists:flatten(ImportList),
             Aliases = [A || {alias, _, _, _} = A <- Imports],
-            Dependencies = [{dependency, Ctx, FileName, maps:get(Module, ModuleMap)} ||
-                            {dependency, Ctx, Module} <- Imports],
+            Dependencies = [Dep || {dependency, _, _} = Dep <- Imports],
             ErrFun = fun({alias, ErrorCtx1, Alias, _},
                          {alias, ErrorCtx2, _, _}) -> error:format({duplicate_import, Alias},
                                                                    {import, ErrorCtx1, ErrorCtx2}) end,
-            Duplicates = utils:duplicates(Aliases, fun({alias, _, A, _}) -> A end),
-            case Duplicates =:= [] of
-                false   -> error:collect([ErrFun(D1, D2) || {D1, D2} <- Duplicates]);
-                true    -> 
-                    ImportMap = maps:from_list([{Alias, Term} || {alias, _, Alias, Term} <- Aliases]),
-                    case tagger:tag(AST, ImportMap) of
-                        {error, Errs}       -> {error, Errs};
-                        {ok, {_, Tagged}}   -> {ok, {Dependencies, Tagged}}
-                    end
+            case utils:duplicates(Aliases, fun({alias, _, A, _}) -> A end) of
+                []          -> ImportMap = maps:from_list([{Alias, Term} || {alias, _, Alias, Term} <- Aliases]),
+                               case tagger:tag(DefMap, ImportMap) of
+                                   {error, Errs}       -> {error, Errs};
+                                   {ok, {_, Tagged}}   -> {ok, {Dependencies, Tagged}}
+                               end;
+                Duplicates  -> error:collect([ErrFun(D1, D2) || {D1, D2} <- Duplicates])
             end
     end.
 
