@@ -19,8 +19,7 @@ root_def_test_() ->
                                          [test_file],
                                          [],
                                          #{blah := {export, _, [blah], none}},
-                                         #{blah := {def, #{}, blah, _}},
-                                         #{}}}, Modules)
+                                         #{blah := {def, #{}, blah, _}}}}, Modules)
            end).
 
 root_import_test_() ->
@@ -32,7 +31,6 @@ root_import_test_() ->
                                          [test_file],
                                          [{import, #{}, [{symbol, _, variable, noop}]}],
                                          #{},
-                                         #{},
                                          #{}}}, Modules)
            end).
 
@@ -40,12 +38,11 @@ empty_module_test_() ->
     ?setup("test_file",
            "module test_module {}",
            fun({ok, Modules}) ->
-                   ?test(#{test_file := {module, _, _, _, _, _, _},
+                   ?test(#{test_file := {module, _, _, _, _, _},
                            test_module := {module,
                                            #{},
                                            [test_module],
                                            [{import, #{}, [{symbol, #{}, variable, test_file}, {symbol, _, variable, '_'}]}],
-                                           #{},
                                            #{},
                                            #{}}}, Modules)
            end).
@@ -56,14 +53,13 @@ module_def_test_() ->
                 def blah -> noop
             )",
            fun({ok, Modules}) ->
-                   ?test(#{test_file := {module, _, _, _, _, _, _},
+                   ?test(#{test_file := {module, _, _, _, _, _},
                            test_module := {module,
                                            #{},
                                            [test_module],
                                            [{import, #{}, [{symbol, #{}, variable, test_file}, {symbol, _, variable, '_'}]}],
                                            #{},
-                                           #{blah := {def, #{}, blah, {symbol, _, variable, noop}}},
-                                           #{}}}, Modules)
+                                           #{blah := {def, #{}, blah, {symbol, _, variable, noop}}}}}, Modules)
            end).
 
 module_import_test_() ->
@@ -72,13 +68,12 @@ module_import_test_() ->
                 import blah/_
             )",
            fun({ok, Modules}) ->
-                   ?test(#{test_file := {module, _, _, _, _, _, _},
+                   ?test(#{test_file := {module, _, _, _, _, _},
                            test_module := {module,
                                            #{},
                                            [test_module],
                                            [{import, #{}, [{symbol, #{}, variable, test_file}, {symbol, _, variable, '_'}]},
                                             {import, #{}, [{symbol, #{}, variable, blah}, {symbol, _, variable, '_'}]}],
-                                           #{},
                                            #{},
                                            #{}}}, Modules)
            end).
@@ -89,16 +84,16 @@ module_export_test_() ->
                 type T -> A
             )",
            fun({ok, Modules}) ->
-                   ?test(#{test_file := {module, _, _, _, _, _, _},
-                           test_module_T := {module, _, _, _, _, _, _},
+                   ?test(#{test_file := {module, _, _, _, _, _},
+                           test_module_T := {module, _, _, _, _, _},
                            test_module := {module,
                                            #{},
                                            [test_module],
-                                           [{import, #{}, [{symbol, #{}, variable, test_file}, {symbol, _, variable, '_'}]}],
+                                           [{import, #{}, [{symbol, #{}, variable, test_file}, {symbol, _, variable, '_'}]},
+                                            {import, #{}, [{symbol, #{}, type, 'T'}]}],
                                            #{'T' := {export, #{}, ['T'], {symbol, #{}, type, 'A'}},
                                              'A' := {export, #{}, ['T', 'A'], none}},
-                                           #{},
-                                           #{}}}, Modules)
+                                           #{'T' := _}}}, Modules)
            end).
 
 root_export_test_() ->
@@ -106,15 +101,15 @@ root_export_test_() ->
            "module test_module {T: A, T/A}
             type T -> A",
            fun({ok, Modules}) ->
-                   ?test(#{test_file := {module, _, _, _, _, _, _},
-                           test_file_T := {module, _, _, _, _, _, _},
+                   ?test(#{test_file := {module, _, _, _, _, _},
+                           test_file_T := {module, _, _, _, _, _},
                            test_module := {module,
                                            #{},
                                            [test_module],
-                                           [{import, #{}, [{symbol, #{}, variable, test_file}, {symbol, _, variable, '_'}]}],
+                                           [{import, #{}, [{symbol, #{}, variable, test_file}, {symbol, _, variable, '_'}]},
+                                            {import, #{}, [{symbol, #{}, type, 'T'}]}],
                                            #{'T' := {export, #{}, ['T'], {symbol, #{}, type, 'A'}},
                                              'A' := {export, #{}, ['T', 'A'], none}},
-                                           #{},
                                            #{}}}, Modules)
            end).
 
@@ -141,21 +136,36 @@ export_unsupported_test_() ->
                     [?testError({export_unsupported, 't/T/A'}, Error)]
            end).
 
+unintended_sub_module_test_() ->
+    {"When modules are formed in the beginning of the pipeline, we nominally
+     don't know that the constant `B` is a type imported from `T`. In this
+     instance, `Q` doesn't define any constants and we shouldn't create a
+     module called `test_file_Q`. To make sure we don't, the `module` module
+     filters out the locally imported constants and only creates modules for
+     definitions or types that define their own constants.",
+     ?setup("test_file",
+            "type T -> (A | B)
+            import T/_
+            type P -> (A | S)
+            type Q -> B",
+
+            fun({ok, Modules}) ->
+                    ?test(['test_file', 'test_file_P', 'test_file_T'], maps:keys(Modules))
+            end)}.
 
 subtype_test_() ->
     ?setup("test_file",
            "type T -> A",
            fun({ok, Modules}) ->
                    ?test(#{test_file := {module, _, _, _, _,
-                                         #{'T' := {type_def, _, 'T', {symbol, _, type, 'A'}}},
-                                         #{'T' := [{symbol, _, type, 'A'}]}},
+                                         #{'T' := {type_def, _, 'T', {symbol, _, type, 'A'}}}},
                            test_file_T := {module,
                                            #{line := 1},
                                            [test_file, 'T'],
-                                           [{import, #{}, [{symbol, #{}, variable, test_file}, {symbol, _, variable, '_'}]}],
-                                           #{'A' := {symbol, _, type, 'A'}},
-                                           #{'A' := {type_def, _, 'A', {symbol, #{}, type, 'A'}}},
-                                           #{}}}, Modules)
+                                           [{import, #{}, [{symbol, #{}, variable, test_file},
+                                                           {dict, _, [{symbol, _, variable, 'T'}]}]}],
+                                           #{'A' := {export, _, ['A'], _}},
+                                           #{'A' := {type_def, _, 'A', {symbol, _, type, 'A'}}}}}, Modules)
            end).
 
 subtype_tagged_test_() ->
@@ -163,18 +173,16 @@ subtype_tagged_test_() ->
            "type T -> R: A",
            fun({ok, Modules}) ->
                    ?test(#{test_file := {module, _, _, _, _,
-                                         #{'T' := {type_def, _, 'T', {tagged, _, ['T', 'R'], {symbol, _, type, 'A'}}}},
-                                         #{'T' := [{tagged, _, ['T', 'R'], {symbol, _, type, 'A'}},
-                                                   {symbol, _, type, 'A'}]}},
+                                         #{'T' := {type_def, _, 'T', {tagged, _, ['T', 'R'], {symbol, _, type, 'A'}}}}},
                            test_file_T := {module,
                                            #{line := 1},
                                            [test_file, 'T'],
-                                           [_],
-                                           #{'A' := {symbol, _, type, 'A'},
-                                             'T/R' := {tagged, _, ['T', 'R'], _}},
+                                           _,
+                                           #{'A' := {export, _, ['A'], _},
+                                             'R' := {export, _, ['R'], _}},
                                            #{'A' := {type_def, _, 'A', {symbol, #{}, type, 'A'}},
-                                             'T/R' := {type_def, _, 'T/R', {tagged, _, ['T', 'R'], {symbol, _, type, 'A'}}}},
-                                          #{}}}, Modules)
+                                             'R' := {type_def, _, 'R', {tagged, _, ['T', 'R'], {symbol, _, type, 'A'}}}}
+                                          }}, Modules)
            end).
 
 duplicate_module_error_test_() ->

@@ -56,15 +56,15 @@ step(Meta, _Type, Scope, {module, Ctx, Path, Exports, Defs}) ->
             NewEnv = merge(DefEnvs),
             {ok, {NewEnv, {module, Ctx, Path, Exports, NewDefs}}}
     end;
-step(Meta, _Type, Scope, {module, Ctx, Path, Imports, Exports, Defs, Types}) ->
+step(Meta, _Type, Scope, {module, Ctx, Path, Imports, Exports, Defs}) ->
     case map(Meta, top_level, Scope, maps:values(Defs)) of
         {error, Errs}    -> {error, Errs};
         {ok, {DefEnvs, TDefs}} ->
             NewDefs = maps:from_list(lists:zip(maps:keys(Defs), TDefs)),
             NewEnv = merge(DefEnvs),
-            {ok, {NewEnv, {module, Ctx, Path, Imports, Exports, NewDefs, Types}}}
+            {ok, {NewEnv, {module, Ctx, Path, Imports, Exports, NewDefs}}}
     end;
-step(Meta, _Type, Scope, {import, _, _} = Term) -> {ok, {#{}, Term}};
+step(_Meta, _Type, _Scope, {import, _, _} = Term) -> {ok, {#{}, Term}};
 step(Meta, top_level, Scope, {def, Ctx, Name, Fun}) ->
     step(Meta, expr, Scope, {def, Ctx, Name, Fun});
 step(Meta, top_level, Scope, {type_def, Ctx, Name, Fun}) ->
@@ -223,6 +223,7 @@ step(Meta, Type, Scope, {TermType, Ctx, Key, Val}) when TermType =:= pair;
 step(_, _, _, {symbol, _, _, _} = Term)             -> {ok, {#{}, Term}};
 step(_, _, _, {variable, _, _, _} = Term)           -> {ok, {#{}, Term}};
 step(_, _, _, {type, _, _, _} = Term)               -> {ok, {#{}, Term}};
+step(_, _, _, {constant, _, _, _} = Term)           -> {ok, {#{}, Term}};
 step(_, _, _, {recursive_type, _, _, _} = Term)     -> {ok, {#{}, Term}};
 step(_, _, _, {qualified_symbol, _, _} = Term)      -> {ok, {#{}, Term}};
 step(_, _, _, {qualified_symbol, _, _, _} = Term)   -> {ok, {#{}, Term}};

@@ -66,10 +66,48 @@ clauses(Mode, Env, Stack, Args, [{clause, Ctx, _, _} | _] = Clauses) ->
 
 clause(Mode, Env, Stack, Args, {clause, _, Patterns, Expr}) ->
     Scan = fun(ArgTag, Domain, Pattern) -> 
-                   case pattern(Mode, Env, Stack, Domain, Pattern) of
+                   % The strictness of a pattern is either `normal` or
+                   % `lenient`. A pattern is evaluated at compile time in to a
+                   % literal domain.
+                   %
+                   % When we typecheck using a strictness mode of `strict`, we
+                   % check that the set of values that an expression can take
+                   % is a subset of possible values which it is allowed to take
+                   % given the constraints in place (e.g. a pattern).  When
+                   % using a strictness mode of `normal`, we check instead that
+                   % the value domain intersects with the constraint domain,
+                   % i.e. that some values satisfy the constraints.                   %
+                   %
+                   % When evaluating code at runtime, having made sure that a
+                   % value domain is a subset of the constraints, means that
+                   % we're sure that any function called with the value is
+                   % defined for that value.
+                   %
+                   % Patterns on the other hand are evaluated to domain
+                   % literals (e.g. a list of possible values) at compile time
+                   % and aren't 'executed' at run-time. When we evaluate a
+                   % pattern at run-time, we're interested in the fact that a
+                   % pattern may match. Even though we might type-check
+                   % with the strictness mode set to 'strict', we aren't
+                   % interested in whether an expression is strictly a subset
+                   % of a patternb.
+                   %
+                   % There's one complication in that application arguments in
+                   % a pattern are treated as expressions. This means that an
+                   % argument to an application could itself be an expression
+                   % calling a function. Since this evaluation would take time
+                   % at compile time, we should only be evaluating the domain
+                   % level of any function, which removes the risk of calling a
+                   % function for values it isn't defined for. It might be a
+                   % faff to make sure that we don't end up passing the
+                   % application a bunch of terms that haven't been evaluated
+                   % to their domains though.
+                   PatternMode = case Mode of lenient -> lenient; _ -> normal end,
+                   case pattern(PatternMode, Env, Stack, Domain, Pattern) of
                        {error, _} = Errs    -> {#{}, Errs};
                        {ok, {E, D}}         -> {merge(E, #{ArgTag => D}), D}
                    end end,
+
     {PsEnvs, PsDomains} = unzip([Scan(ArgTag, ArgDomain, Pattern) || 
                                  {{ArgTag, ArgDomain}, Pattern} <- zip(Args, Patterns)]),
     ClauseEnv = merge([Env | PsEnvs]),
@@ -199,6 +237,9 @@ pattern(Mode, Env, Stack, Domain, {dict_pair, _, Key, Val}) ->
 
 % Pattern: `T(a)` or `f(b)`
 pattern(Mode, Env, Stack, Domain, {application, Ctx, _, _} = Term) ->
+    % The arguments of a function application are interpreted as an expression
+    % and not as a pattern. This allows us to pass other variables in scope as
+    % arguments.
     case expr(Mode, Env, Stack, Term) of
         {error, Errs}           -> {error, Errs};
         {ok, {_, AppDomain}}    ->

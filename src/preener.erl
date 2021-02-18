@@ -30,7 +30,8 @@ clean_tuple_elements(Expressions) ->
     F = fun({val, Ctx, Pattern, Expr}, Acc)         -> {'let', Ctx, Pattern, Expr, Acc};
            ({def, Ctx, Name, _} = Expr, Acc)        -> Pattern = {symbol, Ctx, variable, Name},
                                                        {'let', Ctx, Pattern, Expr, Acc};
-           ({type_def, Ctx, _, _} = Expr, Acc)      -> {let_type, Ctx, Expr, Acc};
+           ({type_def, Ctx, Name, _} = Expr, Acc)   -> Pattern = {symbol, Ctx, variable, Name},
+                                                       {'let', Ctx, Pattern, Expr, Acc};
            (T, Acc)                                 -> {seq, ast:context(T), T, Acc} end,
     case lists:reverse(Expressions) of
         [{val, _, _, _} = T | _]    -> error:format({illegal_end_of_tuple, val}, {preener, T});
@@ -68,14 +69,16 @@ tagged_pre(top_level, _, {type_def, _, Name, _} = Term) ->
     {ok, ast:tag(parent, Term, Name)};
 tagged_pre(top_level, _, {def, _, Name, _} = Term) -> 
     {ok, ast:tag(parent, Term, Name)};
+tagged_pre(top_level, _, {macro, _, Name, _} = Term) -> 
+    {ok, ast:tag(parent, Term, Name)};
 tagged_pre(top_level, _, _)  -> ok;
 tagged_pre(_, _, Term) -> {ok, ast:tag(parent, Term)}.
-tagged_post(expr, _, {pair, Ctx, {symbol, _, _, Name}, Val} = Term) ->
+tagged_post(_, _, {pair, Ctx, {symbol, _, type, Name}, Val} = Term) ->
     Parent = ast:get_tag(parent, Term),
-    {ok, {tagged, Ctx, [Parent, Name], Val}};
-tagged_post(pattern, _, {pair, Ctx, {symbol, _, type, Name}, Val} = Term) ->
-    Parent = ast:get_tag(parent, Term),
-    {ok, {tagged, Ctx, [Parent, Name], Val}};
+    case Parent =:= Name of
+        true    -> {ok, {tagged, Ctx, [Name], Val}};
+        false   -> {ok, {tagged, Ctx, [Parent, Name], Val}}
+    end;
 tagged_post(_, _, _) -> ok.
 tagged_values(AST) ->
     ast:traverse(fun tagged_pre/3, fun tagged_post/3, AST).
@@ -119,41 +122,6 @@ translate_vals_to_let_statements_test_() ->
                       {'let', _, {symbol, _, _, c}, {symbol, _, _, a},
                        {symbol, _, _, c}}}}}]}}]}, do_preen(Code)).
 
-translate_defs_to_let_statements_test_() ->
-    Code = "def test a -> (def f b -> a, f(a))",
-    ?test({ok, [{def, _, _,
-                 {'fun', _,
-                  [{clause, _, _,
-                    {'let', _,
-                     {symbol, _, _, f},
-                     {def, _, f,
-                      {'fun', _,
-                       [{clause, _,
-                         [{symbol, _, _, b}],
-                         {symbol, _, _, a}}]}},
-                     {application, _,
-                      {symbol, _, _, f},
-                      [{symbol, _, _, a}]}}}]}}]}, do_preen(Code)).
-
-translate_typedefs_to_let_type_statements_test_() ->
-    Code = "def test a -> (type T b -> (A | b),\n"
-           "               a: T(a))",
-    ?test({ok, [{def, _, _,
-                 {'fun', _,
-                  [{clause, _, _,
-                    {let_type, _,
-                     {type_def, _, 'T',
-                      {'fun', _,
-                       [{clause, _,
-                         [{symbol, _, _, b}],
-                         {sum, _,
-                          [{symbol, _, _, 'A'},
-                           {symbol, _, _, b}]}}]}},
-                     {tagged, _, [test, a],
-                      {application, _,
-                       {symbol, _, _, 'T'},
-                       [{symbol, _, _, a}]}}}}]}}]}, do_preen(Code)).
-
 dict_expr_test_() ->
     Code = "def test a -> {a: a, b: a}",
     ?test({ok, [{def, _, _,
@@ -191,11 +159,21 @@ dict_illegal_element_test_() ->
                {illegal_dict_pair_element, dict, expr}, do_preen(Code)).
 
 pair_expr_test_() ->
-    Code = "def test a -> a: {a: a, b}",
+    Code = "def test a -> A: {a: a, b}",
     ?test({ok, [{def, _, _,
                  {'fun', _,
                   [{clause, _, _,
-                    {tagged, _, [test, a],
+                    {tagged, _, [test, 'A'],
+                     {dict, _,
+                      [{pair, _, {key, _, a}, {symbol, _, _, a}},
+                       {key, _, b}]}}}]}}]}, do_preen(Code)).
+
+pair_expr_homonym_test_() ->
+    Code = "def A a -> A: {a: a, b}",
+    ?test({ok, [{def, _, _,
+                 {'fun', _,
+                  [{clause, _, _,
+                    {tagged, _, ['A'],
                      {dict, _,
                       [{pair, _, {key, _, a}, {symbol, _, _, a}},
                        {key, _, b}]}}}]}}]}, do_preen(Code)).

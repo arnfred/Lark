@@ -3,10 +3,10 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
-get_AST(Code) ->
+tag(Code) ->
     case parser:parse([{text, Code}], #{import_kind_libraries => false}) of
         {error, Errs} -> {error, Errs};
-        {ok, [{ast, _, _, _, Defs} | _]} -> {ok, maps:values(Defs)}
+        {ok, [{module, _, _, _, _, Defs} | _]} -> {ok, maps:values(Defs)}
     end.
 
 
@@ -17,7 +17,7 @@ identity_function_test_() ->
                          [{clause, _,
                            [{variable, _, a, A}],
                            {variable, _, a, A}}]}}]},
-                 get_AST(Code)).
+                 tag(Code)).
 
 pattern_match1_test_() ->
     Code = 
@@ -26,7 +26,7 @@ pattern_match1_test_() ->
     ?test({ok, [{def, _, 'not',
                         {'fun', _,
                          [{clause, _, [{variable, _, b, B}], {variable, _, b, B}}]}}]},
-                 get_AST(Code)).
+                 tag(Code)).
 
 tuple_test_() ->
     Code = "def not a -> (a, a)",
@@ -35,7 +35,7 @@ tuple_test_() ->
                          [{clause, _,
                            [{variable, _, a, A}],
                            {seq, _, {variable, _, a, A}, {variable, _, a, A}}}]}}]},
-                 get_AST(Code)).
+                 tag(Code)).
     
 anonymous_function_test_() ->
     Code = 
@@ -57,7 +57,7 @@ anonymous_function_test_() ->
                          [{clause, _,
                            [{variable, _, a, A1}],
                            {variable, _, a, A1}}]}}]},
-                 get_AST(Code)).
+                 tag(Code)).
 
 dict_pair_test_() ->
     Code = "def f b -> {a: b}",
@@ -68,7 +68,7 @@ dict_pair_test_() ->
                     {dict, _,
                      [{pair, _,
                        {key, _, a},
-                       {variable, _, b, B}}]}}]}}]}, get_AST(Code)).
+                       {variable, _, b, B}}]}}]}}]}, tag(Code)).
 
 
 dict_value_test_() ->
@@ -81,7 +81,7 @@ dict_value_test_() ->
                     {pair,_,
                      {variable, _, d, D},
                      {dict, _,
-                      [{key, _, a}]}}}]}}]}, get_AST(Code)).
+                      [{key, _, a}]}}}]}}]}, tag(Code)).
 
 
 simple_sum_type_test_() ->
@@ -96,9 +96,9 @@ simple_sum_type_test_() ->
                 {def, _, blah,
                  {'fun', _,
                   [{clause, _,
-                    [{type, _, 'True', ['Boolean', 'True']}],
-                    {type, _, 'False', ['Boolean', 'False']}}]}}]},
-          get_AST(Code)).
+                    [{qualified_symbol, _, [Root, 'Boolean'], 'True'}],
+                    {qualified_symbol, _, [Root, 'Boolean'], 'False'}}]}}]},
+          tag(Code)).
 
 complex_sum_syntax_test_() ->
     Code =
@@ -113,21 +113,20 @@ complex_sum_syntax_test_() ->
                           {type, _, 'Parrot', ['Animal', 'Parrot']},
                           {type, _, 'Seagull', ['Animal', 'Seagull']},
                           {type, _, 'Brontosaurus', ['Animal', 'Brontosaurus']}]}}]},
-                 get_AST(Code)).
+                 tag(Code)).
 
 simple_product_type_test_() ->
     Code =
         "type Monkey -> Monkey: { food: Banana, plant: Trees }",
     ?test({ok, [{type_def, _, 'Monkey',
-                        {pair, _,
-                         {type, _, 'Monkey', ['Monkey']},
+                        {tagged, _, ['Monkey'],
                          {dict, _,
                           [{pair,_,
                             {key,_,food},
                             {type,_,'Banana',['Monkey', 'Banana']}},
                            {pair,_,
                             {key,_,plant},
-                            {type,_,'Trees',['Monkey', 'Trees']}}]}}}]}, get_AST(Code)).
+                            {type,_,'Trees',['Monkey', 'Trees']}}]}}}]}, tag(Code)).
 
 complex_type_test_() ->
     Code =
@@ -136,8 +135,7 @@ complex_type_test_() ->
         "                     Nil)",
     ?test({ok, [{type_def,_,'BooleanList',
                         {sum,_,
-                         [{pair,_,
-                           {type,_,'Cons',['BooleanList','Cons']},
+                         [{tagged,_,['BooleanList','Cons'],
                            {dict,_,
                             [{pair,_,
                               {key,_,value},
@@ -147,19 +145,19 @@ complex_type_test_() ->
                              {pair,_,
                               {key,_,cons},
                               {type,_,'BooleanList',['BooleanList']}}]}},
-                          {type,_,'Nil',['BooleanList','Nil']}]}}]}, get_AST(Code)).
+                          {type,_,'Nil',['BooleanList','Nil']}]}}]}, tag(Code)).
 
 
 product_key_not_propagated_test_() ->
     Code =
         "type Blip -> { blup: Blyp }\n"
         "def blap -> blup",
-    ?testError({undefined_variable, blup}, get_AST(Code)).
+    ?testError({undefined_symbol, blup}, tag(Code)).
 
 pattern_product_key_propagated_test_() ->
     Code = "def test\n"
            " | {b, c} -> b(c)",
-    Tagged = get_AST(Code),
+    Tagged = tag(Code),
     ?test({ok, [{def, _, test,
                  {'fun', _,
                   [{clause,_,
@@ -170,63 +168,35 @@ pattern_product_key_propagated_test_() ->
                      {variable,_,b, _B},
                      [{variable,_,c, _C}]}}]}}]}, Tagged).
 
-undefined_type_test_() ->
-    Code = "def test -> T",
-    ?testError({undefined_symbol, type, 'T'}, get_AST(Code)).
-
 undefined_variable_test_() ->
     Code = "def test -> a",
-    ?testError({undefined_variable, a}, get_AST(Code)).
+    ?testError({undefined_symbol, a}, tag(Code)).
 
 undefined_qualified_symbol_test_() ->
     Code = "def test -> T/T",
-    ?testError({undefined_symbol, 'T/T'}, get_AST(Code)).
+    ?testError({undefined_symbol, 'T/T'}, tag(Code)).
 
-nested_def_test_() ->
-    Code = "def test a -> (def f b -> a,\n"
+val_test_() ->
+    Code = "def test a -> (val f = | b -> a,\n"
            "               f(a))",
     ?test({ok, [{def, _, test,
                  {'fun', _,
                   [{clause, _,
                     [{variable, _, a, A1}],
                     {'let', _, {variable, _, f, F},
-                     {def, _, f,
-                      {'fun', _,
-                       [{clause, _,
-                         [{variable, _, b, _B}],
-                         {variable, _, a, _A2}}]}},
+                     {'fun', _,
+                      [{clause, _,
+                        [{variable, _, b, _B}],
+                        {variable, _, a, A1}}]},
                      {application, _, {variable, _, f, F},
-                      [{variable, _, a, A1}]}}}]}}]}, get_AST(Code)).
+                      [{variable, _, a, A1}]}}}]}}]}, tag(Code)).
 
-nested_type_test_() ->
-    Code = "def match a f -> f(a)\n"
-           "def test a -> (type T -> (A | B),\n"
-           "               a.match(\n"
-           "                 | T -> a\n"
-           "                 | T/A -> T/B))",
-    ?test({ok, [_,
-                {def, _, test,
-                 {'fun', _,
-                  [{clause, _,
-                    [{variable, _, a, _A}],
-                    {let_type, _,
-                     {type_def, _, 'T',
-                      {sum, _, [{type, _, 'A', ['T', 'A']},
-                                {type, _, 'B', ['T', 'B']}]}},
-                     {application, _, {variable, _, match, {match, 2}},
-                      [{variable, _, a, _A},
-                       {'fun', _,
-                        [{clause, _, [{type, _, 'T', ['T']}],
-                          {variable, _, a, _A}},
-                         {clause, _, [{type, _, 'A', ['T', 'A']}],
-                          {type, _, 'B', ['T', 'B']}}]}]}}}]}}]},
-          get_AST(Code)).
-
-type_already_defined_error_test_() ->
-    Code = "type B -> (A | C)\n"
-           "def test -> (type B -> (C | B/A),\n"
-           "             B/C)",
-    ?testError({type_already_defined, 'B'}, get_AST(Code)).
+local_import_conflict_test_() ->
+    Code = "type T -> (A | B)
+            import T/_",
+    ?test({ok, [{type_def, _, 'T', {sum, _,
+                                    [{qualified_symbol, _, [_,'T'], 'A'},
+                                     {qualified_symbol, _, [_,'T'], 'B'}]}}]}, tag(Code)).
 
 type_variable_test_() ->
     Code = "type F a -> a",
@@ -234,4 +204,25 @@ type_variable_test_() ->
                  {'fun', _,
                   [{clause, _,
                     [{variable, _, 'a', A}],
-                    {variable, _, 'a', A}}]}}]}, get_AST(Code)).
+                    {variable, _, 'a', A}}]}}]}, tag(Code)).
+
+tag_sub_module_test_() ->
+    "I'm seeing some problems with type defs in sub modules and it's likely
+     that the issue I'm seeing belongs in the `tagged_gen` module, but it's
+     easier to design a test for it here",
+    Code = "type List a -> (Nil | Cons: { head: a, tail: List(a) })",
+    Parsed = parser:parse([{text, Code}], #{import_kind_libraries => false}),
+    {ok, Modules} = Parsed,
+    % Should result in `no_file_xxxxx` module and `no_file_xxxxx_List` module.
+    % We're interested in the latter.
+    [#{'Cons' := Cons}] = [Defs || {module, _, Path, _, _, Defs} <- Modules, lists:last(Path) =:= 'List'],
+    ?test({type_def, _, 'Cons',
+                {'fun', _,
+                 [{clause, _,
+                   [{pair, _, {variable, _, _, Sub1}, {variable, _, a, _}},
+                    {pair, _, {variable, _, _, Sub2}, {application, _,
+                                                       {qualified_symbol, _, _, 'List'},
+                                                       [{type, _, any, _}]}}],
+                   {tagged, _, ['List', 'Cons'],
+                    {dict, _, [{pair, _, {key, _, head}, {variable, _, _, Sub1}},
+                               {pair, _, {key, _, tail}, {variable, _, _, Sub2}}]}}}]}}, Cons).

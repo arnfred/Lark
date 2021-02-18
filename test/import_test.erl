@@ -18,7 +18,7 @@ symbols([S | Symbols], Out) when is_map(S) ->
                                    {symbol, #{}, variable, K},
                                    {symbol, #{}, variable, V}} || {K, V} <- maps:to_list(S)]} | Out]).
 
-empty_module() -> {module, #{}, [test_module], [], #{}, #{}, #{}}.
+empty_module() -> {module, #{}, [test_module], [], #{}, #{}}.
 
 test_import(ImportPath, ModuleMap) ->
 	import:import({import, #{}, symbols(ImportPath)}, empty_module(), ModuleMap).
@@ -106,6 +106,14 @@ local_type_test_() ->
     Actual = import:import(import(['Blup', 'A']), Mod, ModuleMap),
     ?test({ok, [{alias, _, 'A', {qualified_symbol, _, [blap, 'Blup'], 'A'}}]}, Actual).
 
+local_type_parent_test_() ->
+    Code = "type Blup -> (A | B)",
+    ModuleMap = module_map("blap", Code),
+    #{blap := Mod} = ModuleMap,
+    Actual = import:import(import(['Blup']), Mod, ModuleMap),
+    ?test({ok, [{alias, _, 'Blup/A', {qualified_symbol, _, [blap, 'Blup'], 'A'}},
+                {alias, _, 'Blup/B', {qualified_symbol, _, [blap, 'Blup'], 'B'}}]}, Actual).
+
 local_type_underscore_test_() ->
     Code = "type Blup -> (A | B)",
     ModuleMap = module_map("blap", Code),
@@ -118,16 +126,27 @@ transitive_local_type_test_() ->
     Code = "type Blup -> (A | B)
             module test_module {} (import Blup/A)",
     ModuleMap = module_map("root_module", Code),
-    #{test_module := {module, _, _, Imports, _, _, _} = Mod} = ModuleMap,
+    #{test_module := {module, _, _, Imports, _, _} = Mod} = ModuleMap,
     Actual = import:import(lists:last(Imports), Mod, ModuleMap),
     ?test({ok, [{alias, _, 'A', {qualified_symbol, _, [root_module, 'Blup'], 'A'}}]}, Actual).
+
+transitive_local_type_dict_import_test_() ->
+    Code = "module test/module1 {T, S} (type T -> A
+                                        type S -> B)
+            module test/module2 {} (import test/module1/{T: Q, S}
+                                    import S/_
+                                    import T/_)",
+    ModuleMap = module_map("root_module", Code),
+    #{test_module2 := {module, _, _, Imports, _, _} = Mod} = ModuleMap,
+    Actual = import:import(lists:last(Imports), Mod, ModuleMap),
+    ?test({ok, [{alias, _, 'A', {qualified_symbol, _, [test, module1, 'T'], 'A'}}]}, Actual).
 
 transitive_path_overlap_test_() ->
     Code = "module a/b/c {T} (type T -> A)
             import a/b/c
             import c/T",
     ModuleMap = module_map("test_module", Code), 
-    #{test_module := {module, _, _, Imports, _, _, _} = Mod} = ModuleMap,
+    #{test_module := {module, _, _, Imports, _, _} = Mod} = ModuleMap,
     Actual = import:import(lists:last(Imports), Mod, ModuleMap),
     ?test({ok, [{alias, _, 'T', {qualified_symbol, _, [a, b, c], 'T'}},
                 {alias, _, 'T/A', {qualified_symbol, _, [a, b, c, 'T'], 'A'}}]}, Actual).
@@ -139,9 +158,18 @@ ambigious_transitive_local_type_test_() ->
                                     import test/module2/_
                                     import Blup)",
     ModuleMap = module_map("test_file", Code),
-    #{test_module3 := {module, _, _, Imports, _, _, _} = Mod} = ModuleMap,
+    #{test_module3 := {module, _, _, Imports, _, _} = Mod} = ModuleMap,
     Actual = import:import(lists:last(Imports), Mod, ModuleMap),
     ?testError({multiple_transitive_import_candidates, ['test/module1/Blup', 'test/module2/Blup']}, Actual).
+
+qualified_export_test_() ->
+    Code = "module test/module1 {T/A} (type T -> (A | B))
+            module test/module2 {} (import test/module1/_)",
+    ModuleMap = module_map("test_file", Code),
+    #{test_module2 := {module, _, _, Imports, _, _} = Mod} = ModuleMap,
+    Actual = import:import(lists:last(Imports), Mod, ModuleMap),
+    ?test({ok, [{dependency, _, [test, module1]},
+                {alias, _, 'A', {qualified_symbol, _, [test, module1, 'T'], 'A'}}]}, Actual).
 
 errors_test_() ->
     Code = "type Blup -> A",

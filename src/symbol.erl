@@ -20,6 +20,7 @@ tag({tagged, _, Symbols, _}) -> tag(Symbols);
 tag({symbol, _, _, S}) -> S;
 tag({variable, _, _, Tag}) -> Tag;
 tag({key, _, K}) -> K;
+tag({qualified_symbol, _, Path, S}) -> tag(Path ++ [S]);
 tag(Term) -> list_to_atom("expr_" ++ integer_to_list(erlang:phash2(Term))).
 
 ctx(Term) -> element(2, Term).
@@ -30,9 +31,11 @@ name({key, _, Key}) -> Key;
 name({symbol, _, _, S}) -> S;
 name({qualified_symbol, _, _, S}) -> S;
 name({qualified_symbol, _, S}) -> S;
+name({tagged, _, Symbols, _}) -> lists:last(Symbols);
 name({variable, _, Key, _}) -> Key;
 name({type, _, Key}) -> Key;
-name({type, _, Key, _}) -> Key.
+name({type, _, Key, _}) -> Key;
+name({type_def, _, Name, _}) -> Name.
 
 is({symbol, _, _, _})           -> true;
 is({variable, _, _, _})         -> true;

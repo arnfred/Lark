@@ -55,6 +55,7 @@ is_literal(_TypesEnv, D) when is_atom(D)                        -> true;
 is_literal(_TypesEnv, N) when is_number(N)                      -> true;
 is_literal(_TypesEnv, S) when is_binary(S)                      -> true;
 is_literal(_TypesEnv, {variable, _, _, _})                      -> false;
+is_literal(_TypesEnv, {symbol, _, variable, _})                 -> false;
 is_literal(_TypesEnv, {application, _, _, _})                   -> false;
 is_literal(_TypesEnv, {recursive_type_application, _, _, _})    -> false;
 is_literal(_TypesEnv, {recursive_type, _, _, _})                -> false;

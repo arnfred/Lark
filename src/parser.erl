@@ -37,13 +37,11 @@ parse(Inputs, Options) ->
                             case error:collect([F(M) || M <- maps:values(ModuleMap)]) of
                                 {error, Errs}   -> {error, Errs};
                                 {ok, Formatted} ->
-                                    {DepList, TaggedASTs} = lists:unzip(Formatted),
+                                    {DepList, TaggedMods} = lists:unzip(Formatted),
                                     case topological_sort(lists:flatten(DepList)) of
                                         {error, Errs}   -> {error, Errs};
-                                        {ok, Order}     -> 
-                                            {Paths, _} = lists:unzip(Sources),
-                                            TaggedSources = lists:zip(Paths, TaggedASTs),
-                                            {ok, reorder_asts(Order, TaggedSources)}
+                                        {ok, Order}     ->
+                                            {ok, reorder_modules(Order, TaggedMods)}
                                     end
                             end
                     end
@@ -60,12 +58,12 @@ traverse(FileName) ->
     case {filelib:is_dir(FileName), filelib:is_file(FileName)} of
         {true, _} -> traverse(dir, FileName);
         {_, true} -> traverse(file, FileName);
-        _         -> error:format({malformed_path, FileName}, {sourcemap})
+        _         -> error:format({malformed_path, FileName}, {parser})
     end.
 
 traverse(dir, FileName) -> 
     case file:list_dir(FileName) of
-        {error, Err}     -> error:format({error_listing_dir_files, FileName, Err}, {sourcemap});
+        {error, Err}     -> error:format({error_listing_dir_files, FileName, Err}, {parser});
         {ok, List}       -> 
             case error:collect([traverse(filename:absname_join(FileName, File)) || File <- List]) of
                 {error, Errs}   -> {error, Errs};
@@ -79,60 +77,19 @@ traverse(file, FileName) ->
         _               -> []
     end.
 
-types_pre(top_level, _, {type_def, _, Name, _} = Term) -> 
-    {ok, ast:tag(parent, Term, Name)};
-types_pre(top_level, _, _)  -> skip;
-types_pre(_, _, Term) -> {ok, ast:tag(parent, Term)}.
-
-types_post(expr, _, {pair, _, {symbol, _, type, Name}, _} = Term) -> 
-    Parent = ast:get_tag(parent, Term),
-    {ok, {Parent, Name}, Term};
-types_post(expr, _, {pair, _, {symbol, _, operator, Name}, _} = Term) -> 
-    Parent = ast:get_tag(parent, Term),
-    {ok, {Parent, Name}, Term};
-types_post(expr, _, {symbol, _, type, Name} = Term) -> 
-    Parent = ast:get_tag(parent, Term),
-    % Don't include recursive types
-    case Parent == Name of
-        true    -> {ok, Term};
-        false   -> {ok, {Parent, Name}, Term}
-    end;
-types_post(_, _, _) -> ok.
-
-
-types(FileName, AST) ->
-    case ast:traverse(fun types_pre/3, fun types_post/3, AST) of
-        {error, Errs}   -> 
-            {error, Errs};
-        {ok, {Env, _}}  -> 
-            GetKey = fun({K, _}) -> K end,
-            GetVal = fun({_, V}) -> V end,
-            Types = maps:from_list(utils:group_by(GetKey, GetVal, maps:keys(Env))),
-            {ok, {FileName, Types}}
-    end.
-
-
-type_modules({module, Ctx, Name, Exports}, Types) ->
-    F = fun(Type, Members) ->
-                TypeExports = maps:from_list([{T, T} || T <- Members]),
-                Path = Name ++ [Type],
-                {module, Ctx, Path, TypeExports}
-        end,
-    [F(T, Members) || {T, Members} <- maps:to_list(Types), maps:is_key(T, Exports)].
-
 load_source({source, FileName}) ->
     case file:read_file(FileName) of
-        {error, Err}    -> error:format({malformed_source_file, Err, FileName}, {sourcemap, FileName});
+        {error, Err}    -> error:format({malformed_source_file, Err, FileName}, {parser, FileName});
         {ok, Data}      -> {FileName, unicode:characters_to_list(Data, utf8)}
     end.
 
 to_ast(FileName, Text) ->
     case lexer:string(Text) of
-        {error, Error}          -> error:format({lexer_error, Error},{sourcemap, FileName});
-        {error, Error1, Error2} -> error:format({lexer_error, Error1, Error2},{sourcemap, FileName});
+        {error, Error}          -> error:format({lexer_error, Error},{parser, FileName});
+        {error, Error1, Error2} -> error:format({lexer_error, Error1, Error2},{parser, FileName});
         {ok, Tokens, _}         ->
             case syntax:parse(Tokens) of
-                {error, Error}  -> error:format({parser_error, Error}, {sourcemap, FileName});
+                {error, Error}  -> error:format({parser_error, Error}, {parser, FileName});
                 {ok, Parsed}    ->
                     case preener:preen(FileName, Parsed) of
                         {error, Errs}   -> {error, Errs};
@@ -141,43 +98,46 @@ to_ast(FileName, Text) ->
             end
     end.
 
-import_and_tag({module, ModuleCtx, ModulePath, Imports, Exports, DefMap, Types},
-               ModuleMap,
-               Options) ->
+import_and_tag({module, ModuleCtx, ModulePath, ModuleImports, Exports, DefMap} = Mod, ModuleMap, Options) ->
 
     % Make sure to import prelude only if we're both importing prelude and all
     % kind libraries in general
     ImportPrelude = maps:get(import_prelude, Options, true) andalso maps:get(import_kind_libraries, Options, true),
-
-	% make sure to include if we're running imports in sandboxed mode where
-	% only some erlang functions are allowed
-	Sandboxed = maps:get(sandboxed, Options, false),
 
     % Make sure not to import prelude if this is the prelude
     PreludePath = [{symbol, #{}, variable, kind}, {symbol, #{}, variable, prelude}, {symbol, #{}, variable, '_'}],
     PreludeImports = case {ImportPrelude, ModulePath} of
                          {false, _}             -> [];
                          {_, [kind, prelude]}   -> [];
-                         {_, _}                 -> import:import({import, #{}, PreludePath}, ModuleMap, Types, Sandboxed)
+                         {_, _}                 -> import:import({import, #{}, PreludePath}, Mod, ModuleMap, Options)
                      end,
 
-    F = fun(Import) -> import:import(Import, ModuleMap, Types, Sandboxed) end,
-    case error:collect([F(I) || I <- Imports] ++ [PreludeImports]) of
+    F = fun(Import) -> import:import(Import, Mod, ModuleMap, Options) end,
+    case error:collect([F(I) || I <- ModuleImports] ++ [PreludeImports]) of
         {error, Errs} -> {error, Errs};
         {ok, ImportList} ->
             Imports = lists:flatten(ImportList),
             Aliases = [A || {alias, _, _, _} = A <- Imports],
-            Dependencies = [Dep || {dependency, _, _} = Dep <- Imports],
-            ErrFun = fun({alias, ErrorCtx1, Alias, _},
-                         {alias, ErrorCtx2, _, _}) -> error:format({duplicate_import, Alias},
+            Dependencies = [{dependency, Ctx, ModulePath, Path} || {dependency, Ctx, Path} <- Imports],
+            ErrFun = fun({alias, ErrorCtx1, Alias, T1},
+                         {alias, ErrorCtx2, _, T2}) ->
+                             error:format({duplicate_import, Alias, symbol:tag(T1), symbol:tag(T2)},
                                                                    {import, ErrorCtx1, ErrorCtx2}) end,
-            case utils:duplicates(Aliases, fun({alias, _, A, _}) -> A end) of
-                []          -> ImportMap = maps:from_list([{Alias, Term} || {alias, _, Alias, Term} <- Aliases]),
-                               case tagger:tag(DefMap, ImportMap) of
-                                   {error, Errs}       -> {error, Errs};
-                                   {ok, {_, Tagged}}   -> {ok, {Dependencies, Tagged}}
-                               end;
-                Duplicates  -> error:collect([ErrFun(D1, D2) || {D1, D2} <- Duplicates])
+
+            % We want to pick out duplicate aliases that import different terms
+            % because this is ambigious. On the other hand we don't care if two
+            % separate imports map the same alias to the same term.
+            Duplicates = utils:duplicates(Aliases, fun({alias, _, A, _}) -> A end),
+            DistinctDuplicates = [{D1, D2} || {{alias, _, _, T1} = D1, {alias, _, _, T2} = D2} <- Duplicates,
+                                            not(symbol:tag(T1) =:= symbol:tag(T2))],
+            case DistinctDuplicates of
+                []  -> ImportMap = maps:from_list([{Alias, Term} || {alias, _, Alias, Term} <- Aliases]),
+                       ModuleWithImports = {module, ModuleCtx, ModulePath, ImportMap, Exports, DefMap},
+                       case tagger:tag(ModuleWithImports) of
+                           {error, Errs}       -> {error, Errs};
+                           {ok, {_, Tagged}}   -> {ok, {Dependencies, Tagged}}
+                       end;
+                _   -> error:collect([ErrFun(D1, D2) || {D1, D2} <- DistinctDuplicates])
             end
     end.
 
@@ -210,15 +170,15 @@ cycles(G, [Vertex | Rest], CycleErrs) ->
 
 % Any source without any dependencies isn't included in the module order
 % It needs to get added to the front of the path order
-reorder_asts(FileNameOrder, TaggedSources) ->
-    SourceMap = maps:from_list(TaggedSources),
-    Roots = [maps:get(FileName, SourceMap) || {FileName, _} <- TaggedSources, not(lists:member(FileName, FileNameOrder))],
-    Roots ++ [maps:get(FileName, SourceMap) || FileName <- FileNameOrder].
+reorder_modules(PathOrder, Modules) ->
+    ModMap = maps:from_list([{P, M} || {module, _, P, _, _, _} = M <- Modules]),
+    Roots = [Mod || {Path, Mod} <- maps:to_list(ModMap), not(lists:member(Path, PathOrder))],
+    Roots ++ [maps:get(Path, ModMap) || Path <- PathOrder].
 
 -ifdef(TEST).
 
 traverse_test_() -> 
-    {timeout,3600, [?_assertMatch({ok, _}, parse([{path, "test/dir"}], #{import_prelude => false}))]}.
+    ?test({ok, _}, parse([{path, "test/dir"}], #{import_prelude => false})).
 
 topo_sort_cycle_test_() -> Actual = topological_sort([{dependency, #{}, 'A', 'B'},
                                                       {dependency, #{}, 'B', 'C'},
