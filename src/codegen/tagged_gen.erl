@@ -7,6 +7,7 @@
 term(TypesEnv, {tagged, Ctx, Path, Val} = Term) -> tagged(Path, Ctx, term(TypesEnv, symbol:name(Term), Val));
 term(TypesEnv, Term) -> term(TypesEnv, symbol:name(Term), Term).
 
+term(TypesEnv, Tag, {link, _, _} = Term) -> Term;
 term(TypesEnv, Tag, Term) ->
     Ctx = element(2, Term),
     case domain:is_literal(TypesEnv, Term) of

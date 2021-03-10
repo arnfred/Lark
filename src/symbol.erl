@@ -1,13 +1,10 @@
 -module(symbol).
--export([id/1, tag/1, name/1, is/1, ctx/1]).
+-export([id/1, tag/1, name/1, is/1, ctx/1, rename/2]).
 
 id(Path) when is_list(Path) -> 
     PathString = [atom_to_list(A) || A <- lists:join('_', Path)],
     list_to_atom(lists:flatten([PathString, "_", get_random_string(6)]));
 id(Symbol) -> id([Symbol]).
-
-atom_id(Symbol) -> atom_id([Symbol]);
-atom_id(Path) -> list_to_atom(id(Path)).
 
 tag(Symbols) when is_list(Symbols) ->
     list_to_atom(lists:flatten([atom_to_list(A) || A <- lists:join('/', Symbols)]));
@@ -29,6 +26,7 @@ name({pair, _, K, _}) -> name(K);
 name({dict_pair, _, K, _}) -> name(K);
 name({key, _, Key}) -> Key;
 name({symbol, _, _, S}) -> S;
+name({link, _, Term}) -> name(Term);
 name({qualified_symbol, _, _, S}) -> S;
 name({qualified_symbol, _, S}) -> S;
 name({tagged, _, Symbols, _}) -> lists:last(Symbols);
@@ -36,6 +34,20 @@ name({variable, _, Key, _}) -> Key;
 name({type, _, Key}) -> Key;
 name({type, _, Key, _}) -> Key;
 name({type_def, _, Name, _}) -> Name.
+
+rename({pair, Ctx, K, V}, Name) -> {pair, Ctx, rename(K, Name), V};
+rename({dict_pair, Ctx, K, V}, Name) -> {dict_pair, Ctx, rename(K, Name), V};
+rename({key, Ctx, _}, Name) -> {key, Ctx, Name};
+rename({symbol, Ctx, Path, _}, Name) -> {symbol, Ctx, Path, Name};
+rename({link, Ctx, Term}, Name) -> {link, Ctx, rename(Term, Name)};
+rename({qualified_symbol, Ctx, Path, _}, Name) -> {qualified_symbol, Ctx, Path, Name};
+rename({qualified_symbol, Ctx, _}, Name) -> {qualified_symbol, Ctx, Name};
+rename({tagged, Ctx, Symbols, Expr}, Name) -> {tagged, Ctx, lists:droplast(Symbols) ++ [Name], Expr};
+rename({variable, Ctx, _, Tag}, Name) -> {variable, Ctx, Name, Tag};
+rename({type, Ctx, _}, Name) -> {type, Ctx, Name};
+rename({type, Ctx, _, Tag}, Name) -> {type, Ctx, Name, Tag};
+rename({type_def, Ctx, _, Expr}, Name) -> {type_def, Ctx, Name, Expr}.
+
 
 is({symbol, _, _, _})           -> true;
 is({variable, _, _, _})         -> true;

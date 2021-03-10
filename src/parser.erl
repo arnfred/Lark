@@ -15,13 +15,15 @@ parse(Inputs, Options) ->
 
     % Add in the kind libraries as input paths unless options says no
     GivenPaths = [Path || {path, Path} <- Inputs],
-    InputPaths = case maps:get(import_kind_libraries, Options, true) of
+    InputPaths = case maps:get(include_kind_libraries, Options, true) of
                      true   -> [?KIND_SRC_LIB | GivenPaths];
                      false  -> GivenPaths
                  end,
 
     Tag = fun() -> atom_to_list(symbol:id(no_file)) end,
-    InlineTexts = [{Tag(), Text} || {text, Text} <- Inputs],
+    UnnamedInlineTexts = [{Tag(), Text} || {text, Text} <- Inputs],
+    NamedInlineTexts = [{Tag, Text} || {text, Tag, Text} <- Inputs],
+    InlineTexts = UnnamedInlineTexts ++ NamedInlineTexts,
 
     case error:collect([load(P) || P <- InputPaths]) of
         {error, Errs}   -> {error, Errs};
@@ -41,7 +43,9 @@ parse(Inputs, Options) ->
                                     case topological_sort(lists:flatten(DepList)) of
                                         {error, Errs}   -> {error, Errs};
                                         {ok, Order}     ->
-                                            {ok, reorder_modules(Order, TaggedMods)}
+                                            ReOrdered = reorder_modules(Order, TaggedMods),
+                                            NoEmptyMods = [M || M <- ReOrdered, not(module:empty(M))],
+                                            {ok, NoEmptyMods}
                                     end
                             end
                     end
@@ -80,7 +84,7 @@ traverse(file, FileName) ->
 load_source({source, FileName}) ->
     case file:read_file(FileName) of
         {error, Err}    -> error:format({malformed_source_file, Err, FileName}, {parser, FileName});
-        {ok, Data}      -> {FileName, unicode:characters_to_list(Data, utf8)}
+        {ok, Data}      -> {ok, {FileName, unicode:characters_to_list(Data, utf8)}}
     end.
 
 to_ast(FileName, Text) ->
@@ -102,14 +106,17 @@ import_and_tag({module, ModuleCtx, ModulePath, ModuleImports, Exports, DefMap} =
 
     % Make sure to import prelude only if we're both importing prelude and all
     % kind libraries in general
-    ImportPrelude = maps:get(import_prelude, Options, true) andalso maps:get(import_kind_libraries, Options, true),
+    ImportPrelude = maps:get(import_prelude, Options, true) andalso maps:get(include_kind_libraries, Options, true),
 
     % Make sure not to import prelude if this is the prelude
-    PreludePath = [{symbol, #{}, variable, kind}, {symbol, #{}, variable, prelude}, {symbol, #{}, variable, '_'}],
+    Prelude = {import, ModuleCtx, [kind, prelude, '_']},
     PreludeImports = case {ImportPrelude, ModulePath} of
-                         {false, _}             -> [];
-                         {_, [kind, prelude]}   -> [];
-                         {_, _}                 -> import:import({import, #{}, PreludePath}, Mod, ModuleMap, Options)
+                         {false, _}                     -> [];
+                         {_, [source, lib, prelude]}    -> []; % source file module
+                         {_, [source, lib, prelude, _]} -> []; % source file sub modules
+                         {_, [kind, prelude]}           -> []; % declared module
+                         {_, [kind, prelude, _]}        -> []; % declared sub modules
+                         {_, _}                         -> import:import(Prelude, Mod, ModuleMap, Options)
                      end,
 
     F = fun(Import) -> import:import(Import, Mod, ModuleMap, Options) end,
@@ -121,8 +128,9 @@ import_and_tag({module, ModuleCtx, ModulePath, ModuleImports, Exports, DefMap} =
             Dependencies = [{dependency, Ctx, ModulePath, Path} || {dependency, Ctx, Path} <- Imports],
             ErrFun = fun({alias, ErrorCtx1, Alias, T1},
                          {alias, ErrorCtx2, _, T2}) ->
-                             error:format({duplicate_import, Alias, symbol:tag(T1), symbol:tag(T2)},
-                                                                   {import, ErrorCtx1, ErrorCtx2}) end,
+                             error:format({duplicate_import, Alias, module:kind_name(ModulePath),
+                                           symbol:tag(T1), symbol:tag(T2)},
+                                          {import, ErrorCtx1, ErrorCtx2}) end,
 
             % We want to pick out duplicate aliases that import different terms
             % because this is ambigious. On the other hand we don't care if two
@@ -133,7 +141,11 @@ import_and_tag({module, ModuleCtx, ModulePath, ModuleImports, Exports, DefMap} =
             case DistinctDuplicates of
                 []  -> ImportMap = maps:from_list([{Alias, Term} || {alias, _, Alias, Term} <- Aliases]),
                        ModuleWithImports = {module, ModuleCtx, ModulePath, ImportMap, Exports, DefMap},
-                       case tagger:tag(ModuleWithImports) of
+                       Module = case module:is_submodule(ModuleWithImports) of
+                                 true   -> remove_imported_defs(ModuleWithImports);
+                                 false  -> ModuleWithImports
+                             end,
+                       case tagger:tag(Module) of
                            {error, Errs}       -> {error, Errs};
                            {ok, {_, Tagged}}   -> {ok, {Dependencies, Tagged}}
                        end;
@@ -175,10 +187,16 @@ reorder_modules(PathOrder, Modules) ->
     Roots = [Mod || {Path, Mod} <- maps:to_list(ModMap), not(lists:member(Path, PathOrder))],
     Roots ++ [maps:get(Path, ModMap) || Path <- PathOrder].
 
+remove_imported_defs({module, Ctx, Path, Imports, Exports, Defs}) ->
+    NewDefs = maps:filter(fun(K, _V) -> not(maps:is_key(K, Imports)) end, Defs),
+    NewExports = maps:filter(fun(K, _V) -> not(maps:is_key(K, Imports)) end, Exports),
+    {module, ctx, Path, Imports, NewExports, NewDefs}.
+
+
 -ifdef(TEST).
 
 traverse_test_() -> 
-    ?test({ok, _}, parse([{path, "test/dir"}], #{import_prelude => false})).
+    ?test({ok, _}, parse([{path, "test/dir"}], #{import_prelude => true})).
 
 topo_sort_cycle_test_() -> Actual = topological_sort([{dependency, #{}, 'A', 'B'},
                                                       {dependency, #{}, 'B', 'C'},

@@ -228,6 +228,7 @@ step(_, _, _, {recursive_type, _, _, _} = Term)     -> {ok, {#{}, Term}};
 step(_, _, _, {qualified_symbol, _, _} = Term)      -> {ok, {#{}, Term}};
 step(_, _, _, {qualified_symbol, _, _, _} = Term)   -> {ok, {#{}, Term}};
 step(_, _, _, {key, _, _} = Term)                   -> {ok, {#{}, Term}};
+step(_, _, _, {link, _, _} = Term)                  -> {ok, {#{}, Term}};
 
 step(_, _, _, {value, _, _, _} = Term)              -> {ok, {#{}, Term}};
 

@@ -4,7 +4,7 @@
 -include("test/macros.hrl").
 
 tag(Code) ->
-    case parser:parse([{text, Code}], #{import_kind_libraries => false}) of
+    case parser:parse([{text, test_code, Code}], #{include_kind_libraries => false}) of
         {error, Errs} -> {error, Errs};
         {ok, [{module, _, _, _, _, Defs} | _]} -> {ok, maps:values(Defs)}
     end.
@@ -96,8 +96,8 @@ simple_sum_type_test_() ->
                 {def, _, blah,
                  {'fun', _,
                   [{clause, _,
-                    [{qualified_symbol, _, [Root, 'Boolean'], 'True'}],
-                    {qualified_symbol, _, [Root, 'Boolean'], 'False'}}]}}]},
+                    [{qualified_symbol, _, [source, test_code, 'Boolean'], 'True'}],
+                    {qualified_symbol, _, [source, test_code, 'Boolean'], 'False'}}]}}]},
           tag(Code)).
 
 complex_sum_syntax_test_() ->
@@ -123,7 +123,7 @@ simple_product_type_test_() ->
                          {dict, _,
                           [{pair,_,
                             {key,_,food},
-                            {type,_,'Banana',['Monkey', 'Banana']}},
+                            {type,_,'Banana', ['Monkey', 'Banana']}},
                            {pair,_,
                             {key,_,plant},
                             {type,_,'Trees',['Monkey', 'Trees']}}]}}}]}, tag(Code)).
@@ -195,8 +195,8 @@ local_import_conflict_test_() ->
     Code = "type T -> (A | B)
             import T/_",
     ?test({ok, [{type_def, _, 'T', {sum, _,
-                                    [{qualified_symbol, _, [_,'T'], 'A'},
-                                     {qualified_symbol, _, [_,'T'], 'B'}]}}]}, tag(Code)).
+                                    [{qualified_symbol, _, [source, test_code, 'T'], 'A'},
+                                     {qualified_symbol, _, [source, test_code, 'T'], 'B'}]}}]}, tag(Code)).
 
 type_variable_test_() ->
     Code = "type F a -> a",
@@ -211,7 +211,7 @@ tag_sub_module_test_() ->
      that the issue I'm seeing belongs in the `tagged_gen` module, but it's
      easier to design a test for it here",
     Code = "type List a -> (Nil | Cons: { head: a, tail: List(a) })",
-    Parsed = parser:parse([{text, Code}], #{import_kind_libraries => false}),
+    Parsed = parser:parse([{text, Code}], #{include_kind_libraries => false}),
     {ok, Modules} = Parsed,
     % Should result in `no_file_xxxxx` module and `no_file_xxxxx_List` module.
     % We're interested in the latter.

@@ -77,12 +77,12 @@
             ((fun () ->
                       case (Expr) of
                           {error, [{Err1, _} | [{Err2, _} | [{Err3, _} | _]]]} -> ok;
-                          {error, [{E1, _} | [{E2, _} | [{E3, _}]]]} -> erlang:error({errorMatch,
-                                                                                      [{module, ?MODULE},
-                                                                                       {line, ?LINE},
-                                                                                       {expression, (??Expr)},
-                                                                                       {expected, ([??Err1, ??Err2, ??Err3])},
-                                                                                       {actual, [E1, E2, E3]}]});
+                          {error, [{E1, _} | [{E2, _} | [{E3, _} | _]]]} -> erlang:error({errorMatch,
+                                                                                          [{module, ?MODULE},
+                                                                                           {line, ?LINE},
+                                                                                           {expression, (??Expr)},
+                                                                                           {expected, ([??Err1, ??Err2, ??Err3])},
+                                                                                           {actual, [E1, E2, E3]}]});
                           __V -> erlang:error({errorMatch,
                                                [{module, ?MODULE},
                                                 {line, ?LINE},

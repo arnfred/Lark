@@ -60,6 +60,7 @@ is_literal(_TypesEnv, {application, _, _, _})                   -> false;
 is_literal(_TypesEnv, {recursive_type_application, _, _, _})    -> false;
 is_literal(_TypesEnv, {recursive_type, _, _, _})                -> false;
 is_literal(_TypesEnv, {sum, _, _})                              -> false;
+is_literal(TypesEnv, {link, _, Term})                          -> is_literal(TypesEnv, Term);
 is_literal(TypesEnv, L) when is_list(L)         -> lists:all(fun(E) -> is_literal(TypesEnv, E) end, L);
 is_literal(TypesEnv, {list, _, Elems})          -> lists:all(fun(E) -> is_literal(TypesEnv, E) end, Elems);
 is_literal(TypesEnv, M) when is_map(M)          -> lists:all(fun(E) -> is_literal(TypesEnv, E) end, maps:values(M));

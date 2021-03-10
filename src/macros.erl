@@ -43,7 +43,7 @@ clean(Modules) ->
 -ifdef(TEST).
 
 
--define(setup(Code, Tests), {setup, fun() -> kind:load(Code, #{import_kind_libraries => false}) end, fun clean/1, Tests}).
+-define(setup(Code, Tests), {setup, fun() -> kind:load(Code, #{include_kind_libraries => false}) end, fun clean/1, Tests}).
 
 
 happy_macro_test_() ->

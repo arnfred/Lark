@@ -5,7 +5,7 @@
 
 -define(setup(Code, Tests), {setup,
                              fun() -> kind:load(Code, #{sandboxed => false,
-                                                        import_kind_libraries => true}) end,
+                                                        include_kind_libraries => true}) end,
                              fun clean/1,
                              Tests}).
 

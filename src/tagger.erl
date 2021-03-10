@@ -3,13 +3,13 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-tag({module, _, _Path, ImportScope, _Exports, Defs} = Module) ->
+tag({module, _, Path, ImportScope, _Exports, Defs} = Module) ->
     MacroScope = maps:from_list([{Name, true} || {macro, _, Name, _} <- maps:values(Defs)]),
     case ast:traverse(fun(_, _, _) -> ok end, fun tag_macros/3, MacroScope, Module) of
         {error, Errs}   -> {error, Errs};
         {ok, {_, MacroedModule}}  ->
             LocalScope = maps:from_list([{Name, tag_def(Def)} || {Name, Def} <- maps:to_list(Defs)]),
-            case merge_scopes(LocalScope, ImportScope) of
+            case merge_scopes(Path, LocalScope, ImportScope) of
                 {error, Errs}   -> {error, Errs};
                 {ok, Scope}     -> ast:traverse(fun(_, _, _) -> ok end, fun tag_symbols/3, Scope, MacroedModule)
             end
@@ -17,7 +17,7 @@ tag({module, _, _Path, ImportScope, _Exports, Defs} = Module) ->
 
 % maps:merge is simpler, but we want to error when an import conflicts with a
 % local definition
-merge_scopes(LocalScope, ImportScope) ->
+merge_scopes(ModulePath, LocalScope, ImportScope) ->
     F = fun(Alias, {type, _, _, _} = Term) -> {ok, {Alias, Term}};
            (Alias, Term) ->
                 case maps:is_key(Alias, LocalScope) of
@@ -26,7 +26,7 @@ merge_scopes(LocalScope, ImportScope) ->
                         {_, Ctx, Module, Name} = Term,
                         Import = maps:get(import, Ctx),
                         ImportName = module:kind_name(Module ++ [Name]),
-                        error:format({import_conflicts_with_local_def, Alias, ImportName},
+                        error:format({import_conflicts_with_local_def, Alias, module:kind_name(ModulePath), ImportName},
                                      {tagger, Import})
                 end
         end,
@@ -52,6 +52,7 @@ tag_def({def, _, Name, Expr}) ->
         _                                           ->
             {variable, #{}, Name, {Name, 0}}
     end;
+tag_def({link, _, Symbol}) -> Symbol;
 tag_def({type_def, _, Name, _Expr}) -> 
     {type, #{}, Name, [Name]}.
 

@@ -1,5 +1,8 @@
 -module(module).
--export([parse/1, beam_name/1, kind_name/1]).
+-export([parse/1, beam_name/1, kind_name/1, is_submodule/1, empty/1]).
+
+-include_lib("eunit/include/eunit.hrl").
+-include("test/macros.hrl").
 
 parse(Sources) ->
     case error:collect([prepare(FileName, AST) || {FileName, AST} <- Sources]) of
@@ -21,60 +24,67 @@ parse(Sources) ->
 prepare(FileName, Code) ->
     Modules = [M || M = {module, _, _, _, _} <- Code],
     DefList = [D || D = {Type, _, _, _} <- Code, Type == type_def orelse Type == def orelse Type == macro],
-    RootName = list_to_atom(FileName),
-    RootImports = [I || I = {import, _, _} <- Code],
-    case types(DefList, RootImports) of
+    RootPath = filename_to_module_path(FileName),
+    RootImports = [import(I) || I = {import, _, _} <- Code],
+    case types(DefList, RootImports, RootPath) of
         {error, Errs}   -> {error, Errs};
         {ok, RootTypes} ->
-            Root = root_module_and_types(RootName, RootImports, RootTypes, DefList),
+            Root = root_module_and_types(FileName, RootPath, RootImports, RootTypes, DefList),
             case error:collect([parse_module(M, Root) || M <- Modules]) of
                 {error, Errs}       -> {error, Errs};
-                {ok, ModsAndTypes}  -> SubModules = lists:flatten([sub_modules(M, Ts) || {M, Ts} <- [Root | ModsAndTypes]]),
+                {ok, ModsAndTypes}  -> SubModules = lists:flatten([sub_modules(M, Ts, RootPath, RootTypes) ||
+                                                                   {M, Ts} <- [Root | ModsAndTypes]]),
                                        {Mods, _} = lists:unzip([Root | ModsAndTypes]),
                                        {ok, {FileName, Mods ++ SubModules}}
             end
     end.
 
-root_module_and_types(RootName, RootImports, Types, DefList) ->
-    Ctx = #{filename => atom_to_list(RootName), line => 0, module => RootName},
+root_module_and_types(FileName, RootPath, RootImports, Types, DefList) ->
+    RootName = kind_name(RootPath),
+    Ctx = #{filename => FileName, line => 0, module => RootName},
     Defs = maps:from_list([{Name, Def} || {_, _, Name, _} = Def <- DefList]),
-    Imports = RootImports ++ [{import, Ctx, [{symbol, Ctx, type, Parent}]} || Parent <- maps:keys(Types)],
+    Imports = RootImports ++ [{import, Ctx, [Parent]} || Parent <- maps:keys(Types)],
     Exports = maps:from_list([{Name, {export, DefCtx, [Name], none}} || {_, DefCtx, Name, _} <- DefList]),
-    {tag_symbols({module, Ctx, [RootName], Imports, Exports, Defs}), Types}.
+    {tag_symbols({module, Ctx, RootPath, Imports, Exports, Defs}), Types}.
 
 
 parse_module({module, ModuleCtx, Path, Exports, Statements},
-             {{module, _RootCtx, RootPath, RootImports, _, RootDefs}, RootTypes}) ->
-    LocalImports = [I || I = {import, _, _} <- Statements],
+             {{module, _RootCtx, RootPath, RootImports, RootExports, RootDefs}, RootTypes}) ->
+    LocalImports = [import(I) || I = {import, _, _} <- Statements],
     LocalDefMap = maps:from_list([{Name, D} || D = {Type, _, Name, _} <- Statements,
                                              Type == type_def orelse Type == def orelse Type == macro]),
     RootDefMap = maps:from_list([{Name, T} || T = {Type, _, Name, _} <- maps:values(RootDefs),
                                              Type == type_def orelse Type == def orelse Type == macro]),
     
-    case types(Statements, LocalImports) of
+    case types(Statements, LocalImports, Path) of
         {error, Errs}       -> {error, Errs};
         {ok, LocalTypes}    ->
 
             Types = maps:merge(RootTypes, LocalTypes),
-            DefMap = maps:merge(RootDefMap, LocalDefMap),
+            GlobalDefMap = maps:merge(RootDefMap, LocalDefMap),
 
-            case error:collect([parse_export(E, Types, DefMap) || E <- Exports]) of
+            case error:collect([parse_export(E, Types, GlobalDefMap) || E <- Exports]) of
                 {error, Errs}       -> {error, Errs};
                 {ok, ExportTerms}   ->
                     ExportMap = maps:from_list(ExportTerms),
                     ModulePath = [S || {symbol, _, _, S} <- Path],
 
+                    % Any def we export but don't define is linked to the root module
+                    LinkF = fun(Ctx, Name) -> {link, Ctx, {qualified_symbol, Ctx, RootPath, Name}} end,
+                    Links = maps:from_list([{Name, LinkF(Ctx, Name)} || {_, {export, Ctx, [Name], _}} <- ExportTerms,
+                                                                        not(maps:is_key(Name, LocalDefMap))]),
+
                     % Import all defs in the source file defined outside a module
                     % alongside the explicitly stated imports within and outside the
                     % module and finally all types defined within the module
-                    RootImport = {import, ModuleCtx,
-                                  [{symbol, ModuleCtx, variable, P} || P <- RootPath] ++
-                                  [{symbol, ModuleCtx, variable, '_'}]},
-                    TypeImports = [{import, ModuleCtx, [{symbol, ModuleCtx, type, Parent}]} ||
-                                   Parent <- maps:keys(LocalTypes)],
-                    Imports = [RootImport | RootImports ++ TypeImports ++ LocalImports],
+                    ImportOfRootItself = base_import(ModuleCtx, RootPath, RootExports, Links),
+                    TypeImports = [{import, ModuleCtx, [Parent]} || Parent <- maps:keys(LocalTypes)],
+                    NonLocalRootImports = [I || I <- RootImports, not(is_local_non_wildcard_import(I, RootDefs))],
+                    Imports = [ImportOfRootItself | NonLocalRootImports ++ TypeImports ++ LocalImports],
 
-                    {ok, {tag_symbols({module, ModuleCtx, ModulePath, Imports, ExportMap, LocalDefMap}), LocalTypes}}
+                    DefMap = maps:merge(LocalDefMap, Links),
+
+                    {ok, {tag_symbols({module, ModuleCtx, ModulePath, Imports, ExportMap, DefMap}), LocalTypes}}
             end
     end.
 
@@ -89,7 +99,7 @@ parse_export({qualified_symbol, Ctx, Symbols} = Elem, Types, DefMap) when (lengt
     [P, T] = [S || {symbol, _, _, S} <- Symbols],
     case maps:is_key(P, DefMap) andalso 
          maps:is_key(P, Types) andalso
-         lists:member(T, [symbol:tag(C) || C <- maps:get(P, Types)]) of
+         lists:member(T, [C || {C, _} <- maps:get(P, Types)]) of
         false -> error:format({export_missing, module:kind_name([P, T])}, {module, Elem});
         true  -> case maps:is_key(T, DefMap) of
                      false  -> {ok, {T, {export, Ctx, [P, T], none}}};
@@ -113,60 +123,58 @@ parse_export({symbol, Ctx, _, Val} = Elem, _Types, DefMap) ->
 % If we export 'Boolean' in 'prelude', then we want to be able to import
 % 'prelude/Boolean/_'.  To do this, we need a module for 'prelude/Boolean',
 % which exports anything defined by 'Boolean'.
-sub_modules({module, BaseCtx, BasePath, BaseImports, BaseExports, BaseDefMap}, BaseTypes) ->
-    F = fun(Parent, Children) ->
-                % Any function defined in the base module could be called from
-                % a definition in the sub module, so the base module needs to
-                % be in scope.
-                %
-                % A def might have the same name as a subtype in the def. For
-                % this reason we import only the base exports that don't match
-                % the names of any of the children
-                ChildMap = maps:from_list([{symbol:name(C), true} || C <- Children]),
-                BaseExportsNotInChildren = [E || {K, E} <- maps:to_list(BaseExports), not(maps:is_key(K, ChildMap))],
-                BaseImportDict = {dict, BaseCtx, [{symbol, BaseCtx, variable, lists:last(P)}
-                                                  || {export, _, P, _} <- BaseExportsNotInChildren]},
-                ImportOfBaseItself = {import, BaseCtx,
-                                      [{symbol, BaseCtx, variable, S} || S <- BasePath] ++ [BaseImportDict]},
-                BaseImportsExceptParent = [Import || {import, _, [{symbol, _, _, S} | _]} = Import <- BaseImports,
-                                                    not(S =:= Parent)],
-                Imports = [ImportOfBaseItself | BaseImportsExceptParent],
-                Exports = maps:from_list([{symbol:name(T), {export, symbol:ctx(T), [symbol:name(T)], none}} || T <- Children]),
-                Path = BasePath ++ [Parent],
+sub_modules({module, _, _, _, BaseExports, _} = BaseMod, BaseTypes, RootPath, RootTypes) ->
+    ExportMap = maps:from_list([{P, true} || {export, _, [P | _], _ } <- maps:values(BaseExports)]),
+    DefSubMods = [def_submodule(T, Members, BaseMod, BaseTypes) || {T, Members} <- maps:to_list(BaseTypes)],
+    LinkSubMods = [link_submodule(T, Members, BaseMod, RootPath) || {T, Members} <- maps:to_list(RootTypes),
+                                                                    maps:is_key(T, ExportMap),
+                                                                    not(maps:is_key(T, BaseTypes))],
+    DefSubMods ++ LinkSubMods.
 
-                % We use the type env in `tagged_gen` to determine if a type is
-                % a literal. However, at this point we don't know if a symbol
-                % refers to a type constant (i.e. a literal) or an imported
-                % type. We do know though, that any type definition we create
-                % for an imported type will be removed in the `tagger` module.
-                % For this reason, we only include tagged type symbols in the
-                % type env.
-                SubTypeEnv = maps:from_list([{symbol:tag(T), T}
-                                             || {tagged, _, _, _} = T <- lists:flatten(maps:values(BaseTypes))]),
-                TypeEnv = maps:merge(BaseDefMap, SubTypeEnv),
-                ChildDefs = [tagged_gen:term(TypeEnv, Term) || Term <- Children],
-                DefMap = maps:from_list([{symbol:name(D), D} || D <- ChildDefs]),
+% Sub module for constants and tagged values defined within the base module
+def_submodule(Parent, Children, {module, BaseCtx, BasePath, BaseImports, BaseExports, BaseDefMap}, BaseTypes) ->
+    ChildMap = maps:from_list(Children),
+    % Any function defined in the base module could be called from
+    % a definition in the sub module, so the base module needs to
+    % be in scope.
+    ImportOfBaseItself = base_import(BaseCtx, BasePath, BaseExports, ChildMap),
+    BaseImportsExceptParent = [Import || {import, _, [S | _] = Path} = Import <- BaseImports,
+                                         not(S =:= Parent), length(Path) > 1],
+    Imports = [ImportOfBaseItself | BaseImportsExceptParent],
+    Exports = maps:from_list([{Name, {export, symbol:ctx(T), [Name], none}} || {Name, T} <- Children]),
+    Path = BasePath ++ [Parent],
 
-                Ctx = symbol:ctx(maps:get(Parent, BaseDefMap)),
-                tag_symbols({module, Ctx, Path, Imports, Exports, DefMap})
-        end,
-    [F(T, Members) || {T, Members} <- maps:to_list(BaseTypes)].
+    % We use the type env in `tagged_gen` to determine if a type is
+    % a literal. However, at this point we don't know if a symbol
+    % refers to a type constant (i.e. a literal) or an imported
+    % type. We do know though, that any type definition we create
+    % for an imported type will be removed in the `tagger` module.
+    % For this reason, we only include tagged type symbols in the
+    % type env.
+    SubTypeEnv = maps:from_list([{symbol:tag(T), T}
+                                 || {tagged, _, _, _} = T <- lists:flatten(maps:values(BaseTypes))]),
+    TypeEnv = maps:merge(BaseDefMap, SubTypeEnv),
+    DefMap = maps:from_list([{Name, tagged_gen:term(TypeEnv, Term)} || {Name, Term} <- Children]),
 
+    Ctx = maps:put(submodule, true, symbol:ctx(maps:get(Parent, BaseDefMap))),
+    tag_symbols({module, Ctx, Path, Imports, Exports, DefMap}).
 
-arity({def, _, _, {'fun', _, [{clause, _, Ps, _} | _]}}) -> length(Ps);
-arity({def, _, _, _}) -> 0;
-arity({type_def, _, _, {'fun', _, [{clause, _, Ps, _} | _]}}) -> length(Ps);
-arity({type_def, _, _, _}) -> 0.
+% Sub module for constants and tagged values exported from the base module, but not defined there
+link_submodule(Parent, Children, {module, BaseCtx, BasePath, _, _, _}, RootPath) ->
+    LinkF = fun({link, _, _} = Link) -> Link;
+               (C) -> {link, symbol:ctx(C), {qualified_symbol, symbol:ctx(C), RootPath ++ [Parent], symbol:name(C)}} end,
+    Links = maps:from_list([{Name, LinkF(C)} || {Name, C} <- Children]),
+    Exports = maps:from_list([{Name, {export, symbol:ctx(C), [Name], none}} || {Name, C} <- Children]),
+    Imports = [{import, BaseCtx, RootPath ++ [Parent]}],
+    tag_symbols({module, BaseCtx, BasePath ++ [Parent], Imports, Exports, Links}).
 
-apply_def_term(Name, 0, Ctx) -> 
-    {def, Ctx, Name,
-     {application, Ctx, {symbol, Ctx, 'variable', Name}, []}};
-apply_def_term(Name, Arity, Ctx) -> 
-    Args = [{symbol, Ctx, 'variable', symbol:id('')} || _ <- lists:seq(1, Arity)],
-    {def, Ctx, Name,
-     {'fun', Ctx,
-      [{clause, Ctx, Args,
-        {application, Ctx, {symbol, Ctx, 'variable', Name}, Args}}]}}.
+% A def might have the same name as a subtype in the def. For
+% this reason we import only the base exports that don't match
+% the names of any of the keys in the ExludeMap
+base_import(Ctx, Path, Exports, ExcludeMap) ->
+                IncludedExports = [E || {K, E} <- maps:to_list(Exports), not(maps:is_key(K, ExcludeMap))],
+                ImportDict = maps:from_list([{lists:last(P), lists:last(P)} || {export, _, P, _} <- IncludedExports]),
+                {import, Ctx, Path ++ [ImportDict]}.
 
 % At this point in the compilation, we don't know if a symbol is defined
 % elsewhere or created within this def. We assume any symbol is a new constant,
@@ -184,8 +192,8 @@ types_post(expr, _, {tagged, _Ctx, _Path, _Val} = Term) ->
 types_post(_, _, _) -> ok.
 
 
-types([], _) -> {ok, maps:from_list([])};
-types(Defs, Imports) ->
+types([], _, _) -> {ok, maps:from_list([])};
+types(Defs, Imports, Path) ->
     case ast:traverse(fun types_post/3, Defs) of
         {error, Errs}   -> 
             {error, Errs};
@@ -193,28 +201,71 @@ types(Defs, Imports) ->
             GetKey = fun({K, _}) -> K end,
             GetVal = fun({_, V}) -> V end,
             TypeList = utils:group_by(GetKey, GetVal, maps:keys(Env)),
-            % Pick up any def for which there is a local import
-            LocallyImported = maps:from_list([{P, Cs} || {P, Cs} <- TypeList, is_local_wildcard_import(P, Imports)]),
-            % Then filter out any of the child types of the local imports from any other types
-            Types = maps:from_list([{P, Fs} || {P, Cs} <- TypeList,
-                                               Fs <- [filter_imported(LocallyImported, P, Cs)],
-                                               length(Fs) > 0]),
+
+            % If a type constant has been imported locally, we other types that
+            % refer to this constant to represent it as a link to the type
+            % where it was defined
+            LocalImports = local_imports(Imports, TypeList),
+            Link = fun(P, Cs) -> link_imported(LocalImports, P, Cs, Path) end,
+            Types = maps:from_list([{P, Link(P, Cs)} || {P, Cs} <- TypeList]),
+
             {ok, Types}
     end.
 
+is_local_non_wildcard_import(I, Defs) -> import:is_local(I, Defs) andalso not(import:is_wildcard(I)).
 
-is_local_wildcard_import(_, []) -> false;
-is_local_wildcard_import(Type, [{import, _, Symbols} | Rest]) when length(Symbols) > 1 ->
-    case lists:nthtail(length(Symbols) - 2, Symbols) of
-        [{symbol, _, _, Type}, {symbol, _, _, '_'}] -> true;
-        _                                           -> is_local_wildcard_import(Type, Rest)
-    end;
-is_local_wildcard_import(Type, [_ | Rest]) -> is_local_wildcard_import(Type, Rest).
+local_imports(Imports, TypeList) ->
+    Tag = fun(Cs, '_')                  -> [{C, C} || C <- Cs];
+             (_, Ts) when is_map(Ts)    -> maps:to_list(Ts);
+             (Cs, T)                    -> [{C, C} || C <- Cs, C =:= T]
+        end,
+    TagChildren = fun(Cs, T) -> Tag([symbol:name(C) || C <- Cs], T) end,
 
-filter_imported(AllImported, P, Terms) ->
-    AllImportedExceptChildrenOfP = lists:flatten(maps:values(maps:remove(P, AllImported))),
-    ConstantMap = maps:from_list([{symbol:tag(C), true} || C <- AllImportedExceptChildrenOfP]),
-    [T || T <- Terms, not(maps:is_key(symbol:tag(T), ConstantMap))].
+    ImportList = [{P, K, V} || {import, _, [P, T]} <- Imports,
+                               {Parent, Cs} <- TypeList,
+                               Parent =:= P,
+                               {K, V} <- TagChildren(Cs, T)],
+
+    ExpandedImportList = expand_imports(ImportList),
+
+    maps:from_list(utils:group_by(fun({P, _, _}) -> P end, fun({_, K, V}) -> {K, V} end, ExpandedImportList)).
+
+% Local imports can be chained in the sense that a constant imported from one
+% def can be used in another def which in turn can be imported. Take the
+% following example:
+%
+% ```
+% def R -> (A | B)
+% import R/_
+% def S -> (C | B)
+% import S/{B: D}
+% def T -> (A | D)
+% ```
+%
+% Here, T consists of `R/A` (since A is imported in the local scope), and "`T/D`"
+% which is an import that maps to `S/D`. However, `D` is an alias for `B` which
+% is declared by `R`. To correctly map `T` to `(R/A | R/B)` we need to make
+% sure follow the chain of imports to where the constants are originally created
+expand_imports(ImportList) -> expand_imports(ImportList, #{}, []).
+expand_imports([], _, Res) -> Res;
+expand_imports([{P, K, V} = Triplet | Rest], Seen, Res) ->
+    case maps:is_key(Triplet, Seen) of
+        true    -> expand_imports(Rest, Seen, [Triplet | Res]);
+        false   -> {Linked, Unlinked} = lists:partition(fun({_, Key, _}) -> V =:= Key end, Rest),
+                   New = [{P, K, Val} || {_, _, Val} <- Linked],
+                   expand_imports(Unlinked ++ [Triplet] ++ New, maps:put(Triplet, true, Seen), Res)
+    end.
+
+link_imported(Imported, P, Terms, BasePath) ->
+    LinkF = fun(Parent, ChildName) -> 
+                    Path = BasePath ++ [Parent],
+                    {link, #{}, {qualified_symbol, #{}, Path, ChildName}}
+            end,
+    Links = maps:from_list([{Alias, LinkF(Parent, Name)} || {Parent, Cs} <- maps:to_list(maps:remove(P, Imported)),
+                                                            {Name, Alias} <- Cs]),
+
+    % By using `symbol:tag` we make sure that symbols match but tagged value wont
+    [{symbol:name(T), maps:get(symbol:tag(T), Links, T)} || T <- Terms].
 
 
 tag_symbols({module, _, Path, _, _, _} = Mod) ->
@@ -233,3 +284,27 @@ kind_name({module, _, Path, _, _, _}) -> kind_name(Path);
 kind_name(Path) ->
     PathString = [atom_to_list(A) || A <- lists:join('/', Path)],
     list_to_atom(lists:flatten([PathString])).
+
+filename_to_module_path(FileName) ->
+    FilePath = lists:map(fun list_to_atom/1, filename:split(FileName)),
+    FileTail = case length(FilePath) > 2 of
+                   true     -> lists:nthtail(length(FilePath) - 2, lists:droplast(FilePath));
+                   false    -> lists:droplast(FilePath)
+               end,
+    BaseName = list_to_atom(filename:basename(FileName, ".kind")),
+    [source] ++ FileTail ++ [BaseName].
+
+import({import, Ctx, Path}) -> {import, Ctx, import(Path, [])}.
+import([], Path) -> lists:reverse(Path);
+import([{symbol, _, _, P} | Rest], Path) -> import(Rest, [P | Path]);
+import([{dict, _, Pairs} | Rest], Path) -> import(Rest, [import_dict_pairs(Pairs) | Path]).
+import_dict_pairs(Pairs) -> maps:from_list(import_dict_pairs(Pairs, [])).
+import_dict_pairs([], Pairs) -> lists:reverse(Pairs);
+import_dict_pairs([{symbol, _, _, P} | Rest], Pairs) -> import_dict_pairs(Rest, [{P, P} | Pairs]);
+import_dict_pairs([{pair, _, {symbol, _, _, K}, {symbol, _, _, V}} | Rest], Pairs) ->
+    import_dict_pairs(Rest, [{K, V} | Pairs]).
+
+
+is_submodule({module, Ctx, _, _, _, _}) -> maps:get(submodule, Ctx, false).
+
+empty({module, _, _, _, Exports, Defs}) -> maps:size(Exports) =:= 0 andalso maps:size(Defs) =:= 0.

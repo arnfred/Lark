@@ -3,7 +3,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
--define(setup(Code, Tests), {setup, loadFun(Code, #{import_kind_libraries => false}), fun unload/1, Tests}).
+-define(setup(Code, Tests), {setup, loadFun(Code, #{include_kind_libraries => false}), fun unload/1, Tests}).
 -define(setup(Code, Options, Tests), {setup, loadFun(Code, Options), fun unload/1, Tests}).
 
 loadFun(Code, Options) -> 
@@ -496,7 +496,7 @@ qualified_symbol_pattern_atom_test_() ->
             "type T\n"
             " | Boolean/False -> Falsy\n"
             " | Boolean/True -> Truthy",
-            #{import_kind_libraries => true},
+            #{include_kind_libraries => true},
             fun({ok, _}) ->
                     [?test('T/Falsy', test:'T'('Boolean/False'))]
             end)}.
@@ -508,7 +508,7 @@ qualified_symbol_pattern_sum_test_() ->
              type T
                | Boolean -> Falsy
                | _ -> Truthy",
-            #{import_kind_libraries => true},
+            #{include_kind_libraries => true},
             fun({ok, _}) ->
                     [?test('T/Falsy', test:'T'('Boolean/False')),
                      ?test('T/Falsy', test:'T'('Boolean/True')),
@@ -521,7 +521,7 @@ qualified_symbol_undefined_arity_pattern_test_() ->
              type T
               | Option -> Falsy
               | Truthy -> Truthy",
-            #{import_kind_libraries => true},
+            #{include_kind_libraries => true},
             fun({ok, _}) ->
                     [?testError({wrong_arity, 'kind/prelude', 'Option', 0, 1}, test_domain:'T'('T/Falsy'))]
             end)}.
@@ -533,7 +533,7 @@ call_qualified_symbol_with_args_test_() ->
      ?setup("import kind/prelude\n"
             "module test { Test }\n"
             "type Test -> kind/prelude/Option(Boolean/True)",
-            #{import_kind_libraries => true},
+            #{include_kind_libraries => true},
             fun({ok, _}) ->
                     Actual = test:'Test'(),
                     [?test(none, domain:diff({sum, ordsets:from_list(['Boolean/True', 'Option/Nil'])}, Actual))]
@@ -545,7 +545,7 @@ var_application_in_type_def_test_() ->
             "module test { Test }\n"
             "type Test a -> a.match(| True -> False\n"
             "                       | False -> True)",
-            #{import_kind_libraries => true},
+            #{include_kind_libraries => true},
             fun({ok, _}) ->
                     [?test('Boolean/False', test:'Test'('Boolean/True'))]
             end)}.
@@ -556,7 +556,7 @@ pattern_type_application_test_() ->
             "type Test\n"
             "  | Option(Boolean) -> True\n"
             "  | _               -> False",
-            #{import_kind_libraries => true},
+            #{include_kind_libraries => true},
             fun({ok, _}) ->
                     [?test('Boolean/True', test:'Test'('Option/Nil')),
                      ?test('Boolean/True', test:'Test'('Boolean/True')),
@@ -570,7 +570,7 @@ pattern_local_application_test_() ->
              type F a -> a
              type Test
                | True.F -> True",
-            #{import_kind_libraries => true},
+            #{include_kind_libraries => true},
             fun({ok, _}) ->
                     [?test('Boolean/True', test_domain:'Test'('Boolean/True'))]
             end)}.
@@ -581,7 +581,7 @@ pattern_variable_application_test_() ->
              type Test a b -> a.match(
                | Option(b)  -> True
                | False      -> False)",
-            #{import_kind_libraries => true},
+            #{include_kind_libraries => true},
             fun({ok, _}) ->
                     [?test('Boolean/True', test_domain:'Test'({sum, ['Boolean/True', 'Option/Nil']}, 'Boolean/True')),
                      ?test('Boolean/True', test_domain:'Test'({sum, ['Boolean/False', 'Option/Nil']}, 'Boolean/False')),

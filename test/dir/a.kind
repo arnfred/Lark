@@ -1,6 +1,4 @@
-type Boolean -> (True | False)
-
 def xor
- | Boolean/True Boolean/False -> Boolean/True
- | Boolean/False Boolean/True -> Boolean/True
- | _ _                        -> Boolean/False
+ | True False -> True
+ | False True -> True
+ | _ _        -> False
