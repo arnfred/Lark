@@ -21,7 +21,7 @@ nested_local_type_test_() ->
     ModuleMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
     ?test(#{'source/test_code' := {module, _, [source, test_code], _, _,
                                    #{main := {def, _, 'main',
-                                              {qualified_symbol, _, [source, test_code, 'Blup'], 'Blap'}}}}}, ModuleMap).
+                                              {qualified_application, _, [source, test_code], 'Blup/Blap', []}}}}}, ModuleMap).
 
 
 local_type_alias_test_() ->
@@ -37,9 +37,9 @@ local_type_no_import_test_() ->
     Module = 
     "type Boolean -> (True | False)\n"
     "import Boolean/False\n"
-    "def xor\n"
-    " | True False -> True\n"
-    " | False True -> True\n"
+    "def notxor\n"
+    " | True False -> False\n"
+    " | False True -> False\n"
     " | _ _ -> False",
     ?testError({undefined_symbol, 'True'}, parser:parse([{text, Module}], #{import_prelude => false})).
 
@@ -187,7 +187,7 @@ qualified_beam_import_test_() ->
     "def blap -> reverse",
     ?test({ok, [{module, _, _, _, _,
                  #{blap := {def, _, 'blap',
-                            {qualified_symbol, _, [lists], reverse}}}}]},
+                            {qualified_application, _, [lists], reverse, []}}}}]},
           parser:parse([{text, Module}], #{include_kind_libraries => false})).
 
 qualified_source_import_test_() ->
@@ -202,7 +202,7 @@ qualified_source_import_test_() ->
     ModuleMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
     ?test(#{'source/test_code_2' := {module, _, [source, test_code_2], _, _,
                  #{blap := {def, _, 'blap',
-                            {qualified_symbol, _, [source, test_code_1, 'T'], 'A'}}}}}, ModuleMap).
+                            {qualified_application, _, [source, test_code_1], 'T/A', []}}}}}, ModuleMap).
 
 qualified_local_import_test_() ->
     Module = 
@@ -214,4 +214,11 @@ qualified_local_import_test_() ->
     ModuleMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
     ?test(#{'source/test_code' := {module, _, [source, test_code], _, _,
                                    #{blap := {def, _, 'blap',
-                                              {qualified_symbol, _, [source, test_code, 'T'], 'A'}}}}}, ModuleMap).
+                                              {type, _, 'A', ['T', 'A']}}}}}, ModuleMap).
+
+module_order_test_() ->
+    Module = "type T -> (A | B)
+              module test {T}",
+    {ok, Modules} = parser:parse([{text, test_code, Module}], #{include_kind_libraries => false}),
+    ModuleNames = [module:kind_name(M) || M <- Modules],
+    ?test(['source/test_code', 'source/test_code/T', 'test', 'test/T'], ModuleNames).

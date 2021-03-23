@@ -119,15 +119,6 @@ export_missing_test_() ->
                     [?testError({export_missing, 'T'}, Error)]
            end).
 
-export_already_defined_test_() ->
-    ?setup("test/file.kind",
-           "module test_module {T/A} (
-                type T -> A
-                type A -> A)",
-           fun(Error) ->
-                    [?testError({export_already_defined, 'T/A', 'A'}, Error)]
-           end).
-
 export_unsupported_test_() ->
     ?setup("test/file.kind",
            "module test_module {t/T/A}",
@@ -139,31 +130,37 @@ subtype_test_() ->
     ?setup("test/file.kind",
            "type T -> A",
            fun({ok, Modules}) ->
-                   ?test(#{source_test_file := {module, _, _, _, _,
-                                                #{'T' := {type_def, _, 'T', {symbol, _, type, 'A'}}}},
-                           source_test_file_T := {module,
+                   [?test(#{source_test_file := {module, _, _, _, _,
+                                                #{'T' := {type_def, _, 'T', {symbol, _, type, 'A'}},
+                                                  'T/A' := {type_def, _, 'A', {symbol, _, type, 'A'}}}}}, Modules),
+                    ?test(#{source_test_file_T := {module,
                                                   #{line := 1},
                                                   [source, test, file, 'T'],
-                                                  [{import, #{}, [source, test, file, #{'T' := 'T'}]}],
+                                                  [],
                                                   #{'A' := {export, _, ['A'], _}},
-                                                  #{'A' := {type_def, _, 'A', {symbol, _, type, 'A'}}}}}, Modules)
+                                                  #{'A' := {link, _, 
+                                                            {qualified_symbol, _, [source, test, file], 'T/A'}}}}}, Modules)]
            end).
 
 subtype_tagged_test_() ->
     ?setup("test/file.kind",
            "type T -> R: A",
            fun({ok, Modules}) ->
-                   ?test(#{source_test_file := {module, _, _, _, _,
-                                                #{'T' := {type_def, _, 'T', {tagged, _, ['T', 'R'], {symbol, _, type, 'A'}}}}},
-                           source_test_file_T := {module,
+                   [?test(#{source_test_file := {module, _, _, _, _,
+                                                #{'T' := {type_def, _, 'T',
+                                                          {tagged, _, ['T', 'R'], {symbol, _, type, 'A'}}},
+                                                  'T/A' := {type_def, _, 'A', {symbol, _, type, 'A'}},
+                                                  'T/R' := {type_def, _, 'R',
+                                                            {tagged, _, ['T', 'R'], {symbol, _, type, 'A'}}}}}}, Modules),
+                    ?test(#{source_test_file_T := {module,
                                            #{line := 1},
                                            [source, test, file, 'T'],
                                            _,
                                            #{'A' := {export, _, ['A'], _},
                                              'R' := {export, _, ['R'], _}},
-                                           #{'A' := {type_def, _, 'A', {symbol, #{}, type, 'A'}},
-                                             'R' := {type_def, _, 'R', {tagged, _, ['T', 'R'], {symbol, _, type, 'A'}}}}
-                                          }}, Modules)
+                                           #{'A' := {link, _, {qualified_symbol, _, [source, test, file], 'T/A'}},
+                                             'R' := {link, _,
+                                                     {qualified_symbol, _, [source, test, file], 'T/R'}}}}}, Modules)]
            end).
 
 duplicate_module_error_test_() ->
@@ -193,20 +190,28 @@ module_sub_def_link_test_() ->
            "def T -> (A | B)
             module test_module {T}",
            fun({ok, Modules}) ->
-                   ?test(#{source_test_file := {module, _, _, _, _, #{'T' := _}},
-                           test_module := {module,
+                   [?test(#{source_test_file := {module, _, _, _, _, 
+                                                #{'T' := {def, _, 'T', _},
+                                                  'T/A' := {type_def, _, 'A', _},
+                                                  'T/B' := {type_def, _, 'B', _}}}},
+                          Modules),
+                    ?test(#{test_module := {module,
                                            #{line := 2},
                                            [test_module],
                                            _,
                                            #{'T' := {export, _, ['T'], _}},
-                                           #{'T' := {link, _, {qualified_symbol, _, [source, test, file], 'T'}}}},
-                          test_module_T := {module, _, [test_module, 'T'], _,
+                                           #{'T' := {link, _, {qualified_symbol, _, [source, test, file], 'T'}}}}},
+                          Modules),
+                    ?test(#{test_module_T := {module, _, [test_module, 'T'], _,
                                             #{'A' := _, 'B' := _},
-                                            #{'A' := {link, _, {qualified_symbol, _, [source, test, file, 'T'], 'A'}},
-                                              'B' := {link, _, {qualified_symbol, _, [source, test, file, 'T'], 'B'}}}},
-                          source_test_file_T := {module, _, [source, test, file, 'T'], _,
+                                            #{'A' := {link, _, {qualified_symbol, _, [source, test, file], 'T/A'}},
+                                              'B' := {link, _, {qualified_symbol, _, [source, test, file], 'T/B'}}}}},
+                          Modules),
+                    ?test(#{source_test_file_T := {module, _, [source, test, file, 'T'], _,
                                                  #{'A' := _, 'B' := _},
-                                                 #{'A' := _, 'B' := _}}}, Modules)
+                                                 #{'A' := {link, _, {qualified_symbol, _, [source, test, file], 'T/A'}},
+                                                   'B' := {link, _, {qualified_symbol, _, [source, test, file], 'T/B'}}}}},
+                         Modules)]
            end).
 
 nested_link_test_() ->
@@ -218,21 +223,30 @@ nested_link_test_() ->
             type Blonk -> (Blank | Blop)
             module t {Blonk}",
            fun({ok, Modules}) ->
-                   [?test(#{source_test_file := {module, _, _, _, _, #{'Blup' := _, 'Flup' := _, 'Blonk' := _}}}, Modules),
+                   [?test(#{source_test_file := {module, _, _, _, _, 
+                                                 #{'Blup' := _,
+                                                   'Blup/Blap' := _,
+                                                   'Blup/Blip' := _,
+                                                   'Flup' := _,
+                                                   'Flup/Flip' := _,
+                                                   'Flup/Blap' := _,
+                                                   'Blonk' := _,
+                                                   'Blonk/Blank' := _,
+                                                   'Blonk/Blop' := _}}}, Modules),
                     ?test(#{source_test_file_Blup := {module, _, _, _, _, #{'Blip' := _, 'Blap' := _}}}, Modules),
                     ?test(#{source_test_file_Flup := {module, _, _, _, _,
-                                                      #{'Flip' := {type_def, _, _, _},
+                                                      #{'Flip' := {link, _, {qualified_symbol, _,
+                                                                             [source, test, file], 'Flup/Flip'}},
                                                         'Blap' := {link, _, {qualified_symbol, _,
-                                                                             [source, test, file, 'Blup'],
-                                                                             'Blap'}}}}}, Modules),
+                                                                             [source, test, file], 'Blup/Blap'}}}}}, Modules),
                     ?test(#{source_test_file_Blonk := {module, _, _, _, _,
-                                                       #{'Blank' := {type_def, _, _, _},
+                                                       #{'Blank' := {link, _, {qualified_symbol, _,
+                                                                               [source, test, file], 'Blonk/Blank'}},
                                                          'Blop' := {link, _, {qualified_symbol, _,
-                                                                              [source, test, file, 'Blup'],
-                                                                              'Blap'}}}}}, Modules),
+                                                                              [source, test, file], 'Blup/Blap'}}}}}, Modules),
                    ?test(#{t_Blonk := {module, _, _, _, _,
                                        #{'Blank' := {link, _, {qualified_symbol, _,
-                                                               [source, test, file, 'Blonk'], 'Blank'}},
+                                                               [source, test, file], 'Blonk/Blank'}},
                                          'Blop' := {link, _, {qualified_symbol, _,
-                                                              [source, test, file, 'Blup'], 'Blap'}}}}}, Modules)]
+                                                              [source, test, file], 'Blup/Blap'}}}}}, Modules)]
            end).

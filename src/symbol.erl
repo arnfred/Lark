@@ -1,5 +1,5 @@
 -module(symbol).
--export([id/1, tag/1, name/1, is/1, ctx/1, rename/2]).
+-export([id/1, tag/1, name/1, is/1, ctx/1, rename/2, path/1]).
 
 id(Path) when is_list(Path) -> 
     PathString = [atom_to_list(A) || A <- lists:join('_', Path)],
@@ -19,6 +19,10 @@ tag({variable, _, _, Tag}) -> Tag;
 tag({key, _, K}) -> K;
 tag({qualified_symbol, _, Path, S}) -> tag(Path ++ [S]);
 tag(Term) -> list_to_atom("expr_" ++ integer_to_list(erlang:phash2(Term))).
+
+path(Tag) when is_atom(Tag) -> 
+    lists:map(fun(C) -> list_to_atom(C) end, re:split(atom_to_list(Tag), "/", [{return,list}]));
+path(Term) -> path(tag(Term)).
 
 ctx(Term) -> element(2, Term).
 

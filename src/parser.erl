@@ -22,7 +22,7 @@ parse(Inputs, Options) ->
 
     Tag = fun() -> atom_to_list(symbol:id(no_file)) end,
     UnnamedInlineTexts = [{Tag(), Text} || {text, Text} <- Inputs],
-    NamedInlineTexts = [{Tag, Text} || {text, Tag, Text} <- Inputs],
+    NamedInlineTexts = [{T, Text} || {text, T, Text} <- Inputs],
     InlineTexts = UnnamedInlineTexts ++ NamedInlineTexts,
 
     case error:collect([load(P) || P <- InputPaths]) of
@@ -147,11 +147,27 @@ import_and_tag({module, ModuleCtx, ModulePath, ModuleImports, Exports, DefMap} =
                              end,
                        case tagger:tag(Module) of
                            {error, Errs}       -> {error, Errs};
-                           {ok, {_, Tagged}}   -> {ok, {Dependencies, Tagged}}
+                           {ok, {_, Tagged}}   -> 
+                               {ok, {Dependencies, normalize_applications(Tagged)}}
                        end;
                 _   -> error:collect([ErrFun(D1, D2) || {D1, D2} <- DistinctDuplicates])
             end
     end.
+
+% A qualified symbol is due to be either the expression part of an application,
+% or itself an application with zero arguments. This function straightens out
+% that ambiguity
+normalize_applications(Module) ->
+    Pre = fun(_, _, {application, Ctx, {qualified_symbol, _, ModulePath, Name}, Args}) ->
+                  {ok, {qualified_application, Ctx, ModulePath, Name, Args}};
+             (_, _, {qualified_symbol, Ctx, ModulePath, Name}) ->
+                  {ok, {qualified_application, Ctx, ModulePath, Name, []}};
+             (_, _, _) -> ok end,
+    Post = fun(_, _, _) -> ok end,
+    {ok, {_, Normalized}} = ast:traverse(Pre, Post, Module),
+    Normalized.
+
+
 
 % Adapted from http://rosettacode.org/wiki/Topological_sort#Erlang
 % More info: https://en.wikipedia.org/wiki/Topological_sorting
@@ -185,12 +201,12 @@ cycles(G, [Vertex | Rest], CycleErrs) ->
 reorder_modules(PathOrder, Modules) ->
     ModMap = maps:from_list([{P, M} || {module, _, P, _, _, _} = M <- Modules]),
     Roots = [Mod || {Path, Mod} <- maps:to_list(ModMap), not(lists:member(Path, PathOrder))],
-    Roots ++ [maps:get(Path, ModMap) || Path <- PathOrder].
+    [maps:get(Path, ModMap) || Path <- PathOrder] ++ Roots.
 
 remove_imported_defs({module, Ctx, Path, Imports, Exports, Defs}) ->
     NewDefs = maps:filter(fun(K, _V) -> not(maps:is_key(K, Imports)) end, Defs),
     NewExports = maps:filter(fun(K, _V) -> not(maps:is_key(K, Imports)) end, Exports),
-    {module, ctx, Path, Imports, NewExports, NewDefs}.
+    {module, Ctx, Path, Imports, NewExports, NewDefs}.
 
 
 -ifdef(TEST).

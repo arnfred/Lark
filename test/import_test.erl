@@ -72,7 +72,7 @@ module_type_test_() ->
     Actual = import:import(import([source, blap, 'Blup']), empty_module(), ModuleMap),
     ?test({ok, [{alias, _, 'Blup', {qualified_symbol, _, [source, 'blap'], 'Blup'}},
                 {dependency, _, [source, blap]},
-                {alias, _, 'Blup/A', {qualified_symbol, _, [source, 'blap', 'Blup'], 'A'}},
+                {alias, _, 'Blup/A', {qualified_symbol, _, [source, 'blap'], 'Blup/A'}},
                 {dependency, _, [source, blap, 'Blup']}]}, Actual).
 
 module_sub_type_test_() ->
@@ -80,39 +80,15 @@ module_sub_type_test_() ->
     ModuleMap = module_map("blap", Code),
     Actual = import:import(import([source, blap, 'Blup', 'A']), empty_module(), ModuleMap),
     ?test({ok, [{dependency, _, [source, blap, 'Blup']},
-                {alias, _, 'A', {qualified_symbol, _, [source, 'blap', 'Blup'], 'A'}}]}, Actual).
+                {alias, _, 'A', {qualified_symbol, _, [source, 'blap'], 'Blup/A'}}]}, Actual).
 
 wildcard_type_test_() ->
     Code = "type Blup -> (A | B)",
     ModuleMap = module_map("blap", Code),
     Actual = import:import(import([source, blap, 'Blup', '_']), empty_module(), ModuleMap),
     ?test({ok, [{dependency, _, [source, blap, 'Blup']},
-                       {alias, _, 'A', {qualified_symbol, _, [source, 'blap', 'Blup'], 'A'}},
-                       {alias, _, 'B', {qualified_symbol, _, [source, 'blap', 'Blup'], 'B'}}]}, Actual).
-
-
-local_type_test_() ->
-    Code = "type Blup -> (A | B)",
-    ModuleMap = module_map("blap", Code),
-    #{source_blap := Mod} = ModuleMap,
-    Actual = import:import(import(['Blup', 'A']), Mod, ModuleMap),
-    ?test({ok, [{alias, _, 'A', {qualified_symbol, _, [source, blap, 'Blup'], 'A'}}]}, Actual).
-
-local_type_parent_test_() ->
-    Code = "type Blup -> (A | B)",
-    ModuleMap = module_map("blap", Code),
-    #{source_blap := Mod} = ModuleMap,
-    Actual = import:import(import(['Blup']), Mod, ModuleMap),
-    ?test({ok, [{alias, _, 'Blup/A', {qualified_symbol, _, [source, blap, 'Blup'], 'A'}},
-                {alias, _, 'Blup/B', {qualified_symbol, _, [source, blap, 'Blup'], 'B'}}]}, Actual).
-
-local_type_underscore_test_() ->
-    Code = "type Blup -> (A | B)",
-    ModuleMap = module_map("blap", Code),
-    #{source_blap := Mod} = ModuleMap,
-    Actual = import:import(import(['Blup', '_']), Mod, ModuleMap),
-    ?test({ok, [{alias, _, 'A', {qualified_symbol, _, [source, blap, 'Blup'], 'A'}},
-                {alias, _, 'B', {qualified_symbol, _, [source, blap, 'Blup'], 'B'}}]}, Actual).
+                       {alias, _, 'A', {qualified_symbol, _, [source, 'blap'], 'Blup/A'}},
+                       {alias, _, 'B', {qualified_symbol, _, [source, 'blap'], 'Blup/B'}}]}, Actual).
 
 transitive_local_type_test_() ->
     Code = "type Blup -> (A | B)
@@ -120,7 +96,7 @@ transitive_local_type_test_() ->
     ModuleMap = module_map("root_module", Code),
     #{test_module := {module, _, _, Imports, _, _} = Mod} = ModuleMap,
     Actual = import:import(lists:last(Imports), Mod, ModuleMap),
-    ?test({ok, [{alias, _, 'A', {qualified_symbol, _, [source, root_module, 'Blup'], 'A'}}]}, Actual).
+    ?test({ok, [{alias, _, 'A', {qualified_symbol, _, [source, root_module], 'Blup/A'}}]}, Actual).
 
 transitive_local_type_dict_import_test_() ->
     Code = "module test/module1 {T, S} (type T -> A
@@ -131,7 +107,7 @@ transitive_local_type_dict_import_test_() ->
     ModuleMap = module_map("root_module", Code),
     #{test_module2 := {module, _, _, Imports, _, _} = Mod} = ModuleMap,
     Actual = import:import(lists:last(Imports), Mod, ModuleMap),
-    ?test({ok, [{alias, _, 'A', {qualified_symbol, _, [test, module1, 'T'], 'A'}}]}, Actual).
+    ?test({ok, [{alias, _, 'A', {qualified_symbol, _, [test, module1], 'T/A'}}]}, Actual).
 
 transitive_path_overlap_test_() ->
     Code = "module a/b/c {T} (type T -> A)
@@ -141,7 +117,7 @@ transitive_path_overlap_test_() ->
     #{source_test_module := {module, _, _, Imports, _, _} = Mod} = ModuleMap,
     Actual = import:import(lists:last(Imports), Mod, ModuleMap),
     ?test({ok, [{alias, _, 'T', {qualified_symbol, _, [a, b, c], 'T'}},
-                {alias, _, 'T/A', {qualified_symbol, _, [a, b, c, 'T'], 'A'}}]}, Actual).
+                {alias, _, 'T/A', {qualified_symbol, _, [a, b, c], 'T/A'}}]}, Actual).
 
 ambigious_transitive_local_type_test_() ->
     Code = "module test/module1 {Blup} (type Blup -> (A | B))
@@ -161,7 +137,7 @@ qualified_export_test_() ->
     #{test_module2 := {module, _, _, Imports, _, _} = Mod} = ModuleMap,
     Actual = import:import(lists:last(Imports), Mod, ModuleMap),
     ?test({ok, [{dependency, _, [test, module1]},
-                {alias, _, 'A', {qualified_symbol, _, [test, module1, 'T'], 'A'}}]}, Actual).
+                {alias, _, 'A', {qualified_symbol, _, [test, module1], 'T/A'}}]}, Actual).
 
 errors_test_() ->
     Code = "type Blup -> A",
@@ -214,8 +190,8 @@ link_sub_def_test_() ->
     Actual = test_import([t, 'T'], ModuleMap),
     [?test({ok, [{alias, _, 'T', {qualified_symbol, _, [source, test_file], 'T'}},
                  {dependency, _, [source, test_file]},
-                 {alias, _, 'T/A', {qualified_symbol, _, [source, test_file, 'T'], 'A'}},
-                 {alias, _, 'T/B', {qualified_symbol, _, [source, test_file, 'T'], 'B'}},
+                 {alias, _, 'T/A', {qualified_symbol, _, [source, test_file], 'T/A'}},
+                 {alias, _, 'T/B', {qualified_symbol, _, [source, test_file], 'T/B'}},
                  {dependency, _, [t, 'T']}]}, Actual)].
 
 nested_link_test_() ->
@@ -229,6 +205,6 @@ nested_link_test_() ->
     Actual = test_import([t, 'Blonk'], ModuleMap),
     [?test({ok, [{alias, _, 'Blonk', {qualified_symbol, _, [source, test, file], 'Blonk'}},
                  {dependency, _, [source, test, file]},
-                 {alias, _, 'Blonk/Blank', {qualified_symbol, _, [source, test, file, 'Blonk'], 'Blank'}},
-                 {alias, _, 'Blonk/Blop', {qualified_symbol, _, [source, test, file, 'Blup'], 'Blap'}},
+                 {alias, _, 'Blonk/Blank', {qualified_symbol, _, [source, test, file], 'Blonk/Blank'}},
+                 {alias, _, 'Blonk/Blop', {qualified_symbol, _, [source, test, file], 'Blup/Blap'}},
                  {dependency, _, [t, 'Blonk']}]}, Actual)].

@@ -8,7 +8,7 @@ tag({module, _, Path, ImportScope, _Exports, Defs} = Module) ->
     case ast:traverse(fun(_, _, _) -> ok end, fun tag_macros/3, MacroScope, Module) of
         {error, Errs}   -> {error, Errs};
         {ok, {_, MacroedModule}}  ->
-            LocalScope = maps:from_list([{Name, tag_def(Def)} || {Name, Def} <- maps:to_list(Defs)]),
+            LocalScope = maps:from_list([{Name, tag_def(Name, Def)} || {Name, Def} <- maps:to_list(Defs)]),
             case merge_scopes(Path, LocalScope, ImportScope) of
                 {error, Errs}   -> {error, Errs};
                 {ok, Scope}     -> ast:traverse(fun(_, _, _) -> ok end, fun tag_symbols/3, Scope, MacroedModule)
@@ -18,8 +18,7 @@ tag({module, _, Path, ImportScope, _Exports, Defs} = Module) ->
 % maps:merge is simpler, but we want to error when an import conflicts with a
 % local definition
 merge_scopes(ModulePath, LocalScope, ImportScope) ->
-    F = fun(Alias, {type, _, _, _} = Term) -> {ok, {Alias, Term}};
-           (Alias, Term) ->
+    F = fun(Alias, Term) ->
                 case maps:is_key(Alias, LocalScope) of
                     false	-> {ok, {Alias, Term}};
                     true	->
@@ -45,16 +44,16 @@ tag_macros(_, Scope, {application, _, {symbol, Ctx, _, S}, Args} = Term) ->
 tag_macros(_, _, _) -> ok.
 
 % Step 2: Build local scope of all top-level module definitions
-tag_def({def, _, Name, Expr}) ->
+tag_def(Tag, {def, _, Name, Expr}) ->
     case Expr of
         {'fun', _, [{clause, _, Patterns, _} | _]}  ->
-            {variable, #{}, Name, {Name, length(Patterns)}};
+            {variable, #{}, Name, {Tag, length(Patterns)}};
         _                                           ->
-            {variable, #{}, Name, {Name, 0}}
+            {variable, #{}, Name, {Tag, 0}}
     end;
-tag_def({link, _, Symbol}) -> Symbol;
-tag_def({type_def, _, Name, _Expr}) -> 
-    {type, #{}, Name, [Name]}.
+tag_def(_, {link, _, Symbol}) -> Symbol;
+tag_def(Tag, {type_def, _, Name, _Expr}) -> 
+    {type, #{}, Name, symbol:path(Tag)}.
 
 
 % Step 3: tag all symbols
@@ -72,12 +71,14 @@ tag_symbols(Type, Scope, {symbol, _, operator, S} = Term) ->
         true    -> {ok, replace(Scope, S, Term)}
     end;
 
-tag_symbols(expr, Scope, {symbol, Ctx, type, S} = Term) ->
+tag_symbols(expr, OuterScope, {symbol, Ctx, type, S} = Term) ->
+    Scope = maps:merge(OuterScope, inner_scope(OuterScope, Term)),
     case maps:is_key(S, Scope) of
         false   -> {ok, S, {type, Ctx, S, [ast:get_tag(parent, Term), S]}};
         true    -> {ok, replace(Scope, S, Term)}
     end;
-tag_symbols(pattern, Scope, {symbol, _, type, S} = Term) ->
+tag_symbols(pattern, OuterScope, {symbol, Ctx, type, S} = Term) ->
+    Scope = maps:merge(OuterScope, inner_scope(OuterScope, Term)),
     case maps:is_key(S, Scope) of
         false   -> error:format({undefined_symbol, S}, {tagger, pattern, Term});
         true    -> {ok, replace(Scope, S, Term)}
@@ -91,6 +92,15 @@ tag_symbols(Type, Scope, {qualified_symbol, _, Symbols} = Term) ->
     end;
 
 tag_symbols(_, _, _) -> ok.
+
+inner_scope(Scope, {symbol, Ctx, _, _}) ->
+    Parent = maps:get(parent, Ctx),
+    TypeF = fun(Name, {qualified_symbol, _, _, Tag}) -> {type, Ctx, Name, symbol:path(Tag)};
+               (Name, _)                                        -> {type, Ctx, Name, [Parent, Name]}
+            end,
+    maps:from_list([{Name, TypeF(Name, Term)} || {Tag, Term} <- maps:to_list(Scope),
+                                                    [P, Name] <- [symbol:path(Tag)],
+                                                    P =:= Parent]).
 
 id({symbol, _, _, S} = Term) -> symbol:id([ast:get_tag(parent, Term), S]).
 

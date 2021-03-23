@@ -4,7 +4,16 @@
 -define(DEFAULT_SANDBOXED, false).
 
 import(Import, Module, ModuleMap) -> import(Import, Module, ModuleMap, #{sandboxed => ?DEFAULT_SANDBOXED}).
-import({import, _, ImportPath} = Import, Module, ModuleMap, Options) ->
+import(Import, {module, _, ModulePath, _, _, _} = Module, ModuleMap, Options) ->
+    case import_prime(Import, Module, ModuleMap, Options) of
+        {error, Errs}       -> {error, Errs};
+        {ok, Imports}       -> {ok, [I || I <- Imports, not(is_circular(ModulePath, I))]}
+    end.
+
+is_circular(ModulePath, {alias, _, _, {qualified_symbol, _, ModulePath, _}}) -> true;
+is_circular(_, _) -> false.
+
+import_prime({import, _, ImportPath} = Import, Module, ModuleMap, Options) ->
     case lists:reverse(ImportPath) of
         []                              -> error:format({empty_import}, {import, Import});
 
@@ -219,7 +228,7 @@ kind_source_aliases({module, _, _, _, Exports, _} = Module, '_', _, ModuleMap, T
     lists:flatten([kind_source_aliases(Module, Name, Name, ModuleMap, Term)
                    || Name <- maps:keys(Exports)]);
 
-kind_source_aliases({module, _, ModulePath, _, Exports, _} = Module, Name, Alias, ModuleMap, Term) ->
+kind_source_aliases({module, _, ModulePath, _, Exports, _}, Name, Alias, ModuleMap, Term) ->
     Ctx = element(2, Term),
     ImportPath = ModulePath ++ [Name],
     ImportName = module:kind_name(ImportPath),
@@ -289,9 +298,9 @@ is_wildcard({import, _, Path}) -> lists:last(Path) =:= '_'.
 symbol(Path, Name, ModuleMap, Term) ->
     KindName = module:kind_name(Path),
     case maps:get(module:beam_name(Path), ModuleMap, undefined) of
-        undefined                           -> error:format({nonexistent_module, source, KindName},
-                                                            {import, Term});
-        {module, _, _, _, Exports, Defs}    ->
+        undefined                     -> error:format({nonexistent_module, source, KindName},
+                                                      {import, Term});
+        {module, _, _, _, _, Defs}    ->
             case maps:get(Name, Defs, undefined) of
                 undefined                   -> error:format({nonexistent_export, source, KindName, Name},
                                                             {import, Term});
