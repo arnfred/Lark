@@ -1,4 +1,4 @@
-import erlang/{<, >}
+import beam/erlang/{<, >}
 
 module kind/prelude {
     Boolean

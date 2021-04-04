@@ -21,7 +21,7 @@ nested_local_type_test_() ->
     ModuleMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
     ?test(#{'source/test_code' := {module, _, [source, test_code], _, _,
                                    #{main := {def, _, 'main',
-                                              {qualified_application, _, [source, test_code], 'Blup/Blap', []}}}}}, ModuleMap).
+                                              {type, _, 'Blap', ['Blup', 'Blap']}}}}}, ModuleMap).
 
 
 local_type_alias_test_() ->
@@ -100,19 +100,19 @@ unexported_source_def_test_() ->
 
 beam_def_test_() ->
     Module =
-    "import lists/reverse\n"
+    "import beam/lists/reverse\n"
     "def blap a -> a.reverse",
     ?test({ok, _}, parser:parse([{text, Module}])).
 
 unexported_beam_def_test_() ->
     Module =
-    "import lists/blup\n"
+    "import beam/lists/blup\n"
     "def blap a -> a.blup",
     ?testError({nonexistent_export, beam, 'lists/blup'}, parser:parse([{text, Module}])).
 
 wildcard_beam_def_test_() ->
     Module =
-    "import lists/_\n"
+    "import beam/lists/_\n"
     "def blap a -> a.reverse",
     ?test({ok, _}, parser:parse([{text, Module}])).
 
@@ -173,21 +173,21 @@ import_alias_already_defined_test_() ->
 
 multiple_beam_import_test_() ->
     Module =
-    "import lists/_\n"
-    "import maps/_\n"
+    "import beam/lists/_\n"
+    "import beam/maps/_\n"
     "def blap a -> a.reverse.from_list",
     ?testError({duplicate_import, filter, 'source/test_code', 'maps/filter', 'lists/filter'},
                {duplicate_import, map, 'source/test_code', 'maps/map', 'lists/map'},
                {duplicate_import, merge, 'source/test_code', 'maps/merge', 'lists/merge'},
-               parser:parse([{text, test_code, Module}])).
+               parser:parse([{text, test_code, Module}], #{include_kind_libraries => false})).
 
 qualified_beam_import_test_() ->
     Module =
-    "import lists/_\n"
+    "import beam/lists/_\n"
     "def blap -> reverse",
     ?test({ok, [{module, _, _, _, _,
                  #{blap := {def, _, 'blap',
-                            {qualified_application, _, [lists], reverse, []}}}}]},
+                            {beam_application, _, [lists], reverse, []}}}}]},
           parser:parse([{text, Module}], #{include_kind_libraries => false})).
 
 qualified_source_import_test_() ->

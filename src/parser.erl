@@ -102,55 +102,35 @@ to_ast(FileName, Text) ->
             end
     end.
 
-import_and_tag({module, ModuleCtx, ModulePath, ModuleImports, Exports, DefMap} = Mod, ModuleMap, Options) ->
+import_and_tag({module, ModuleCtx, ModulePath, ModuleImports, Exports, DefMap}, ModuleMap, Options) ->
 
     % Make sure to import prelude only if we're both importing prelude and all
     % kind libraries in general
     ImportPrelude = maps:get(import_prelude, Options, true) andalso maps:get(include_kind_libraries, Options, true),
 
     % Make sure not to import prelude if this is the prelude
-    Prelude = {import, ModuleCtx, [kind, prelude, '_']},
-    PreludeImports = case {ImportPrelude, ModulePath} of
+    PreludeImport = case {ImportPrelude, ModulePath} of
                          {false, _}                     -> [];
                          {_, [source, lib, prelude]}    -> []; % source file module
                          {_, [source, lib, prelude, _]} -> []; % source file sub modules
                          {_, [kind, prelude]}           -> []; % declared module
                          {_, [kind, prelude, _]}        -> []; % declared sub modules
-                         {_, _}                         -> import:import(Prelude, Mod, ModuleMap, Options)
+                         {_, _}                         -> [{import, ModuleCtx, [kind, prelude, '_']}]
                      end,
+    WithPreludeMod = {module, ModuleCtx, ModulePath, PreludeImport ++ ModuleImports, Exports, DefMap},
 
-    F = fun(Import) -> import:import(Import, Mod, ModuleMap, Options) end,
-    case error:collect([F(I) || I <- ModuleImports] ++ [PreludeImports]) of
-        {error, Errs} -> {error, Errs};
-        {ok, ImportList} ->
-            Imports = lists:flatten(ImportList),
-            Aliases = [A || {alias, _, _, _} = A <- Imports],
-            Dependencies = [{dependency, Ctx, ModulePath, Path} || {dependency, Ctx, Path} <- Imports],
-            ErrFun = fun({alias, ErrorCtx1, Alias, T1},
-                         {alias, ErrorCtx2, _, T2}) ->
-                             error:format({duplicate_import, Alias, module:kind_name(ModulePath),
-                                           symbol:tag(T1), symbol:tag(T2)},
-                                          {import, ErrorCtx1, ErrorCtx2}) end,
-
-            % We want to pick out duplicate aliases that import different terms
-            % because this is ambigious. On the other hand we don't care if two
-            % separate imports map the same alias to the same term.
-            Duplicates = utils:duplicates(Aliases, fun({alias, _, A, _}) -> A end),
-            DistinctDuplicates = [{D1, D2} || {{alias, _, _, T1} = D1, {alias, _, _, T2} = D2} <- Duplicates,
-                                            not(symbol:tag(T1) =:= symbol:tag(T2))],
-            case DistinctDuplicates of
-                []  -> ImportMap = maps:from_list([{Alias, Term} || {alias, _, Alias, Term} <- Aliases]),
-                       ModuleWithImports = {module, ModuleCtx, ModulePath, ImportMap, Exports, DefMap},
-                       Module = case module:is_submodule(ModuleWithImports) of
-                                 true   -> remove_imported_defs(ModuleWithImports);
-                                 false  -> ModuleWithImports
-                             end,
-                       case tagger:tag(Module) of
-                           {error, Errs}       -> {error, Errs};
-                           {ok, {_, Tagged}}   -> 
-                               {ok, {Dependencies, normalize_applications(Tagged)}}
-                       end;
-                _   -> error:collect([ErrFun(D1, D2) || {D1, D2} <- DistinctDuplicates])
+    case import:import(WithPreludeMod, ModuleMap, Options) of
+        {error, Errs}                   -> {error, Errs};
+        {ok, {ImportMap, Dependencies}} ->
+            ModuleWithImports = {module, ModuleCtx, ModulePath, ImportMap, Exports, DefMap},
+            Module = case module:is_submodule(ModuleWithImports) of
+                         true   -> remove_imported_defs(ModuleWithImports);
+                         false  -> ModuleWithImports
+                     end,
+            case tagger:tag(Module) of
+                {error, Errs}       -> {error, Errs};
+                {ok, {_, Tagged}}   -> 
+                    {ok, {Dependencies, normalize_applications(Tagged)}}
             end
     end.
 
@@ -160,8 +140,12 @@ import_and_tag({module, ModuleCtx, ModulePath, ModuleImports, Exports, DefMap} =
 normalize_applications(Module) ->
     Pre = fun(_, _, {application, Ctx, {qualified_symbol, _, ModulePath, Name}, Args}) ->
                   {ok, {qualified_application, Ctx, ModulePath, Name, Args}};
+             (_, _, {application, Ctx, {beam_symbol, _, ModulePath, Name}, Args}) ->
+                  {ok, {beam_application, Ctx, ModulePath, Name, Args}};
              (_, _, {qualified_symbol, Ctx, ModulePath, Name}) ->
                   {ok, {qualified_application, Ctx, ModulePath, Name, []}};
+             (_, _, {beam_symbol, Ctx, ModulePath, Name}) ->
+                  {ok, {beam_application, Ctx, ModulePath, Name, []}};
              (_, _, _) -> ok end,
     Post = fun(_, _, _) -> ok end,
     {ok, {_, Normalized}} = ast:traverse(Pre, Post, Module),

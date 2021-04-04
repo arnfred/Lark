@@ -249,3 +249,12 @@ tag_sub_module_test_() ->
                    {tagged, _, ['List', 'Cons'],
                     {dict, _, [{pair, _, {key, _, head}, {variable, _, _, Sub1}},
                                {pair, _, {key, _, tail}, {variable, _, _, Sub2}}]}}}]}}, Cons).
+
+local_constant_test_() ->
+    Code = "type T -> A
+            import T/A
+            type S -> A
+            type R -> S/A",
+    Defs = tag(Code),
+    [?test(#{'S' := {type_def, _, 'S', {type, _, 'A', ['T', 'A']}}}, Defs),
+     ?test(#{'R' := {type_def, _, 'R', {type, _, 'A', ['T', 'A']}}}, Defs)].

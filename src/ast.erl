@@ -131,6 +131,11 @@ step(Meta, _Type, Scope, {qualified_application, Ctx, ModulePath, Name, Args}) -
               fun({ArgsEnvs, TArgs}) -> 
                       {merge(ArgsEnvs), {qualified_application, Ctx, ModulePath, Name, TArgs}} end);
 
+step(Meta, _Type, Scope, {beam_application, Ctx, ModulePath, Name, Args}) ->
+    error:map(map(Meta, expr, Scope, Args),
+              fun({ArgsEnvs, TArgs}) -> 
+                      {merge(ArgsEnvs), {beam_application, Ctx, ModulePath, Name, TArgs}} end);
+
 step(Meta, _Type, Scope, {recursive_type_application, Ctx, Tag, Args}) ->
     error:map(map(Meta, expr, Scope, Args),
 	      fun({ArgsEnvs, TArgs}) -> 
@@ -227,6 +232,7 @@ step(_, _, _, {constant, _, _, _} = Term)           -> {ok, {#{}, Term}};
 step(_, _, _, {recursive_type, _, _, _} = Term)     -> {ok, {#{}, Term}};
 step(_, _, _, {qualified_symbol, _, _} = Term)      -> {ok, {#{}, Term}};
 step(_, _, _, {qualified_symbol, _, _, _} = Term)   -> {ok, {#{}, Term}};
+step(_, _, _, {beam_symbol, _, _, _} = Term)        -> {ok, {#{}, Term}};
 step(_, _, _, {key, _, _} = Term)                   -> {ok, {#{}, Term}};
 step(_, _, _, {link, _, _} = Term)                  -> {ok, {#{}, Term}};
 

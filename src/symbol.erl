@@ -18,6 +18,7 @@ tag({symbol, _, _, S}) -> S;
 tag({variable, _, _, Tag}) -> Tag;
 tag({key, _, K}) -> K;
 tag({qualified_symbol, _, Path, S}) -> tag(Path ++ [S]);
+tag({beam_symbol, _, Path, S}) -> tag(Path ++ [S]);
 tag(Term) -> list_to_atom("expr_" ++ integer_to_list(erlang:phash2(Term))).
 
 path(Tag) when is_atom(Tag) -> 
@@ -33,6 +34,7 @@ name({symbol, _, _, S}) -> S;
 name({link, _, Term}) -> name(Term);
 name({qualified_symbol, _, _, S}) -> S;
 name({qualified_symbol, _, S}) -> S;
+name({beam_symbol, _, _, S}) -> S;
 name({tagged, _, Symbols, _}) -> lists:last(Symbols);
 name({variable, _, Key, _}) -> Key;
 name({type, _, Key}) -> Key;
@@ -45,6 +47,7 @@ rename({key, Ctx, _}, Name) -> {key, Ctx, Name};
 rename({symbol, Ctx, Path, _}, Name) -> {symbol, Ctx, Path, Name};
 rename({link, Ctx, Term}, Name) -> {link, Ctx, rename(Term, Name)};
 rename({qualified_symbol, Ctx, Path, _}, Name) -> {qualified_symbol, Ctx, Path, Name};
+rename({beam_symbol, Ctx, Path, _}, Name) -> {beam_symbol, Ctx, Path, Name};
 rename({qualified_symbol, Ctx, _}, Name) -> {qualified_symbol, Ctx, Name};
 rename({tagged, Ctx, Symbols, Expr}, Name) -> {tagged, Ctx, lists:droplast(Symbols) ++ [Name], Expr};
 rename({variable, Ctx, _, Tag}, Name) -> {variable, Ctx, Name, Tag};
@@ -58,6 +61,7 @@ is({variable, _, _, _})         -> true;
 is({type, _, _, _})             -> true;
 is({recursive_type, _, _, _})   -> true;
 is({qualified_symbol, _, _, _}) -> true;
+is({beam_symbol, _, _, _})      -> true;
 is({qualified_symbol, _, _})    -> true;
 is(_)                           -> false.
 

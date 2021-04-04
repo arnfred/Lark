@@ -34,10 +34,12 @@ collect(List) when is_list(List) -> collect_ok(List, []).
 
 collect_ok([], Ret) -> {ok, lists:reverse(Ret)};
 collect_ok([{ok, Head} | Tail], Ret) -> collect_ok(Tail, [Head | Ret]);
+collect_ok([{error, Errs} | Tail], _) when is_list(Errs) -> collect_error(Tail, Errs);
 collect_ok([{error, Err} | Tail], _) -> collect_error(Tail, [Err]);
 collect_ok([Head | Tail], Ret) -> collect_ok(Tail, [Head | Ret]).
 
 collect_error([], Ret) -> {error, utils:unique(lists:reverse(lists:flatten(Ret)))};
+collect_error([{error, Errs} | Tail], Ret) when is_list(Errs) -> collect_error(Tail, lists:reverse(Errs) ++ Ret);
 collect_error([{error, Err} | Tail], Ret) -> collect_error(Tail, [Err | Ret]);
 collect_error([{ok, _} | Tail], Ret) -> collect_error(Tail, Ret);
 collect_error([_ | Tail], Ret) -> collect_error(Tail, Ret).

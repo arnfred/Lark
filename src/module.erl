@@ -15,7 +15,7 @@ parse(Sources) ->
                            error:format({duplicate_module, module:kind_name(Path), File1, File2},
                                         {module, Mod1, Mod2}) end,
             case utils:duplicates(Modules, KeyF) of
-                []      -> ModuleMap = maps:from_list([{beam_name(M), M} || {_, M, _} <- Modules]),
+                []      -> ModuleMap = maps:from_list([{path(M), M} || {_, M, _} <- Modules]),
                            {ok, ModuleMap};
                 Dups    -> error:collect([ErrF(D) || D <- Dups])
             end
@@ -47,16 +47,16 @@ root_module_and_types(FileName, RootPath, RootImports, Types, DefList) ->
     Exports = maps:from_list([{Name, {export, DefCtx, [Name], none}} || {_, DefCtx, Name, _} <- DefList]),
     {tag_symbols({module, Ctx, RootPath, RootImports, Exports, maps:merge(SubDefs, Defs)}), Types}.
 
-
 parse_module({module, ModuleCtx, Path, Exports, Statements},
              {{module, _RootCtx, RootPath, RootImports, RootExports, RootDefs}, RootTypes}) ->
+    ModulePath = [S || {symbol, _, _, S} <- Path],
     LocalImports = [import(I) || I = {import, _, _} <- Statements],
     LocalDefMap = maps:from_list([{Name, D} || D = {Type, _, Name, _} <- Statements,
                                              Type == type_def orelse Type == def orelse Type == macro]),
     RootDefMap = maps:from_list([{Name, T} || T = {Type, _, Name, _} <- maps:values(RootDefs),
                                              Type == type_def orelse Type == def orelse Type == macro]),
     
-    case types(Statements, LocalImports, Path) of
+    case types(Statements, LocalImports, ModulePath) of
         {error, Errs}       -> {error, Errs};
         {ok, LocalTypes}    ->
 
@@ -68,7 +68,6 @@ parse_module({module, ModuleCtx, Path, Exports, Statements},
                 {error, Errs}       -> {error, Errs};
                 {ok, ExportTerms}   ->
                     ExportMap = maps:from_list(ExportTerms),
-                    ModulePath = [S || {symbol, _, _, S} <- Path],
 
                     % Any def we export but don't define is linked to the root module
                     LinkF = fun(Ctx, Name) -> {link, Ctx, {qualified_symbol, Ctx, RootPath, Name}} end,
@@ -195,7 +194,9 @@ types(Defs, Imports, Path) ->
             {ok, Types}
     end.
 
-is_local_non_wildcard_import(I, Defs) -> import:is_local(I, Defs) andalso not(import:is_wildcard(I)).
+is_local_non_wildcard_import({import, _, [_, '_']}, _) -> false;
+is_local_non_wildcard_import({import, _, [D, _]}, Defs) -> maps:is_key(D, Defs);
+is_local_non_wildcard_import({import, _, _}, _) -> false.
 
 local_imports(Imports, TypeList) ->
     Tag = fun(Cs, '_')                  -> [{C, C} || C <- Cs];
@@ -257,12 +258,13 @@ tag_symbols({module, _, Path, _, _, _} = Mod) ->
 tag_symbols_post(ModulePath, {symbol, _, _, _} = Term)  -> {ok, ast:tag(module, Term, ModulePath)};
 tag_symbols_post(_, _)                                  -> ok.
 
-beam_name({module, _, Path, _, _, _}) -> beam_name(Path);
+path({module, _, Path, _, _, _}) -> Path.
+beam_name({module, _, _, _, _, _} = Mod) -> beam_name(path(Mod));
 beam_name(Path) ->
     PathString = [atom_to_list(A) || A <- lists:join('_', Path)],
     list_to_atom(lists:flatten([PathString])).
 
-kind_name({module, _, Path, _, _, _}) -> kind_name(Path);
+kind_name({module, _, _, _, _, _} = Mod) -> kind_name(path(Mod));
 kind_name(Path) ->
     PathString = [atom_to_list(A) || A <- lists:join('/', Path)],
     list_to_atom(lists:flatten([PathString])).

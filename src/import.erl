@@ -1,165 +1,174 @@
 -module(import).
--export([import/3, import/4, is_whitelisted/2, is_local/2, is_wildcard/1]).
+-export([import/3, import/2, is_whitelisted/2]).
 
 -define(DEFAULT_SANDBOXED, false).
 
-import(Import, Module, ModuleMap) -> import(Import, Module, ModuleMap, #{sandboxed => ?DEFAULT_SANDBOXED}).
-import(Import, {module, _, ModulePath, _, _, _} = Module, ModuleMap, Options) ->
-    case import_prime(Import, Module, ModuleMap, Options) of
+import(Module, ModuleMap) -> import(Module, ModuleMap, #{sandboxed => ?DEFAULT_SANDBOXED}).
+import({module, _, ModulePath, Imports, _, _}, ModuleMap, Options) ->
+    FlatImports = lists:flatten([flatten(I) || I <- Imports]),
+    case aliases(FlatImports, ModulePath, ModuleMap) of
         {error, Errs}       -> {error, Errs};
-        {ok, Imports}       -> {ok, [I || I <- Imports, not(is_circular(ModulePath, I))]}
-    end.
-
-is_circular(ModulePath, {alias, _, _, {qualified_symbol, _, ModulePath, _}}) -> true;
-is_circular(_, _) -> false.
-
-import_prime({import, _, ImportPath} = Import, Module, ModuleMap, Options) ->
-    case lists:reverse(ImportPath) of
-        []                              -> error:format({empty_import}, {import, Import});
-
-        % import test/{Test: Blip}      -> [{Blip, test/Test}]
-        % import test/{Test, blah}      -> [{Test, test/Test},
-        %                                   {blah, test/blah}]
-        [Dict | Tail] when is_map(Dict) ->
-            Rest = lists:reverse(Tail),
-            F = fun('_', Alias) -> error:format({import_underscore_for_name, Alias}, {import, Import});
-                   (Name, '_') -> error:format({import_underscore_for_alias, Name}, {import, Import});
-                   (Name, Alias) -> error:collect(import_def(Name, Alias, Rest, Module, ModuleMap, Import, Options))
-                end,
-            error:map(error:collect([F(Name, Alias) || {Name, Alias} <- maps:to_list(Dict)]), fun lists:flatten/1);
-
-        % import lists                  -> [{lists/reverse, lists/reverse},
-        %                                   {lists/split, lists/split},
-        %                                   ...]
-        [_]                             -> import_module(Import, Module, ModuleMap, Options);
-
-        % import test/Test              -> [{Test, test/Test},
-        %                                   {Test/T, test/Test/T},
-        %                                   ...]
-        % import kind/prelude           -> [{kind/prelude/Boolean, kind/prelude/Boolean},
-        %                                   {kind/prelude/True, kind/prelude/True},
-        %                                   ...]
-        % import test/_                 -> [{Test, test/Test},
-        %                                   {blah, test/blah}
-        %                                   ...]
-        [Name | T]                      ->
-            case is_kind_module(ImportPath, ModuleMap) of
-                true    -> import_module(Import, Module, ModuleMap, Options);
-                false   -> error:collect(import_def(Name, Name, lists:reverse(T), Module, ModuleMap, Import, Options))
-            end;
-
-        _                             ->
-            error:format({unrecognized_import, ImportPath}, {import, Import})
-    end.
-
-import_module({import, ImportCtx, ImportPath} = ImportTerm, Module, ModuleMap, Options) ->
-
-    % When importing `module/T`, we import both all type members of `T` (`T/A`,
-    % `T/B`, etc) and also the root type `T` itself
-    {RootPath, [RootName]} = lists:split(length(ImportPath) - 1, ImportPath),
-    RootImport = case (length(RootPath) > 0) andalso is_kind_module(RootPath, ModuleMap) of
-                     true  ->
-                         case symbol(RootPath, RootName, ModuleMap, ImportTerm) of
-                             {error, Errs_}         -> [{error, Errs_}];
-                             {ok, {Dep, Symbol}}    -> [{ok, {alias, ImportCtx, RootName, Symbol}},
-                                                        {ok, Dep}]
-                         end;
-                     false -> []
-                 end,
-
-    case error:collect(RootImport) of
-        {error, Errs}           -> {error, Errs};
-        {ok, Root}              ->
-            % We call `import_def` to create aliases for all members of `ModulePath`
-            case error:collect(import_def('_', '_', ImportPath, Module, ModuleMap, ImportTerm, Options)) of
-                {error, Errs}  -> {error, Errs};
-                {ok, Imports}  -> Tag = fun(Alias) -> symbol:tag([RootName, Alias]) end,
-                                  Aliases = [{alias, Ctx, Tag(Alias), Term} || {alias, Ctx, Alias, Term} <- Imports],
-                                  Other = [Imp || Imp <- Imports, not(element(1, Imp) =:= alias)],
-                                  {ok, Root ++ Aliases ++ Other}
+        {ok, RawAliases}       ->
+            case whitelisted(RawAliases, ModuleMap, Options) of
+                {error, Errs}       -> {error, Errs};
+                {ok, _Whitelisted}  ->
+                    {Local, Global} = lists:partition(fun(A) -> is_local(A, ModulePath) end, RawAliases),
+                    Deps = utils:unique([{dependency, #{}, ModulePath, P} || {alias, _, _,
+                                                                              {qualified_symbol, _, P, _}} <- Global]),
+                    Aliases = [local(A) || A <- Local] ++ Global,
+                    case check_duplicates(Aliases, ModulePath) of
+                        {error, Errs}   -> {error, Errs};
+                        {ok, _}         ->
+                            ImportMap = maps:from_list([{symbol:tag(Alias), Term} || {alias, _, Alias, Term} <- Aliases]),
+                            {ok, {ImportMap, Deps}}
+                    end
             end
     end.
 
-import_def(Name, Alias, ImportPath, {module, _, ModulePath, Imports, _, _}, ModuleMap, Term, Options) ->
-    % Check if ImportPath a local type import. If it is, import it with a fully
-    % qualified path. In case it isn't, check if it's a transitive local type import
-    LocalImportModule = module:beam_name(ModulePath ++ ImportPath),
-    case maps:is_key(LocalImportModule, ModuleMap) of
-        true    -> 
-            Mod = maps:get(LocalImportModule, ModuleMap),
-            % We don't return local source as dependency to avoid triggering
-            % the check for cyclical dependencies
-            kind_source_aliases(Mod, Name, Alias, ModuleMap, Term);
-        false   -> 
-            % Check if ImportPath is a transitive local type import, e.g. an
-            % extension of an existing import, for example by importing the
-            % members of a type which is already in scope. If it is, import it
-            % with a fully qualified path. In case it isn't, try to import it
-            % from source or beam file.
-            TransitiveModulePaths = [ModName || I <- Imports,
-                                                not(I =:= Term),
-                                                ModName <- local_mod_path(I, ImportPath, ModuleMap)],
-            case TransitiveModulePaths of
-                [TransitiveImportModulePath]        ->
-                    % With exactly one transitive match, we can go ahead and import it
-                    Mod = maps:get(module:beam_name(TransitiveImportModulePath), ModuleMap),
-                    kind_source_aliases(Mod, Name, Alias, ModuleMap, Term);
-                []                              -> 
-                    % With zero transitive matches, we assume the import isn't of a local type
-                    ImportName = module:beam_name(ImportPath),
-                    case maps:get(ImportName, ModuleMap, undefined) of
-                        % 2a. check if it's a compiled kind module and look up if it is
-                        undefined    -> beam_function(ImportPath, Name, Alias, Term, Options);
+flatten({import, _, ImportPath} = I)        -> [{Alias, Path, I} || {Alias, Path} <- flatten(ImportPath, [[]])].
+flatten([D], Res) when is_map(D)           -> [{V, lists:reverse([K | R])} || R <- Res, {K, V} <- maps:to_list(D)];
+flatten([E], Res)                           -> [{E, lists:reverse([E | R])} || R <- Res];
+flatten([D | Rest], Res) when is_map(D)    -> flatten(Rest, [[Name | R] || R <- Res, Name <- maps:keys(D)]);
+flatten([E | Rest], Res)                    -> flatten(Rest, [[E | R] || R <- Res]).
 
-                        % 2b. check if it's a source module and import if it is
-                        ImportModule -> kind_source_function(ImportModule, Name, Alias, ModuleMap, Term)
-                    end;
-                MultipleTransitivePaths when length(MultipleTransitivePaths) > 1   ->
-                    % With more than one candidate we throw an error since the import is ambigious
-                    ModuleNames = [module:kind_name(P) || P <- MultipleTransitivePaths],
-                    [error:format({multiple_transitive_import_candidates, ModuleNames}, {import, Term})]
-            end
+aliases(Paths, ModulePath, ModuleMap) -> 
+
+    % Scope is a pair of paths {K, P}. For a module `a/b/c` and an import of
+    % `a/b` then K would be `c` and P would be `a/b/c`
+    ExportScope = [{P ++ [D], P ++ ExportPath} || {P, {module, _, _, _, Exports, _}} <- maps:to_list(ModuleMap),
+                                           {D, {export, _, ExportPath, _}} <- maps:to_list(Exports)],
+    % We include in the local scope all modules for which the local module path
+    % is a prefix. Example: If the local module is `a/b` then we include
+    % `a/b/c` as `c` and `a/b/c/d` as `c/d`
+    LocalScope = [{P -- ModulePath, P} || {_, P} <- ExportScope, lists:prefix(ModulePath, P)],
+
+    Scope = utils:unique(LocalScope ++ ExportScope),
+    aliases(Paths, Scope, ModuleMap, [], []).
+
+aliases([], _, _, [], Res) -> {ok, Res};
+aliases([], _, _, Errors, _) -> error:collect(lists:reverse(Errors));
+aliases([{Alias, [beam | IPath], Term} | Paths], Scope, ModuleMap, Errors, Res) ->
+    case beam(Alias, IPath, Term) of
+        {error, Errs}   -> aliases(Paths, Scope, ModuleMap, [{error, Errs} | Errors], Res);
+        {ok, Aliases}   -> aliases(Paths, Scope, ModuleMap, Errors, Res ++ Aliases)
+    end;
+aliases([{Alias, IPath, Term} | Paths], Scope, ModuleMap, Errors, Res) ->
+    % When Import path is prefix of module path(s) in scope
+    % - We collect all matching module paths in scope, subtract the prefix and add them to scope
+    % - We create aliases qualified by the remainding module path
+    TrimmedPath = trim_wildcard(IPath),
+    Aliases = [kind(Alias, K, IPath, P, ModuleMap, Term) || {K, P} <- Scope,
+                                                            lists:prefix(TrimmedPath, K),
+                                                            length(IPath) =< length(K)],
+    NewScope = [{AP, MP ++ [Name]} || {alias, _, AP, {qualified_symbol, _, MP, Name}} <- Aliases],
+    case NewScope of
+        []  -> Err = case lists:last(IPath) of
+                         '_'    -> error:format({nonexistent_module, module:kind_name(TrimmedPath)},
+                                                {import, Term});
+                         _      -> error:format({nonexistent_export, source, module:kind_name(IPath)},
+                                                {import, Term})
+                     end,
+               aliases(Paths, Scope, ModuleMap, [Err | Errors], Res);
+        _   -> aliases(Paths, Scope ++ NewScope, ModuleMap, Errors, Res ++ Aliases)
     end.
 
-beam_function(ModulePath, Name, Alias, Term, Options) ->
+is_local({alias, _, _, {qualified_symbol, _, ModulePath, _}}, ModulePath) -> true;
+is_local(_, _) -> false.
+
+local({alias, Ctx, Alias, {qualified_symbol, SymbolCtx, _, Name}}) ->
+    Path = symbol:path(Name),
+    {alias, Ctx, Alias, {type, SymbolCtx, lists:last(Path), Path}}.
+
+trim_wildcard(Path) ->
+    {Init, [Last]} = lists:split(length(Path) - 1, Path),
+    case Last of
+        '_' -> Init;
+        _   -> Path
+    end.
+
+% ImportPath: a/b/c/_, K: `a/b/c/D`, Alias: _ -> AliasPath: D
+kind('_', K, ImportPath, Path, ModuleMap, Term) ->
+    kind(K -- ImportPath, Path, ModuleMap, Term);
+% ImportPath: a/b/c, K: `a/b/c/D`, Alias: f -> AliasPath: f/D
+kind(Alias, K, ImportPath, Path, ModuleMap, Term) -> 
+    AliasPath = [Alias | K -- ImportPath],
+    kind(AliasPath, Path, ModuleMap, Term).
+kind(AliasPath, Path, ModuleMap, Term) ->
+    {ModulePath, [Name]} = lists:split(length(Path) -1, Path),
+    {module, _, _, _, _, Defs} = maps:get(ModulePath, ModuleMap),
+    case maps:get(Name, Defs) of
+        {link, Ctx, Symbol} -> {qualified_symbol, Ctx, LinkPath, SymbolName} = Symbol,
+                               NewCtx = maps:put(import, Term, Ctx),
+                               NewSymbol = {qualified_symbol, NewCtx, LinkPath, SymbolName},
+                               {alias, Ctx, AliasPath, NewSymbol};
+        Def                 -> Ctx = symbol:ctx(Def),
+                               NewCtx = maps:put(import, Term, Ctx),
+                               Symbol = {qualified_symbol, NewCtx, ModulePath, Name},
+                               {alias, Ctx, AliasPath, Symbol}
+    end.
+
+
+beam(_, [ModulePath], Term) -> beam('_', '_', [ModulePath], Term);
+beam(Alias, Path, Term) ->
+    {ModulePath, [Name]} = lists:split(length(Path) - 1, Path),
+    beam(Alias, Name, ModulePath, Term).
+beam(Alias, Name, ModulePath, Term) ->
     Module = module:beam_name(ModulePath),
     ModuleName = module:kind_name(ModulePath),
     case code:is_loaded(Module) of
-        {file, _}   -> loaded_module_function(ModulePath, Name, Alias, Term, Options);
+        {file, _}   -> error:collect(loaded_module_function(ModulePath, Name, Alias, Term));
         false       -> case code:which(Module) of
-                           non_existing -> [error:format({nonexistent_module, ModuleName}, {import, Term})];
+                           non_existing -> error:format({nonexistent_module, ModuleName}, {import, Term});
                            _            ->
                                case code:ensure_loaded(Module) of
                                    {error, Err} ->
-                                       [error:format({error_loading_module, Module, Err}, {import, Term})];
+                                       error:format({error_loading_module, Module, Err}, {import, Term});
                                    _            ->
-                                       loaded_module_function(ModulePath, Name, Alias, Term, Options)
+                                       error:collect(loaded_module_function(ModulePath, Name, Alias, Term))
                                end
                        end
     end.
 
-loaded_module_function(ModulePath, '_', _, Term, Options) ->
+loaded_module_function(ModulePath, '_', _, Term) ->
     Module = module:beam_name(ModulePath),
     ExportList = erlang:apply(Module, module_info, [exports]),
     Exports = lists:delete(module_info, utils:unique([Name || {Name, _Arity} <- ExportList])),
-    lists:flatten([loaded_module_function(ModulePath, Name, Name, Term, Options)
+    lists:flatten([loaded_module_function(ModulePath, Name, Name, Term)
                    || Name <- Exports]);
 
-loaded_module_function(ModulePath, Name, Alias, Term, Options) ->
+loaded_module_function(ModulePath, Name, Alias, Term) ->
     ErrorCtx = element(2, Term),
     Module = module:beam_name(ModulePath),
     ImportPath = ModulePath ++ [Name],
     ImportName = module:kind_name(ImportPath),
     Exports = erlang:get_module_info(Module, exports),
-    TypeAliases = beam_subtypes(ImportPath, Alias, Term, Options),
-    case maps:get(sandboxed, Options, ?DEFAULT_SANDBOXED) andalso not(is_whitelisted(Module, Name)) of
-        true    -> [error:format({function_not_whitelisted, Module, Name}, {import, Term})];
-        false   ->
-            case lists:filter(fun({Export, _}) -> Export =:= Name end, Exports) of
-                []      -> [error:format({nonexistent_export, beam, ImportName}, {import, Term})];
-                _       -> [{ok, {alias, ErrorCtx, Alias,
-                                  {qualified_symbol, #{import => Term}, ModulePath, Name}}} | TypeAliases]
-            end
+    SubAliases = beam_subtypes(ImportPath ++ [Name], Alias, Term),
+    case lists:filter(fun({Export, _}) -> Export =:= Name end, Exports) of
+        []      -> [error:format({nonexistent_export, beam, ImportName}, {import, Term})];
+        _       -> [{ok, {alias, ErrorCtx, [Alias],
+                          {beam_symbol, #{import => Term}, ModulePath, Name}}} | SubAliases]
+    end.
+
+beam_subtypes(ImportPath, Alias, Term) ->
+    case beam('_', ImportPath ++ ['_'], Term) of
+        {error, _}      -> [];
+        {ok, Aliases}   -> [{ok, {alias, symbol:ctx(Term), [Alias | T], {beam_symbol, #{import => Term}, ImportPath, T}}}
+                            || {alias, _, T, _} <- Aliases]
+    end.
+
+whitelisted(Aliases, ModuleMap, Options) ->
+    Extract = fun({alias, _, _, {beam_symbol, _, ModulePath, Name}}) -> {ModulePath, Name};
+                 ({alias, _, _, {qualified_symbol, _, ModulePath, Name}}) -> {ModulePath, Name} end,
+    Check = fun({alias, _, _, Symbol} = Alias) ->
+                {ModulePath, Name} = Extract(Alias),
+                case maps:is_key(ModulePath, ModuleMap) orelse is_whitelisted(module:beam_name(ModulePath), Name) of
+                    true    -> {ok, Alias};
+                    false   -> Term = maps:get(import, symbol:ctx(Symbol)),
+                               error:format({function_not_whitelisted, ModulePath, Name}, {import, Term})
+                end end,
+    case maps:get(sandboxed, Options, ?DEFAULT_SANDBOXED) of
+        false   -> {ok, Aliases};
+        true    -> error:collect(lists:map(Check, Aliases))
     end.
 
 % This is a whitelist of functions without side-effects. It serves two
@@ -213,105 +222,20 @@ is_whitelisted(Module, Name) ->
                   'zlib' => []},
     maps:is_key(Module, Whitelist) andalso not(lists:member(Name, maps:get(Module, Whitelist))).
 
+check_duplicates(Aliases, ModulePath) ->
+    ErrFun = fun({alias, ErrorCtx1, Alias, T1},
+                 {alias, ErrorCtx2, _, T2}) ->
+                     error:format({duplicate_import, symbol:tag(Alias), module:kind_name(ModulePath),
+                                   symbol:tag(T1), symbol:tag(T2)},
+                                  {import, ErrorCtx1, ErrorCtx2}) end,
 
-beam_subtypes(ImportPath, Alias, Term, Options) ->
-    Aliases = beam_function(ImportPath, '_', '_', Term, Options),
-    Ctx = element(2, Term),
-    [{ok, {alias, Ctx, symbol:tag([Alias, T]),
-           {qualified_symbol, #{import => Term}, ImportPath, T}}}
-     || {ok, {alias, _, T, _}} <- Aliases].
-
-kind_source_function({module, _, ModulePath, _, _, _} = Module, Name, Alias, ModuleMap, Term) ->
-    [{ok, {dependency, Term, ModulePath}} | kind_source_aliases(Module, Name, Alias, ModuleMap, Term)].
-
-kind_source_aliases({module, _, _, _, Exports, _} = Module, '_', _, ModuleMap, Term) ->
-    lists:flatten([kind_source_aliases(Module, Name, Name, ModuleMap, Term)
-                   || Name <- maps:keys(Exports)]);
-
-kind_source_aliases({module, _, ModulePath, _, Exports, _}, Name, Alias, ModuleMap, Term) ->
-    Ctx = element(2, Term),
-    ImportPath = ModulePath ++ [Name],
-    ImportName = module:kind_name(ImportPath),
-    case maps:is_key(Name, Exports) of
-        false   -> [error:format({nonexistent_export, source, ImportName}, {import, Term})];
-        true    -> {export, _, ExportPath, _} = maps:get(Name, Exports),
-                   Path = ModulePath ++ lists:droplast(ExportPath),
-                   case symbol(Path, Name, ModuleMap, Term) of
-                       {error, Errs}        -> [{error, Errs}];
-                       {ok, {Dep, Symbol}}  ->
-                           {dependency, _, DepPath} = Dep,
-                           TypeAliases = kind_subtypes(DepPath, Name, Alias, ModuleMap, Term),
-                           [{ok, {alias, Ctx, Alias, Symbol}} | TypeAliases]
-                   end
+    % We want to pick out duplicate aliases that import different terms
+    % because this is ambigious. On the other hand we don't care if two
+    % separate imports map the same alias to the same term.
+    Duplicates = utils:duplicates(Aliases, fun({alias, _, A, _}) -> A end),
+    DistinctDuplicates = [{D1, D2} || {{alias, _, _, T1} = D1, {alias, _, _, T2} = D2} <- Duplicates,
+                                      not(symbol:tag(T1) =:= symbol:tag(T2))],
+    case DistinctDuplicates of
+        []  -> {ok, Aliases};
+        _   -> error:collect([ErrFun(D1, D2) || {D1, D2} <- DistinctDuplicates])
     end.
-
-kind_subtypes(ModulePath, Name, Alias, ModuleMap, Term) ->
-    ImportPath = ModulePath ++ [Name],
-    ImportBeamName = module:beam_name(ImportPath),
-    Ctx = element(2, Term),
-    case maps:get(ImportBeamName, ModuleMap, undefined) of
-        undefined                       -> [];
-        {module, _, _, _, Exports, _}   -> 
-            [error:map(symbol(ImportPath, T, ModuleMap, Term),
-                       fun({_Dep, Symbol}) -> {alias, Ctx, symbol:tag([Alias, T]), Symbol} end) || T <- maps:keys(Exports)]
-    end.
-
-is_kind_module(Path, ModuleMap) ->
-    ModuleName = module:beam_name(Path),
-    maps:is_key(ModuleName, ModuleMap).
-
-local_mod_path({import, _, Symbols}, LocalImportPath, ModuleMap) -> 
-    ImportPaths = import_paths(Symbols),
-    LocalPath = case lists:reverse(LocalImportPath) of
-        ['_' | _]   -> lists:droplast(LocalImportPath);
-        _           -> LocalImportPath
-                end,
-
-    [Path || ImportP <- ImportPaths,
-             {path, Path} <- lists:flatten(local_mod_path(ImportP, LocalPath, [])),
-             Name <- [module:beam_name(Path)],
-             maps:is_key(Name, ModuleMap)];
-
-local_mod_path([], _, _) -> [];
-local_mod_path(['_'], LocalPath, Prefix) -> [{path, lists:reverse(Prefix) ++ LocalPath}];
-local_mod_path([H | ImportPath], [H | LocalPath], Prefix) -> local_mod_path_end(ImportPath, LocalPath, [H | Prefix]);
-local_mod_path([H | ImportPath], LocalPath, Prefix) -> local_mod_path(ImportPath, LocalPath, [H | Prefix]).
-
-local_mod_path_end([], LocalPath, Prefix) -> [{path, lists:reverse(Prefix) ++ LocalPath}];
-local_mod_path_end(['_'], LocalPath, Prefix) -> [{path, lists:reverse(Prefix) ++ LocalPath}];
-local_mod_path_end([H | ImportPath], [H | LocalPath], Prefix) -> local_mod_path_end(ImportPath, LocalPath, [H | Prefix]);
-local_mod_path_end(_, _, _) -> [].
-
-import_paths([]) -> [];
-import_paths(Symbols) -> import_paths(Symbols, [[]]).
-import_paths([], Paths) -> [lists:reverse(P) || P <- Paths];
-import_paths([Dict | Rest], Paths) when is_map(Dict) ->
-    NewPaths = [[Name | Path] || Path <- Paths, Name <- maps:keys(Dict)],
-    import_paths(Rest, NewPaths);
-import_paths([P | Rest], Paths) -> import_paths(Rest, [[P | Path] || Path <- Paths]).
-
-is_local({import, _, [P | _] = Path}, Defs) when length(Path) < 3 -> maps:is_key(P, Defs);
-is_local({import, _, _}, _) -> false.
-
-is_wildcard({import, _, Path}) -> lists:last(Path) =:= '_'.
-
-symbol(Path, Name, ModuleMap, Term) ->
-    KindName = module:kind_name(Path),
-    case maps:get(module:beam_name(Path), ModuleMap, undefined) of
-        undefined                     -> error:format({nonexistent_module, source, KindName},
-                                                      {import, Term});
-        {module, _, _, _, _, Defs}    ->
-            case maps:get(Name, Defs, undefined) of
-                undefined                   -> error:format({nonexistent_export, source, KindName, Name},
-                                                            {import, Term});
-                {link, _, Symbol}           -> {qualified_symbol, Ctx, LinkPath, SymbolName} = Symbol,
-                                               Dep = {dependency, Term, LinkPath},
-                                               NewCtx = maps:put(import, Term, Ctx),
-                                               {ok, {Dep, {qualified_symbol, NewCtx, LinkPath, SymbolName}}};
-                _                           -> Symbol = {qualified_symbol, #{import => Term}, Path, Name},
-                                               Dep = {dependency, Term, Path},
-                                               {ok, {Dep, Symbol}}
-            end
-    end.
-
-
