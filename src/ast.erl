@@ -67,8 +67,6 @@ step(Meta, _Type, Scope, {module, Ctx, Path, Imports, Exports, Defs}) ->
 step(_Meta, _Type, _Scope, {import, _, _} = Term) -> {ok, {#{}, Term}};
 step(Meta, top_level, Scope, {def, Ctx, Name, Fun}) ->
     step(Meta, expr, Scope, {def, Ctx, Name, Fun});
-step(Meta, top_level, Scope, {type_def, Ctx, Name, Fun}) ->
-    step(Meta, expr, Scope, {type_def, Ctx, Name, Fun});
 step(Meta, top_level, Scope, {macro, Ctx, Name, Fun}) ->
     step(Meta, expr, Scope, {macro, Ctx, Name, Fun});
 
@@ -76,12 +74,6 @@ step(Meta, Type, Scope, {def, Ctx, Name, Fun}) ->
     case climb(Meta, Type, Scope, Fun) of
         {error, Errs}           -> {error, Errs};
         {ok, {FunEnv, TFun}}    -> {ok, {FunEnv, {def, Ctx, Name, TFun}}}
-    end;
-
-step(Meta, Type, Scope, {type_def, Ctx, Name, Fun}) ->
-    case climb(Meta, Type, Scope, Fun) of
-        {error, Errs}           -> {error, Errs};
-        {ok, {FunEnv, TFun}}    -> {ok, {FunEnv, {type_def, Ctx, Name, TFun}}}
     end;
 
 step(Meta, Type, Scope, {macro, Ctx, Name, Fun}) ->
@@ -136,11 +128,6 @@ step(Meta, _Type, Scope, {beam_application, Ctx, ModulePath, Name, Args}) ->
               fun({ArgsEnvs, TArgs}) -> 
                       {merge(ArgsEnvs), {beam_application, Ctx, ModulePath, Name, TArgs}} end);
 
-step(Meta, _Type, Scope, {recursive_type_application, Ctx, Tag, Args}) ->
-    error:map(map(Meta, expr, Scope, Args),
-	      fun({ArgsEnvs, TArgs}) -> 
-                       {merge(ArgsEnvs), {recursive_type_application, Ctx, Tag, TArgs}} end);
-
 step(Meta, _Type, Scope, {macro_application, Ctx, Name, Args}) ->
     error:map(map(Meta, expr, Scope, Args),
               fun({ArgsEnvs, TArgs}) -> 
@@ -183,18 +170,6 @@ step(Meta, expr, Scope, {'let', Ctx, Pattern, Expr, Term}) ->
                            end
                    end);
 
-step(Meta, expr, Scope, {let_type, Ctx, Type, Term}) ->
-    error:flatmap(climb(Meta, expr, Scope, Type),
-                  fun({TypeEnv, TType}) ->
-                          NewScope = merge(Scope, TypeEnv),
-                          case climb(Meta, expr, NewScope, Term) of
-                              {error, Errs}            -> {error, Errs};
-                              {ok, {TermEnv, TTerm}}    -> 
-                                  {ok, {merge(TypeEnv, TermEnv), 
-                                        {let_type, Ctx, TType, TTerm}}}
-                          end
-                  end);
-
 step(Meta, expr, Scope, {seq, Ctx, First, Then}) ->
     case climb(Meta, expr, Scope, First) of
         {error, Errs}               -> {error, Errs};
@@ -227,14 +202,12 @@ step(Meta, Type, Scope, {TermType, Ctx, Key, Val}) when TermType =:= pair;
 
 step(_, _, _, {symbol, _, _, _} = Term)             -> {ok, {#{}, Term}};
 step(_, _, _, {variable, _, _, _} = Term)           -> {ok, {#{}, Term}};
-step(_, _, _, {type, _, _, _} = Term)               -> {ok, {#{}, Term}};
-step(_, _, _, {constant, _, _, _} = Term)           -> {ok, {#{}, Term}};
-step(_, _, _, {recursive_type, _, _, _} = Term)     -> {ok, {#{}, Term}};
+step(_, _, _, {keyword, _, _, _} = Term)            -> {ok, {#{}, Term}};
+step(_, _, _, {keyword, _, _} = Term)               -> {ok, {#{}, Term}};
 step(_, _, _, {qualified_symbol, _, _} = Term)      -> {ok, {#{}, Term}};
 step(_, _, _, {qualified_symbol, _, _, _} = Term)   -> {ok, {#{}, Term}};
 step(_, _, _, {beam_symbol, _, _, _} = Term)        -> {ok, {#{}, Term}};
-step(_, _, _, {key, _, _} = Term)                   -> {ok, {#{}, Term}};
-step(_, _, _, {link, _, _} = Term)                  -> {ok, {#{}, Term}};
+step(_, _, _, {link, _, _, _} = Term)               -> {ok, {#{}, Term}};
 
 step(_, _, _, {value, _, _, _} = Term)              -> {ok, {#{}, Term}};
 

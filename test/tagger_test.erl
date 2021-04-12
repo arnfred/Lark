@@ -6,7 +6,11 @@
 tag(Code) ->
     case parser:parse([{text, test_code, Code}], #{include_kind_libraries => false}) of
         {error, Errs} -> {error, Errs};
-        {ok, [{module, _, _, _, _, Defs} | _]} -> Defs
+        {ok, Modules} ->
+            ModuleMap = maps:from_list([{module:path(M), M} || M <- Modules]),
+            case maps:get([source, test_code], ModuleMap) of
+                {module, _, _, _, _, Defs} -> Defs
+            end
     end.
 
 
@@ -68,7 +72,7 @@ dict_pair_test_() ->
                      [{variable, _, b, B}],
                      {dict, _,
                       [{pair, _,
-                        {key, _, a},
+                        {keyword, _, a},
                         {variable, _, b, B}}]}}]}}}, Defs).
 
 
@@ -83,95 +87,90 @@ dict_value_test_() ->
                      {pair,_,
                       {variable, _, d, D},
                       {dict, _,
-                       [{key, _, a}]}}}]}}}, Defs).
+                       [{keyword, _, a}]}}}]}}}, Defs).
 
 
 simple_sum_type_test_() ->
     Code =
-        "type Boolean -> (True | False)\n"
+        "def boolean -> (True | False)\n"
         "def blah\n"
-        " | Boolean/True -> Boolean/False",
+        " | boolean/True -> boolean/False",
     Defs = tag(Code),
-    [?test(#{'Boolean' := {type_def, _, 'Boolean',
+    [?test(#{'boolean' := {def, _, 'boolean',
                            {sum, _,
-                            [{type, _, 'True', ['Boolean', 'True']},
-                             {type, _, 'False', ['Boolean', 'False']}]}}}, Defs),
-     ?test(#{'Boolean/False' := {type_def, _, 'False', {type, _, 'False', ['Boolean', 'False']}}}, Defs),
-     ?test(#{'Boolean/True' := {type_def, _, 'True', {type, _, 'True', ['Boolean', 'True']}}}, Defs),
+                            [{keyword, _, [source, test_code, 'boolean'], 'True'},
+                             {keyword, _, [source, test_code, 'boolean'], 'False'}]}}}, Defs),
+     ?test(#{'boolean/False' := {keyword, _, [source, test_code, 'boolean'], 'False'}}, Defs),
+     ?test(#{'boolean/True' := {keyword, _, [source, test_code, 'boolean'], 'True'}}, Defs),
      ?test(#{blah := {def, _, blah,
                       {'fun', _,
                        [{clause, _,
-                         [{type, _, 'True', ['Boolean', 'True']}],
-                         {type, _, 'False', ['Boolean', 'False']}}]}}}, Defs)].
+                         [{keyword, _, [source, test_code, 'boolean'], 'True'}],
+                         {keyword, _, [source, test_code, 'boolean'], 'False'}}]}}}, Defs)].
 
 complex_sum_syntax_test_() ->
     Code =
         "\n"
-        "type Animal -> (Cat | Dog |\n"
-        "                Parrot | Seagull\n"
-        "                Brontosaurus)",
+        "def animal -> (Cat | Dog |\n"
+        "               Parrot | Seagull\n"
+        "               Brontosaurus)",
     Defs = tag(Code),
-    [?test(#{'Animal' := {type_def, _, 'Animal',
+    [?test(#{'animal' := {def, _, 'animal',
                           {sum, _,
-                           [{type, _, 'Cat', ['Animal', 'Cat']},
-                            {type, _, 'Dog', ['Animal', 'Dog']},
-                            {type, _, 'Parrot', ['Animal', 'Parrot']},
-                            {type, _, 'Seagull', ['Animal', 'Seagull']},
-                            {type, _, 'Brontosaurus', ['Animal', 'Brontosaurus']}]}}}, Defs),
-     ?test(#{'Animal/Brontosaurus' := {type_def, _, 'Brontosaurus',
-                                       {type, _, 'Brontosaurus', ['Animal', 'Brontosaurus']}}}, Defs),
-     ?test(#{'Animal/Cat' := {type_def, _, 'Cat',
-                                       {type, _, 'Cat', ['Animal', 'Cat']}}}, Defs),
-     ?test(#{'Animal/Dog' := {type_def, _, 'Dog',
-                                       {type, _, 'Dog', ['Animal', 'Dog']}}}, Defs),
-     ?test(#{'Animal/Parrot' := {type_def, _, 'Parrot',
-                                       {type, _, 'Parrot', ['Animal', 'Parrot']}}}, Defs),
-     ?test(#{'Animal/Seagull' := {type_def, _, 'Seagull',
-                                       {type, _, 'Seagull', ['Animal', 'Seagull']}}}, Defs)].
+                           [{keyword, _, [source, test_code, 'animal'], 'Cat'},
+                            {keyword, _, [source, test_code, 'animal'], 'Dog'},
+                            {keyword, _, [source, test_code, 'animal'], 'Parrot'},
+                            {keyword, _, [source, test_code, 'animal'], 'Seagull'},
+                            {keyword, _, [source, test_code, 'animal'], 'Brontosaurus'}]}}}, Defs),
+     ?test(#{'animal/Brontosaurus' := {keyword, _, [source, test_code, 'animal'], 'Brontosaurus'}}, Defs),
+     ?test(#{'animal/Cat' := {keyword, _, [source, test_code, 'animal'], 'Cat'}}, Defs),
+     ?test(#{'animal/Dog' := {keyword, _, [source, test_code, 'animal'], 'Dog'}}, Defs),
+     ?test(#{'animal/Parrot' := {keyword, _, [source, test_code, 'animal'], 'Parrot'}}, Defs),
+     ?test(#{'animal/Seagull' := {keyword, _, [source, test_code, 'animal'], 'Seagull'}}, Defs)].
 
 simple_product_type_test_() ->
     Code =
-        "type Monkey -> Monkey: { food: Banana, plant: Trees }",
+        "def monkey -> Monkey: { food: Banana, plant: Trees }",
     Defs = tag(Code),
-    [?test(#{'Monkey' := {type_def, _, 'Monkey',
-                          {tagged, _, ['Monkey'],
+    [?test(#{'monkey' := {def, _, 'monkey',
+                          {tagged, _, [monkey, 'Monkey'],
                            {dict, _,
                             [{pair,_,
-                              {key,_,food},
-                              {type,_,'Banana', ['Monkey', 'Banana']}},
+                              {keyword,_,food},
+                              {keyword,_,[source, test_code, 'monkey'], 'Banana'}},
                              {pair,_,
-                              {key,_,plant},
-                              {type,_,'Trees',['Monkey', 'Trees']}}]}}}}, Defs),
-     ?test(#{'Monkey/Banana' := {type_def, _, 'Banana', _}}, Defs),
-     ?test(#{'Monkey/Trees' := {type_def, _, 'Trees', _}}, Defs)].
+                              {keyword,_,plant},
+                              {keyword,_,[source, test_code, 'monkey'], 'Trees'}}]}}}}, Defs),
+     ?test(#{'monkey/Banana' := {keyword, _, _, 'Banana'}}, Defs),
+     ?test(#{'monkey/Trees' := {keyword, _, _, 'Trees'}}, Defs)].
 
 complex_type_test_() ->
     Code =
-        "type BooleanList -> (Cons: { value: (True | False)\n"
-        "                             cons: BooleanList }\n"
+        "def booleanList -> (Cons: { value: (True | False)\n"
+        "                             cons: booleanList }\n"
         "                     Nil)",
     Defs = tag(Code),
-    [?test(#{'BooleanList' := {type_def,_,'BooleanList',
+    [?test(#{'booleanList' := {def,_,'booleanList',
                                {sum,_,
-                                [{tagged,_,['BooleanList','Cons'],
+                                [{tagged,_,['booleanList','Cons'],
                                   {dict,_,
                                    [{pair,_,
-                                     {key,_,value},
+                                     {keyword,_,value},
                                      {sum,_,
-                                      [{type,_,'True',['BooleanList','True']},
-                                       {type,_,'False',['BooleanList','False']}]}},
+                                      [{keyword,_,[source, test_code, 'booleanList'],'True'},
+                                       {keyword,_,[source, test_code, 'booleanList'],'False'}]}},
                                     {pair,_,
-                                     {key,_,cons},
-                                     {type,_,'BooleanList',['BooleanList']}}]}},
-                                 {type,_,'Nil',['BooleanList','Nil']}]}}}, Defs),
-     ?test(#{'BooleanList/True' := {type_def, _, 'True', _}}, Defs),
-     ?test(#{'BooleanList/False' := {type_def, _, 'False', _}}, Defs)].
+                                     {keyword,_,cons},
+                                     {variable,_,'booleanList',{'booleanList', 0}}}]}},
+                                 {keyword,_,[source, test_code, 'booleanList'],'Nil'}]}}}, Defs),
+     ?test(#{'booleanList/True' := {keyword, _, _, 'True'}}, Defs),
+     ?test(#{'booleanList/False' := {keyword, _, _, 'False'}}, Defs)].
 
 
 
 product_key_not_propagated_test_() ->
     Code =
-        "type Blip -> { blup: Blyp }\n"
+        "def blip -> { blup: Blyp }\n"
         "def blap -> blup",
     ?testError({undefined_symbol, blup}, tag(Code)).
 
@@ -213,48 +212,48 @@ val_test_() ->
                           [{variable, _, a, A1}]}}}]}}}, tag(Code)).
 
 local_import_conflict_test_() ->
-    Code = "type T -> (A | B)
-            import T/_",
+    Code = "def t -> (A | B)
+            import t/_",
     Defs = tag(Code),
-    [?test(#{'T' := {type_def, _, 'T', {sum, _,
-                                        [{type, _, 'A', ['T', 'A']},
-                                         {type, _, 'B', ['T', 'B']}]}}}, Defs),
-     ?test(#{'T/A' := {type_def, _, 'A', {type, _, 'A', ['T', 'A']}}}, Defs),
-     ?test(#{'T/B' := {type_def, _, 'B', {type, _, 'B', ['T', 'B']}}}, Defs)].
+    [?test(#{'t' := {def, _, 't', {sum, _,
+                                   [{keyword, _, [source, test_code, 't'], 'A'},
+                                    {keyword, _, [source, test_code, 't'], 'B'}]}}}, Defs),
+     ?test(#{'t/A' := {keyword, _, [source, test_code, 't'], 'A'}}, Defs),
+     ?test(#{'t/B' := {keyword, _, [source, test_code, 't'], 'B'}}, Defs)].
 
 type_variable_test_() ->
-    Code = "type F a -> a",
+    Code = "def f a -> a",
     Defs = tag(Code),
 
-    ?test(#{'F' := {type_def, _, 'F',
+    ?test(#{'f' := {def, _, 'f',
                     {'fun', _,
                      [{clause, _,
                        [{variable, _, 'a', A}],
                        {variable, _, 'a', A}}]}}}, Defs).
 
 tag_sub_module_test_() ->
-    Code = "type List a -> (Nil | Cons: { head: a, tail: List(a) })",
+    Code = "def list a -> (Nil | Cons: { head: a, tail: list(a) })",
     {ok, Parsed} = parser:parse([{text, test_code, Code}], #{include_kind_libraries => false}),
     ModMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Parsed]),
     % Should result in `source_test_code` module and `source_test_code_List` module.
     % We're interested in the latter.
-    #{'source/test_code' := {module, _, _, _, _, #{'List/Cons' := Cons}}} = ModMap,
-    ?test({type_def, _, 'Cons',
-                {'fun', _,
-                 [{clause, _,
-                   [{pair, _, {variable, _, _, Sub1}, {variable, _, a, _}},
-                    {pair, _, {variable, _, _, Sub2}, {application, _,
-                                                       {type, _, 'List', ['List']},
-                                                       [{type, _, any, _}]}}],
-                   {tagged, _, ['List', 'Cons'],
-                    {dict, _, [{pair, _, {key, _, head}, {variable, _, _, Sub1}},
-                               {pair, _, {key, _, tail}, {variable, _, _, Sub2}}]}}}]}}, Cons).
+    #{'source/test_code' := {module, _, _, _, _, #{'list/Cons' := Cons}}} = ModMap,
+    ?test({def, _, 'Cons',
+           {'fun', _,
+            [{clause, _,
+              [{pair, _, {variable, _, _, Sub1}, {variable, _, a, _}},
+               {pair, _, {variable, _, _, Sub2}, {application, _,
+                                                  {variable, _, 'list', _},
+                                                  [{keyword, _, '_'}]}}],
+              {tagged, _, [source, test_code, 'list', 'Cons'],
+               {dict, _, [{pair, _, {keyword, _, head}, {variable, _, _, Sub1}},
+                          {pair, _, {keyword, _, tail}, {variable, _, _, Sub2}}]}}}]}}, Cons).
 
 local_constant_test_() ->
-    Code = "type T -> A
-            import T/A
-            type S -> A
-            type R -> S/A",
+    Code = "def t -> A
+            import t/A
+            def s -> A
+            def r -> s/A",
     Defs = tag(Code),
-    [?test(#{'S' := {type_def, _, 'S', {type, _, 'A', ['T', 'A']}}}, Defs),
-     ?test(#{'R' := {type_def, _, 'R', {type, _, 'A', ['T', 'A']}}}, Defs)].
+    [?test(#{'s' := {def, _, 's', {keyword, _, [source, test_code, 't'], 'A'}}}, Defs),
+     ?test(#{'r' := {def, _, 'r', {keyword, _, [source, test_code, 't'], 'A'}}}, Defs)].

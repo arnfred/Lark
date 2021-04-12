@@ -1,6 +1,6 @@
 Terminals
     def type val macro
-    type_symbol var_symbol
+    keyword_symbol var_symbol
     rightbias_operator plus_operator mult_operator comp_operator eq_operator
     minus_operator div_operator caret_operator other_operator
     value
@@ -89,7 +89,7 @@ function -> macro symbol implies expression             : {macro, ctx('$1'), unw
 % Symbols
 % -------
 
-symbol -> type_symbol           : make_symbol('$1').
+symbol -> keyword_symbol       : make_symbol('$1').
 symbol -> var_symbol            : make_symbol('$1').
 symbol -> operator              : '$1'.
 symbol -> rightbias_operator    : make_symbol('$1', operator).
@@ -346,7 +346,7 @@ unwrap({_,_,V}) -> V;
 unwrap({_,_,_,V}) -> V.
 
 make_symbol({var_symbol, L, S}) -> {symbol, L, variable, S};
-make_symbol({type_symbol, L, S}) -> {symbol, L, type, S}.
+make_symbol({keyword_symbol, L, S}) -> {symbol, L, keyword, S}.
 make_symbol({_, L, S}, Type) -> {symbol, L, Type, S}.
 
 ctx({_, Ctx})         -> Ctx;

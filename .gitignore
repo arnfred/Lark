@@ -1,5 +1,5 @@
 src/lexer.erl
-src/grammar.erl
+src/syntax.erl
 .rebar3
 _*
 .eunit

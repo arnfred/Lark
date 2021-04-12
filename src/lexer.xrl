@@ -1,7 +1,7 @@
 Definitions.
 
 Symbol            = [a-z_\<=>*^+$-][a-zA-Z0-9_\<=>*^+$-]*
-Type_Symbol       = [A-Z][a-zA-Z0-9_<=>-]*
+Keyword_Symbol    = [A-Z][a-zA-Z0-9_<=>-]*
 Operator          = [\<=>*^+$-][a-zA-Z0-9_\<=>*^+$-]*
 DivOperator       = //[a-zA-Z0-9_\<=>*^+$-]*
 RightBiasOperator = [:][a-zA-Z0-9_\<=>*^+$-]+
@@ -43,7 +43,7 @@ module                      : {token, {module_keyword,      #{line => TokenLine}
 {Operator}                  : {token, {op_type(TokenChars), #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {RightBiasOperator}         : {token, {rightbias_operator,  #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {Symbol}                    : {token, {var_symbol,          #{line => TokenLine}, list_to_atom(TokenChars)}}.
-{Type_Symbol}               : {token, {type_symbol,         #{line => TokenLine}, list_to_atom(TokenChars)}}.
+{Keyword_Symbol}            : {token, {keyword_symbol,      #{line => TokenLine}, list_to_atom(TokenChars)}}.
 [\n]+                       : {token, {newlines,            #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {String}                    : {token, {value,               #{line => TokenLine}, string, build_string(TokenChars, TokenLen)}}.
 {Atom}                      : {token, {value,               #{line => TokenLine}, atom, build_atom(TokenChars, TokenLen)}}.

@@ -13,20 +13,20 @@ local_type_test_() ->
 
 nested_local_type_test_() ->
     Module =
-    "type Blup -> (Blip | Blap)
-     import Blup/_
-     type Flup -> (Flip | Blap)
-     def main -> Flup/Blap",
+    "def blup -> (Blip | Blap)
+     import blup/_
+     def flup -> (Flip | Blap)
+     def main -> flup/Blap",
     {ok, Modules} = parser:parse([{text, test_code, Module}], #{include_kind_libraries => false}),
-    ModuleMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
-    ?test(#{'source/test_code' := {module, _, [source, test_code], _, _,
+    ModuleMap = maps:from_list([{Path, Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
+    ?test(#{[source, test_code] := {module, _, [source, test_code], _, _,
                                    #{main := {def, _, 'main',
-                                              {type, _, 'Blap', ['Blup', 'Blap']}}}}}, ModuleMap).
+                                              {keyword, _, [source, test_code, 'blup'], 'Blap'}}}}}, ModuleMap).
 
 
 local_type_alias_test_() ->
     Module = 
-    "import kind/prelude/Boolean/{True: T, False: F}\n"
+    "import kind/prelude/boolean/{True: T, False: F}\n"
     "def xor\n"
     " | T F -> T\n"
     " | F T -> T\n"
@@ -35,8 +35,8 @@ local_type_alias_test_() ->
 
 local_type_no_import_test_() ->
     Module = 
-    "type Boolean -> (True | False)\n"
-    "import Boolean/False\n"
+    "def boolean -> (True | False)\n"
+    "import boolean/False\n"
     "def notxor\n"
     " | True False -> False\n"
     " | False True -> False\n"
@@ -45,8 +45,8 @@ local_type_no_import_test_() ->
 
 local_type_wildcard_test_() ->
     Module = 
-    "type Boolean -> (True | False)\n"
-    "import Boolean/_\n"
+    "def boolean -> (True | False)\n"
+    "import boolean/_\n"
     "def xor\n"
     " | True False -> True\n"
     " | False True -> True\n"
@@ -56,11 +56,11 @@ local_type_wildcard_test_() ->
 external_type_test_() ->
     Module1 = 
     "module blup {\n"
-    "  Boolean\n"
+    "  boolean\n"
     "}\n"
-    "type Boolean -> (True | False)\n",
+    "def boolean -> (True | False)\n",
     Module2 =
-    "import blup/Boolean/_\n"
+    "import blup/boolean/_\n"
     "def xor\n"
     " | True False -> True\n"
     " | False True -> True\n"
@@ -70,9 +70,9 @@ external_type_test_() ->
 undefined_external_type_test_() ->
     Module1 = 
     "module blup {\n"
-    "  Boolean\n"
+    "  boolean\n"
     "}\n"
-    "type Boolean -> (True | False)\n",
+    "def boolean -> (True | False)\n",
     Module2 =
     "import blup/Blap/_",
     ?testError({nonexistent_module, 'blup/Blap'},
@@ -150,13 +150,13 @@ import_already_defined_test_() ->
 wildcard_import_type_already_defined_test_() ->
     Module1 = 
     "module blip {\n"
-    "  T\n"
+    "  t\n"
     "}\n"
-    "type T -> (A | B)\n",
+    "def t -> (A | B)\n",
     Module2 =
     "import blip/_\n"
-    "type T -> (Q | R)",
-    ?testError({import_conflicts_with_local_def, 'T', 'source/test_code_2', 'source/test_code_1/T'},
+    "def t -> (Q | R)",
+    ?testError({import_conflicts_with_local_def, 't', 'source/test_code_2', 'source/test_code_1/t'},
                parser:parse([{text, test_code_2, Module2}, {text, test_code_1, Module1}])).
 
 import_alias_already_defined_test_() ->
@@ -192,33 +192,33 @@ qualified_beam_import_test_() ->
 
 qualified_source_import_test_() ->
     Module1 = 
-    "module blip {T}\n"
-    "type T -> (A | B)\n",
+    "module blip {t}\n"
+    "def t -> (A | B)\n",
     Module2 =
-    "import blip/T\n"
-    "def blap -> T/A",
+    "import blip/t\n"
+    "def blap -> t/A",
     {ok, Modules} = parser:parse([{text, test_code_1, Module1}, {text, test_code_2, Module2}],
                                  #{include_kind_libraries => false}),
     ModuleMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
     ?test(#{'source/test_code_2' := {module, _, [source, test_code_2], _, _,
                  #{blap := {def, _, 'blap',
-                            {qualified_application, _, [source, test_code_1], 'T/A', []}}}}}, ModuleMap).
+                            {keyword, _, [source, test_code_1, t], 'A'}}}}}, ModuleMap).
 
 qualified_local_import_test_() ->
     Module = 
-    "type T -> (A | B)\n"
-    "import T/A\n"
+    "def t -> (A | B)\n"
+    "import t/A\n"
     "def blap -> A",
     {ok, Modules} = parser:parse([{text, test_code, Module}],
                                  #{include_kind_libraries => false}),
     ModuleMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
     ?test(#{'source/test_code' := {module, _, [source, test_code], _, _,
                                    #{blap := {def, _, 'blap',
-                                              {type, _, 'A', ['T', 'A']}}}}}, ModuleMap).
+                                              {keyword, _, [source, test_code, 't'], 'A'}}}}}, ModuleMap).
 
 module_order_test_() ->
-    Module = "type T -> (A | B)
-              module test {T}",
+    Module = "def t -> (A | B)
+              module test {t}",
     {ok, Modules} = parser:parse([{text, test_code, Module}], #{include_kind_libraries => false}),
     ModuleNames = [module:kind_name(M) || M <- Modules],
-    ?test(['source/test_code', 'source/test_code/T', 'test', 'test/T'], ModuleNames).
+    ?test(['source/test_code', 'source/test_code/t', 'test', 'test/t'], ModuleNames).

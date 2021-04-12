@@ -7,14 +7,15 @@
 term(TypesEnv, {tagged, Ctx, Path, Val} = Term) -> tagged(Path, Ctx, term(TypesEnv, symbol:name(Term), Val));
 term(TypesEnv, Term) -> term(TypesEnv, symbol:name(Term), Term).
 
-term(TypesEnv, Tag, {link, _, _} = Term) -> Term;
+term(_, _, {link, _, _} = Term) -> Term;
+term(_, Tag, {keyword, _, _, _} = Term) -> Term;
 term(TypesEnv, Tag, Term) ->
     Ctx = element(2, Term),
     case domain:is_literal(TypesEnv, Term) of
         % For literals we generate a function with no arguments that return the domain
-        true    -> {type_def, Ctx, Tag, Term};
+        true    -> {def, Ctx, Tag, Term};
         % For non literals, we replace the non-literal components with function arguments
-        false   -> {type_def, Ctx, Tag, sub(TypesEnv, Ctx, Term)}
+        false   -> {def, Ctx, Tag, sub(TypesEnv, Ctx, Term)}
     end.
 
 
@@ -41,7 +42,7 @@ sub(_, Ctx, Term) ->
     VarTerm = {symbol, TermCtx, variable, Var},
     {'fun', Ctx, [{clause, Ctx, patterns([VarTerm], [Term], Ctx), VarTerm}]}.
 
-tagged(Path, TagCtx, {type_def, Ctx, Name, Term}) -> {type_def, Ctx, Name, tagged(Path, TagCtx, Term)};
+tagged(Path, TagCtx, {def, Ctx, Name, Term}) -> {def, Ctx, Name, tagged(Path, TagCtx, Term)};
 
 tagged(Path, TagCtx, {'fun', Ctx, Clauses}) ->
     {'fun', Ctx, [tagged(Path, TagCtx, Clause) || Clause <- Clauses]};
@@ -103,7 +104,8 @@ sanitize_pattern(Term) ->
     {ok, {_, NewTerm}} = ast:traverse_term(pattern, fun(_, _, _) -> ok end, fun sanitize_post/3, #{}, Term),
     NewTerm.
 
-sanitize_post(expr, _, {symbol, Ctx, variable, _Name}) -> {ok, {symbol, Ctx, type, 'any'}};
+sanitize_post(expr, _, {symbol, Ctx, variable, _Name}) -> {ok, {symbol, Ctx, keyword, '_'}};
+sanitize_post(expr, _, {symbol, Ctx, keyword, _Name}) -> {ok, {symbol, Ctx, keyword, '_'}};
 sanitize_post(_, _, _) -> ok.
 
 
@@ -234,7 +236,7 @@ nested_sum_of_products_test_() ->
                            tagged:t(#{k5 => 'S/A', k6 => 'T/B'}))]
             end)}.
 
-type_not_in_typesenv_test_() ->
+keyword_not_in_typesenv_test_() ->
     {"A type not in typeenv is treated as a literal and kept",
      ?setup({tagged, #{args => []}, [t], {type, #{}, 'T', ['T']}},
             fun({ok, _}) ->

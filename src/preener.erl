@@ -16,10 +16,7 @@ preen(FileName, AST) ->
             end
     end.
 
-expand_tuples(AST) -> ast:traverse(fun tuple_pre/3, fun tuple_post/3, AST).
-
-tuple_pre(_, _, {type_def, _, _, _})    -> skip;
-tuple_pre(_, _, Term)                   -> {ok, Term}.
+expand_tuples(AST) -> ast:traverse(fun tuple_post/3, AST).
 
 tuple_post(_, _, {tuple, _, [Elem]})    -> {ok, Elem};
 tuple_post(_, _, {sum, _, [Elem]})      -> {ok, Elem};
@@ -29,8 +26,6 @@ tuple_post(_, _, _)                     -> ok.
 clean_tuple_elements(Expressions) ->
     F = fun({val, Ctx, Pattern, Expr}, Acc)         -> {'let', Ctx, Pattern, Expr, Acc};
            ({def, Ctx, Name, _} = Expr, Acc)        -> Pattern = {symbol, Ctx, variable, Name},
-                                                       {'let', Ctx, Pattern, Expr, Acc};
-           ({type_def, Ctx, Name, _} = Expr, Acc)   -> Pattern = {symbol, Ctx, variable, Name},
                                                        {'let', Ctx, Pattern, Expr, Acc};
            (T, Acc)                                 -> {seq, ast:context(T), T, Acc} end,
     case lists:reverse(Expressions) of
@@ -49,14 +44,14 @@ dict_pre(_Type, _Scope, Term) -> {ok, Term}.
 dict_post(_, _, _) -> ok.
 
 
-dict_elem(expr, _Scope, {symbol, Ctx, variable, Name}) -> {ok, {key, Ctx, Name}};
+dict_elem(expr, _Scope, {symbol, Ctx, variable, Name}) -> {ok, {keyword, Ctx, Name}};
 dict_elem(pattern, _Scope, {symbol, _, variable, _} = Term) -> {ok, Term};
 dict_elem(Type, Scope, {pair, Ctx, Key, Val}) ->
     error:map(dict_pair_elem(Type, Scope, Key), fun(K) -> {pair, Ctx, K, Val} end);
 dict_elem(Type, _, Term) ->
     error:format({illegal_dict_element, ast:term_type(Term), Type}, {preener, Term}).
 
-dict_pair_elem(_Type, _Scope, {symbol, Ctx, variable, Name}) -> {ok, {key, Ctx, Name}};
+dict_pair_elem(_Type, _Scope, {symbol, Ctx, variable, Name}) -> {ok, {keyword, Ctx, Name}};
 dict_pair_elem(Type, _, Term) ->
     error:format({illegal_dict_pair_element, ast:term_type(Term), Type}, {preener, Term}).
 
@@ -65,15 +60,13 @@ add_filename(FileName, AST) ->
     Skip = fun(_, _, _) -> ok end,
     ast:traverse(TagId, Skip, AST).
 
-tagged_pre(top_level, _, {type_def, _, Name, _} = Term) -> 
-    {ok, ast:tag(parent, Term, Name)};
 tagged_pre(top_level, _, {def, _, Name, _} = Term) -> 
     {ok, ast:tag(parent, Term, Name)};
 tagged_pre(top_level, _, {macro, _, Name, _} = Term) -> 
     {ok, ast:tag(parent, Term, Name)};
 tagged_pre(top_level, _, _)  -> ok;
 tagged_pre(_, _, Term) -> {ok, ast:tag(parent, Term)}.
-tagged_post(_, _, {pair, Ctx, {symbol, _, type, Name}, Val} = Term) ->
+tagged_post(_, _, {pair, Ctx, {symbol, _, keyword, Name}, Val} = Term) ->
     Parent = ast:get_tag(parent, Term),
     case Parent =:= Name of
         true    -> {ok, {tagged, Ctx, [Name], Val}};
@@ -128,8 +121,8 @@ dict_expr_test_() ->
                  {'fun', _,
                   [{clause, _, _,
                     {dict, _,
-                     [{pair, _, {key, _, a}, {symbol, _, _, a}},
-                      {pair, _, {key, _, b}, {symbol, _, _, a}}]}}]}}]}, do_preen(Code)).
+                     [{pair, _, {keyword, _, a}, {symbol, _, _, a}},
+                      {pair, _, {keyword, _, b}, {symbol, _, _, a}}]}}]}}]}, do_preen(Code)).
 
 dict_pattern_test_() ->
     Code = "def test\n"
@@ -138,8 +131,8 @@ dict_pattern_test_() ->
                  {'fun', _,
                   [{clause, _,
                     [{dict, _,
-                      [{pair, _, {key, _, a}, {symbol, _, _, b}},
-                       {pair, _, {key, _, b}, {symbol, _, _, c}}]}],
+                      [{pair, _, {keyword, _, a}, {symbol, _, _, b}},
+                       {pair, _, {keyword, _, b}, {symbol, _, _, c}}]}],
                     {symbol, _, _, c}}]}}]}, do_preen(Code)).
 
 dict_pattern_variable_test_() ->
@@ -149,7 +142,7 @@ dict_pattern_variable_test_() ->
                  {'fun', _,
                   [{clause, _,
                     [{dict, _,
-                      [{pair, _, {key, _, a}, {symbol, _, _, b}},
+                      [{pair, _, {keyword, _, a}, {symbol, _, _, b}},
                        {symbol, _, _, b}]}],
                     {symbol, _, _, b}}]}}]}, do_preen(Code)).
 
@@ -165,8 +158,8 @@ pair_expr_test_() ->
                   [{clause, _, _,
                     {tagged, _, [test, 'A'],
                      {dict, _,
-                      [{pair, _, {key, _, a}, {symbol, _, _, a}},
-                       {key, _, b}]}}}]}}]}, do_preen(Code)).
+                      [{pair, _, {keyword, _, a}, {symbol, _, _, a}},
+                       {keyword, _, b}]}}}]}}]}, do_preen(Code)).
 
 pair_expr_homonym_test_() ->
     Code = "def A a -> A: {a: a, b}",
@@ -175,8 +168,8 @@ pair_expr_homonym_test_() ->
                   [{clause, _, _,
                     {tagged, _, ['A'],
                      {dict, _,
-                      [{pair, _, {key, _, a}, {symbol, _, _, a}},
-                       {key, _, b}]}}}]}}]}, do_preen(Code)).
+                      [{pair, _, {keyword, _, a}, {symbol, _, _, a}},
+                       {keyword, _, b}]}}}]}}]}, do_preen(Code)).
 
 pair_pattern_test_() ->
     Code = "def test\n"
@@ -187,7 +180,7 @@ pair_pattern_test_() ->
                     [{pair, _,
                       {symbol, _, _, a},
                       {dict, _,
-                       [{pair, _, {key, _, a}, {symbol, _, _, b}},
+                       [{pair, _, {keyword, _, a}, {symbol, _, _, b}},
                         {symbol, _, _, c}]}}],
                     {symbol, _, _, c}}]}}]}, do_preen(Code)).
 

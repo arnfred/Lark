@@ -1,5 +1,5 @@
 -module(module).
--export([parse/1, beam_name/1, kind_name/1, is_submodule/1, empty/1]).
+-export([parse/1, path/1, beam_name/1, kind_name/1, is_submodule/1, empty/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
@@ -23,7 +23,7 @@ parse(Sources) ->
 
 prepare(FileName, Code) ->
     Modules = [M || M = {module, _, _, _, _} <- Code],
-    DefList = [D || D = {Type, _, _, _} <- Code, Type == type_def orelse Type == def orelse Type == macro],
+    DefList = [D || D = {Type, _, _, _} <- Code, Type == def orelse Type == macro],
     RootPath = filename_to_module_path(FileName),
     RootImports = [import(I) || I = {import, _, _} <- Code],
     case types(DefList, RootImports, RootPath) of
@@ -52,9 +52,9 @@ parse_module({module, ModuleCtx, Path, Exports, Statements},
     ModulePath = [S || {symbol, _, _, S} <- Path],
     LocalImports = [import(I) || I = {import, _, _} <- Statements],
     LocalDefMap = maps:from_list([{Name, D} || D = {Type, _, Name, _} <- Statements,
-                                             Type == type_def orelse Type == def orelse Type == macro]),
+                                             Type == def orelse Type == macro]),
     RootDefMap = maps:from_list([{Name, T} || T = {Type, _, Name, _} <- maps:values(RootDefs),
-                                             Type == type_def orelse Type == def orelse Type == macro]),
+                                             Type == def orelse Type == macro]),
     
     case types(Statements, LocalImports, ModulePath) of
         {error, Errs}       -> {error, Errs};
@@ -70,7 +70,7 @@ parse_module({module, ModuleCtx, Path, Exports, Statements},
                     ExportMap = maps:from_list(ExportTerms),
 
                     % Any def we export but don't define is linked to the root module
-                    LinkF = fun(Ctx, Name) -> {link, Ctx, {qualified_symbol, Ctx, RootPath, Name}} end,
+                    LinkF = fun(Ctx, Name) -> {link, Ctx, RootPath, Name} end,
                     LinkMap = maps:from_list([{Name, LinkF(Ctx, Name)} || {_, {export, Ctx, [Name], _}} <- ExportTerms,
                                                                           not(maps:is_key(Name, LocalDefMap))]),
 
@@ -134,13 +134,13 @@ sub_modules({module, _, BasePath, _, BaseExports, _} = BaseMod, BaseTypes, RootP
                                                                   not(maps:is_key(T, BaseTypes))],
     BaseLinks ++ RootLinks.
 
-% Sub module for constants and tagged values exported from the base module, but not defined there
-link_submodule(Parent, Children, {module, BaseCtx, BasePath, _, _, BaseDefs}, RootPath) ->
-    LinkF = fun({link, _, _} = Link) -> Link;
-               (C) -> {link, symbol:ctx(C),
-                       {qualified_symbol, symbol:ctx(C), RootPath, sub_symbol(Parent, symbol:name(C))}} end,
-    Links = maps:from_list([{Name, LinkF(C)} || {Name, C} <- Children]),
-    Exports = maps:from_list([{Name, {export, symbol:ctx(C), [Name], none}} || {Name, C} <- Children]),
+% Sub module for keywords and tagged values exported from the base module, but not defined there
+link_submodule(Parent, Children, {module, BaseCtx, BasePath, _, BaseExports, BaseDefs}, RootPath) ->
+    F = fun({keyword, _, _, _} = Keyword) -> Keyword;
+           (C) -> {link, symbol:ctx(C), RootPath, sub_symbol(Parent, symbol:name(C))} end,
+    Links = maps:from_list([{Name, F(C)} || {Name, C} <- Children]),
+    Exports = maps:from_list([{Name, {export, symbol:ctx(C), [Name], none}} || {Name, C} <- Children,
+                                                                               maps:is_key(Parent, BaseExports)]),
     Imports = [],
     Ctx = case maps:get(Parent, BaseDefs, undefined) of
               undefined -> maps:put(submodule, true, BaseCtx);
@@ -159,9 +159,9 @@ base_import(Ctx, Path, Exports, ExcludeMap) ->
                 {import, Ctx, Path ++ [ImportDict]}.
 
 % At this point in the compilation, we don't know if a symbol is defined
-% elsewhere or created within this def. We assume any symbol is a new constant,
+% elsewhere or created within this def. We assume any symbol is a new keyword,
 % and then when tagging, we remove the ones that have already been defined.
-types_post(expr, _, {symbol, _, type, Name} = Term) -> 
+types_post(expr, _, {symbol, _, keyword, Name} = Term) -> 
     Parent = ast:get_tag(parent, Term),
     % Don't include recursive types
     case Parent == Name of
@@ -184,11 +184,11 @@ types(Defs, Imports, Path) ->
             GetVal = fun({_, V}) -> V end,
             TypeList = utils:group_by(GetKey, GetVal, maps:keys(Env)),
 
-            % If a type constant has been imported locally, we other types that
-            % refer to this constant to represent it as a link to the type
+            % If a type keyword has been imported locally, we other types that
+            % refer to this keyword to represent it as a link to the type
             % where it was defined
             LocalImports = local_imports(Imports, TypeList),
-            Link = fun(P, Cs) -> link_imported(LocalImports, P, Cs, Path) end,
+            Link = fun(P, Cs) -> keywords(LocalImports, P, Cs, Path) end,
             Types = maps:from_list([{P, Link(P, Cs)} || {P, Cs} <- TypeList]),
 
             {ok, Types}
@@ -214,7 +214,7 @@ local_imports(Imports, TypeList) ->
 
     maps:from_list(utils:group_by(fun({P, _, _}) -> P end, fun({_, K, V}) -> {K, V} end, ExpandedImportList)).
 
-% Local imports can be chained in the sense that a constant imported from one
+% Local imports can be chained in the sense that a keyword imported from one
 % def can be used in another def which in turn can be imported. Take the
 % following example:
 %
@@ -229,7 +229,7 @@ local_imports(Imports, TypeList) ->
 % Here, T consists of `R/A` (since A is imported in the local scope), and "`T/D`"
 % which is an import that maps to `S/D`. However, `D` is an alias for `B` which
 % is declared by `R`. To correctly map `T` to `(R/A | R/B)` we need to make
-% sure follow the chain of imports to where the constants are originally created
+% sure follow the chain of imports to where the keywords are originally created
 expand_imports(ImportList) -> expand_imports(ImportList, #{}, []).
 expand_imports([], _, Res) -> Res;
 expand_imports([{P, K, V} = Triplet | Rest], Seen, Res) ->
@@ -240,15 +240,20 @@ expand_imports([{P, K, V} = Triplet | Rest], Seen, Res) ->
                    expand_imports(Unlinked ++ [Triplet] ++ New, maps:put(Triplet, true, Seen), Res)
     end.
 
-link_imported(Imported, P, Terms, BasePath) ->
-    LinkF = fun(Parent, ChildName) -> 
-                    {link, #{}, {qualified_symbol, #{}, BasePath, sub_symbol(Parent, ChildName)}}
-            end,
-    Links = maps:from_list([{Alias, LinkF(Parent, Name)} || {Parent, Cs} <- maps:to_list(maps:remove(P, Imported)),
-                                                            {Name, Alias} <- Cs]),
+keywords(Imported, P, Terms, BasePath) ->
+    Imps = maps:from_list([{Alias, {Parent, Name}} || {Parent, Cs} <- maps:to_list(maps:remove(P, Imported)),
+                                                      {Name, Alias} <- Cs]),
 
-    % By using `symbol:tag` we make sure that symbols match but tagged value wont
-    [{symbol:name(T), maps:get(symbol:tag(T), Links, T)} || T <- Terms].
+    F = fun({symbol, Ctx, keyword, S}) when is_map_key(S, Imps) -> 
+                {Parent, Name} = maps:get(S, Imps),
+                {keyword, Ctx, BasePath ++ [Parent], Name};
+           ({symbol, Ctx, keyword, S}) ->
+                {keyword, Ctx, BasePath ++ [maps:get(parent, Ctx)], S};
+           ({tagged, Ctx, Path, Term}) ->
+                {tagged, Ctx, BasePath ++ Path, Term}
+        end,
+
+    [{symbol:name(T), F(T)} || T <- Terms].
 
 
 tag_symbols({module, _, Path, _, _, _} = Mod) ->

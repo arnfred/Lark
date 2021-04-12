@@ -13,9 +13,8 @@ import({module, _, ModulePath, Imports, _, _}, ModuleMap, Options) ->
                 {error, Errs}       -> {error, Errs};
                 {ok, _Whitelisted}  ->
                     {Local, Global} = lists:partition(fun(A) -> is_local(A, ModulePath) end, RawAliases),
-                    Deps = utils:unique([{dependency, #{}, ModulePath, P} || {alias, _, _,
-                                                                              {qualified_symbol, _, P, _}} <- Global]),
-                    Aliases = [local(A) || A <- Local] ++ Global,
+                    Deps = utils:unique(lists:flatten([dep(ModulePath, A) || A <- Global])),
+                    Aliases = [local(A, ModuleMap) || A <- Local] ++ Global,
                     case check_duplicates(Aliases, ModulePath) of
                         {error, Errs}   -> {error, Errs};
                         {ok, _}         ->
@@ -36,7 +35,7 @@ aliases(Paths, ModulePath, ModuleMap) ->
     % Scope is a pair of paths {K, P}. For a module `a/b/c` and an import of
     % `a/b` then K would be `c` and P would be `a/b/c`
     ExportScope = [{P ++ [D], P ++ ExportPath} || {P, {module, _, _, _, Exports, _}} <- maps:to_list(ModuleMap),
-                                           {D, {export, _, ExportPath, _}} <- maps:to_list(Exports)],
+                                                  {D, {export, _, ExportPath, _}} <- maps:to_list(Exports)],
     % We include in the local scope all modules for which the local module path
     % is a prefix. Example: If the local module is `a/b` then we include
     % `a/b/c` as `c` and `a/b/c/d` as `c/d`
@@ -60,7 +59,10 @@ aliases([{Alias, IPath, Term} | Paths], Scope, ModuleMap, Errors, Res) ->
     Aliases = [kind(Alias, K, IPath, P, ModuleMap, Term) || {K, P} <- Scope,
                                                             lists:prefix(TrimmedPath, K),
                                                             length(IPath) =< length(K)],
-    NewScope = [{AP, MP ++ [Name]} || {alias, _, AP, {qualified_symbol, _, MP, Name}} <- Aliases],
+    ScopeF = fun({alias, _, AP, {qualified_symbol, _, MP, Name}}) -> {AP, MP ++ [Name]};
+                ({alias, _, AP, {keyword, _, MP, Name}}) -> {AP, MP ++ [Name]}
+             end,
+    NewScope = [ScopeF(A) || A <- Aliases],
     case NewScope of
         []  -> Err = case lists:last(IPath) of
                          '_'    -> error:format({nonexistent_module, module:kind_name(TrimmedPath)},
@@ -72,12 +74,18 @@ aliases([{Alias, IPath, Term} | Paths], Scope, ModuleMap, Errors, Res) ->
         _   -> aliases(Paths, Scope ++ NewScope, ModuleMap, Errors, Res ++ Aliases)
     end.
 
+dep(ModulePath, {alias, _, _, {qualified_symbol, _, P, _}}) -> [{dependency, #{}, ModulePath, P}];
+dep(ModulePath, {alias, _, _, {keyword, _, P, _}}) -> [{dependency, #{}, ModulePath, P}];
+dep(ModulePath, {alias, _, _, {beam_symbol, _, _, _}}) -> [].
+
 is_local({alias, _, _, {qualified_symbol, _, ModulePath, _}}, ModulePath) -> true;
+is_local({alias, _, _, {keyword, _, ModulePath, _}}, ModulePath) -> true;
 is_local(_, _) -> false.
 
-local({alias, Ctx, Alias, {qualified_symbol, SymbolCtx, _, Name}}) ->
-    Path = symbol:path(Name),
-    {alias, Ctx, Alias, {type, SymbolCtx, lists:last(Path), Path}}.
+local({alias, Ctx, Alias, {qualified_symbol, SymbolCtx, ModulePath, Name}}, ModuleMap) ->
+    Arity = utils:get_arity(ModulePath, Name, ModuleMap),
+    {alias, Ctx, Alias, {variable, #{}, ModulePath, {Name, Arity}}};
+local({alias, _, _, {keyword, _, _, _}} = Alias, _) -> Alias.
 
 trim_wildcard(Path) ->
     {Init, [Last]} = lists:split(length(Path) - 1, Path),
@@ -94,17 +102,17 @@ kind(Alias, K, ImportPath, Path, ModuleMap, Term) ->
     AliasPath = [Alias | K -- ImportPath],
     kind(AliasPath, Path, ModuleMap, Term).
 kind(AliasPath, Path, ModuleMap, Term) ->
-    {ModulePath, [Name]} = lists:split(length(Path) -1, Path),
+    {ModulePath, [DefName]} = lists:split(length(Path) -1, Path),
     {module, _, _, _, _, Defs} = maps:get(ModulePath, ModuleMap),
-    case maps:get(Name, Defs) of
-        {link, Ctx, Symbol} -> {qualified_symbol, Ctx, LinkPath, SymbolName} = Symbol,
-                               NewCtx = maps:put(import, Term, Ctx),
-                               NewSymbol = {qualified_symbol, NewCtx, LinkPath, SymbolName},
-                               {alias, Ctx, AliasPath, NewSymbol};
-        Def                 -> Ctx = symbol:ctx(Def),
-                               NewCtx = maps:put(import, Term, Ctx),
-                               Symbol = {qualified_symbol, NewCtx, ModulePath, Name},
-                               {alias, Ctx, AliasPath, Symbol}
+    case maps:get(DefName, Defs) of
+        {keyword, Ctx, _, _} = Keyword  -> {alias, Ctx, AliasPath, Keyword};
+        {link, Ctx, LinkPath, Name}     -> NewCtx = maps:put(import, Term, Ctx),
+                                           LinkTerm = {qualified_symbol, NewCtx, LinkPath, Name},
+                                           {alias, Ctx, AliasPath, LinkTerm};
+        Def                             -> Ctx = symbol:ctx(Def),
+                                           NewCtx = maps:put(import, Term, Ctx),
+                                           Symbol = {qualified_symbol, NewCtx, ModulePath, DefName},
+                                           {alias, Ctx, AliasPath, Symbol}
     end.
 
 

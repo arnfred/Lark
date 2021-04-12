@@ -8,7 +8,7 @@ tag({module, _, Path, ImportScope, _Exports, Defs} = Module) ->
     case ast:traverse(fun(_, _, _) -> ok end, fun tag_macros/3, MacroScope, Module) of
         {error, Errs}   -> {error, Errs};
         {ok, {_, MacroedModule}}  ->
-            LocalScope = maps:from_list([{Name, tag_def(Name, Def, Path)} || {Name, Def} <- maps:to_list(Defs)]),
+            LocalScope = maps:from_list([{Name, tag_def(Name, Def)} || {Name, Def} <- maps:to_list(Defs)]),
             case merge_scopes(Path, LocalScope, ImportScope) of
                 {error, Errs}   -> {error, Errs};
                 {ok, Scope}     -> ast:traverse(fun(_, _, _) -> ok end, fun tag_symbols/3, Scope, MacroedModule)
@@ -44,18 +44,11 @@ tag_macros(_, Scope, {application, _, {symbol, Ctx, _, S}, Args} = Term) ->
 tag_macros(_, _, _) -> ok.
 
 % Step 2: Build local scope of all top-level module definitions
-tag_def(Tag, {def, _, Name, Expr}, Path) ->
-    case Expr of
-        {'fun', _, [{clause, _, Patterns, _} | _]}  ->
-            {variable, #{}, Name, {Tag, length(Patterns)}};
-        _                                           ->
-            {variable, #{}, Name, {Tag, 0}}
-    end;
-tag_def(_, {link, _, {qualified_symbol, _, Path, Name}}, Path) ->
-    {type, #{}, lists:last(symbol:path(Name)), symbol:path(Name)};
-tag_def(_, {link, _, Symbol}, _) -> Symbol;
-tag_def(Tag, {type_def, _, Name, _Expr}, Path) -> 
-    {type, #{}, Name, symbol:path(Tag)}.
+tag_def(Tag, {def, _, Name, _} = Def) ->
+    Arity = utils:get_arity(Def),
+    {variable, #{}, Name, {Tag, Arity}};
+tag_def(_, {keyword, _, _, _} = Keyword) -> Keyword;
+tag_def(_, {link, _, Path, Symbol}) -> {qualified_symbol, #{}, Path, Symbol}.
 
 
 % Step 3: tag all symbols
@@ -65,47 +58,31 @@ tag_symbols(expr, Scope, {symbol, _, variable, S} = Term) ->
         true    -> {ok, replace(Scope, S, Term)}
     end;
 tag_symbols(pattern, _Scope, {symbol, Ctx, variable, S} = Term) ->
-    {ok, S, {variable, Ctx, S, id(Term)}};
+    {ok, S, {variable, Ctx, S, symbol:id([ast:get_tag(parent, Term), S])}};
 
-tag_symbols(Type, Scope, {symbol, _, operator, S} = Term) ->
+tag_symbols(Type, Scope, {symbol, Ctx, keyword, '_'} = Term) -> {ok, {keyword, Ctx, '_'}};
+tag_symbols(Type, Scope, {symbol, Ctx, keyword, S} = Term) ->
+    Parent = maps:get(parent, Ctx),
+    Tag = symbol:tag([Parent, S]),
+    case maps:is_key(Tag, Scope) of
+        false   -> error:format({undefined_symbol, S}, {tagger, Type, Term});
+        true    -> {ok, replace(Scope, Tag, Term)}
+    end;
+
+tag_symbols(Type, Scope, {symbol, _, _, S} = Term) ->
     case maps:is_key(S, Scope) of
         false   -> error:format({undefined_symbol, S}, {tagger, Type, Term});
-        true    -> {ok, replace(Scope, S, Term)}
-    end;
-
-tag_symbols(expr, OuterScope, {symbol, Ctx, type, S} = Term) ->
-    Scope = maps:merge(OuterScope, inner_scope(OuterScope, Term)),
-    case maps:is_key(S, Scope) of
-        false   -> {ok, S, {type, Ctx, S, [ast:get_tag(parent, Term), S]}};
-        true    -> {ok, replace(Scope, S, Term)}
-    end;
-tag_symbols(pattern, OuterScope, {symbol, Ctx, type, S} = Term) ->
-    Scope = maps:merge(OuterScope, inner_scope(OuterScope, Term)),
-    case maps:is_key(S, Scope) of
-        false   -> error:format({undefined_symbol, S}, {tagger, pattern, Term});
         true    -> {ok, replace(Scope, S, Term)}
     end;
 
 tag_symbols(Type, Scope, {qualified_symbol, _, Symbols} = Term) ->
     Tag = symbol:tag([S || {_, _, _, S} <- Symbols]),
     case maps:is_key(Tag, Scope) of
-        true    -> {ok, replace(Scope, Tag, Term)};
-        false   -> error:format({undefined_symbol, Tag}, {tagger, Type, Term})
+        false   -> error:format({undefined_symbol, Tag}, {tagger, Type, Term});
+        true    -> {ok, replace(Scope, Tag, Term)}
     end;
 
 tag_symbols(_, _, _) -> ok.
-
-inner_scope(Scope, {symbol, Ctx, _, _}) ->
-    Parent = maps:get(parent, Ctx),
-    TypeF = fun(Name, {qualified_symbol, _, _, Tag}) -> {type, Ctx, Name, symbol:path(Tag)};
-               (Name, {type, _, _, _} = T)           -> T;
-               (Name, _)                             -> {type, Ctx, Name, [Parent, Name]}
-            end,
-    maps:from_list([{Name, TypeF(Name, Term)} || {Tag, Term} <- maps:to_list(Scope),
-                                                    [P, Name] <- [symbol:path(Tag)],
-                                                    P =:= Parent]).
-
-id({symbol, _, _, S} = Term) -> symbol:id([ast:get_tag(parent, Term), S]).
 
 replace(Scope, Key, {_, Ctx, _, _})            -> 
     NewCtx = maps:merge(element(2, maps:get(Key, Scope)), Ctx),

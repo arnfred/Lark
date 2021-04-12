@@ -1,6 +1,6 @@
 -module(utils).
 -export([combinations/1, duplicates/2, group_by/2, group_by/3, unique/1, merge/1, pivot/1,
-         domain_to_term/2, gen_tag/1, print_core/1, get_arity/1, set/1, mapfun/2, mapfun/3,
+         domain_to_term/2, gen_tag/1, print_core/1, get_arity/1, get_arity/3, set/1, mapfun/2, mapfun/3,
          function/2, get_min_arity/2]).
 
 % All combinations of list elements:
@@ -70,8 +70,18 @@ print_core(Name) ->
     {ok, Scanned, _} = core_scan:string(Core),
     io:format("~tp~n", [core_parse:parse(Scanned)]).
 
-get_arity(Fun) ->
-    proplists:get_value(arity, erlang:fun_info(Fun)).
+get_arity({def, _, _, {'fun', _, [{clause, _, Patterns, _} | _]}}) -> length(Patterns);
+get_arity({def, _, _, _})                                          -> 0;
+get_arity({keyword, _, _, _})                                      -> 0;
+get_arity(Fun) when is_function(Fun) -> proplists:get_value(arity, erlang:fun_info(Fun)).
+
+get_arity(Path, Name, ModuleMap) ->
+    {module, _, Path, _, _, Defs} = maps:get(Path, ModuleMap),
+    case maps:get(Name, Defs) of
+        {link, _, LinkPath, LinkName}   -> get_arity(LinkPath, LinkName, ModuleMap);
+        Def                             -> get_arity(maps:get(Name, Defs))
+    end.
+
 get_arities(Module, Name) ->
     case erlang:module_loaded(Module) of
         false   -> [];
