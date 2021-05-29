@@ -10,10 +10,6 @@ intersection({recur, S}, D) when is_map(D) -> {recur, fun() -> intersection(S(),
 intersection({recur, _}, _) -> none;
 intersection(D, {recur, S}) -> intersection({recur, S}, D);
 
-intersection({error, E1}, {error, E2}) -> {error, E1 ++ E2};
-intersection({error, _} = E, _) -> E;
-intersection(_, {error, _} = E) -> E;
-
 intersection(any, D) -> D;
 intersection(D, any) -> D;
 intersection('Domain/Any', D) -> D;
@@ -21,10 +17,16 @@ intersection(D, 'Domain/Any') -> D;
 intersection(none, _) -> none;
 intersection(_, none) -> none;
 
-intersection(F1, F2) when is_function(F1), is_function(F2) -> 
-    case {utils:get_arity(F1), utils:get_arity(F2)} of
-        {N, N} -> utils:mapfun(fun(Res1, Res2) -> domain:intersection(Res1, Res2) end, F1, F2);
-        _ -> none
+% TODO: A function can be considered a value like `5` or 'atom'. While a
+% function can also be seen as a constructor which given some inputs returns a
+% domain, it isn't meaningful to consider the intersection of two such
+% constructors, unless they are identical. While we could compute a new
+% function which returns the intersection of domains of F1 and F2, this
+% function would not correspond to any real function value.
+intersection(F1, F2) when is_function(F1), is_function(F2) ->
+    case utils:gen_tag(F1) =:= utils:gen_tag(F2) of
+        true    -> F1;
+        false   -> none
     end;
 
 intersection({sum, D1}, {sum, D2}) -> 

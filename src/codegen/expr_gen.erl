@@ -77,6 +77,11 @@ gen_expr(expr, _, {qualified_application, _, ModulePath, Name, Args}) ->
     ModuleName = module:beam_name(ModulePath),
     {ok, cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(Name), Args)};
 
+% expr of Form: beam/lists/reverse(a)
+gen_expr(expr, _, {beam_application, _, ModulePath, Name, Args}) -> 
+    ModuleName = module:beam_name(ModulePath),
+    {ok, cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(Name), Args)};
+
 % expr of form: T
 gen_expr(expr, Scope, {type, _, _, Path} = Term) ->
     Tag = symbol:tag(Term),

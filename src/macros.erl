@@ -4,46 +4,33 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
-expand({ast, Ctx, Modules, Imports, Defs} = AST) ->
-    Macros = maps:from_list([{Name, {def, MacroCtx, Name, Fun}} ||
-                              {macro, MacroCtx, Name, Fun} <- maps:values(Defs)]),
-    case maps:size(Macros) of
-        0   -> {ok, AST};
-        _N  ->
-            Module = symbol:id('macros'),
-            Exports = maps:from_list([{Name, {export, Ctx, [Name], none}} || Name <- maps:keys(Macros)]),
-            MacroAST = {ast, Ctx, [{module, Ctx, [Module], Exports}], Imports, Macros},
-            case kind:type_compile_load(MacroAST, #{}) of
-                {error, Errs}       -> {error, Errs};
-                {ok, LoadedModules} -> 
-                    NoMacros = maps:filter(fun(_, {T, _, _, _}) -> not(T =:= macro) end, Defs),
-                    NoMacroAST = {ast, Ctx, Modules, Imports, NoMacros},
-                    case ast:traverse(fun(_, _, Term) -> expand_macro(Module, Term) end, NoMacroAST) of
-                        {error, Errs}               -> clean(LoadedModules), {error, Errs};
-                        {ok, {_Env, ExpandedAST}}   -> clean(LoadedModules), {ok, ExpandedAST}
-                    end
-            end
+expand(Mod) ->
+    case ast:traverse(fun expand_macros_pre/3, fun expand_macros_post/3, Mod) of
+        {error, Errs}               -> {error, Errs};
+        {ok, {_Env, ExpandedMod}}   -> {ok, ExpandedMod}
     end.
 
-expand_macro(Module, {macro_application, Ctx, Name, Args}) ->
-    case erlang:function_exported(Module, Name, length(Args)) of
-        true    -> {ok, erlang:apply(Module, Name, Args)};
+expand_macros_pre(_, _, {application, _, {macro_symbol, _, _, _}, _}) -> leave_intact;
+expand_macros_pre(_, _, _) -> ok.
+
+expand_macros_post(_, _, {application, Ctx, {macro_symbol, _, Path, Name}, Args}) ->
+    ModuleName = module:beam_name(Path),
+    case erlang:function_exported(ModuleName, Name, length(Args)) of
+        true    -> {ok, erlang:apply(ModuleName, Name, Args)};
         false   -> error:format({wrong_macro_arity, Name, length(Args)}, {macros, Ctx})
     end;
-expand_macro(_, _) -> ok.
+expand_macros_post(_, _, {macro_symbol, Ctx, Path, Name}) ->
+    ModuleName = module:beam_name(Path),
+    case erlang:function_exported(ModuleName, Name, 0) of
+        true    -> {ok, erlang:apply(ModuleName, Name, [])};
+        false   -> error:format({wrong_macro_arity, Name, 0}, {macros, Ctx})
+    end;
+expand_macros_post(_, _, _) -> ok.
     
-clean({error, _}) -> noop;
-clean({ok, Modules}) -> clean(Modules);
-clean(Modules) ->
-    F = fun(M) -> true = code:soft_purge(M),
-                  true = code:delete(M)
-        end,
-    [F(M) || M <- Modules].
-
 -ifdef(TEST).
 
 
--define(setup(Code, Tests), {setup, fun() -> kind:load(Code, #{include_kind_libraries => false}) end, fun clean/1, Tests}).
+-define(setup(Code, Tests), {setup, fun() -> kind:load(Code, #{import_kind_libraries => false}) end, fun (_) -> noop end, Tests}).
 
 
 happy_macro_test_() ->

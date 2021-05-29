@@ -8,7 +8,7 @@ tag({module, _, Path, ImportScope, _Exports, Defs} = Module) ->
     case ast:traverse(fun(_, _, _) -> ok end, fun tag_macros/3, MacroScope, Module) of
         {error, Errs}   -> {error, Errs};
         {ok, {_, MacroedModule}}  ->
-            LocalScope = maps:from_list([{Name, tag_def(Name, Def)} || {Name, Def} <- maps:to_list(Defs)]),
+            LocalScope = maps:from_list([{Name, tag_def(Name, Def, Path)} || {Name, Def} <- maps:to_list(Defs)]),
             case merge_scopes(Path, LocalScope, ImportScope) of
                 {error, Errs}   -> {error, Errs};
                 {ok, Scope}     -> ast:traverse(fun(_, _, _) -> ok end, fun tag_symbols/3, Scope, MacroedModule)
@@ -44,11 +44,10 @@ tag_macros(_, Scope, {application, _, {symbol, Ctx, _, S}, Args} = Term) ->
 tag_macros(_, _, _) -> ok.
 
 % Step 2: Build local scope of all top-level module definitions
-tag_def(Tag, {def, _, Name, _} = Def) ->
-    Arity = utils:get_arity(Def),
-    {variable, #{}, Name, {Tag, Arity}};
-tag_def(_, {keyword, _, _, _} = Keyword) -> Keyword;
-tag_def(_, {link, _, Path, Symbol}) -> {qualified_symbol, #{}, Path, Symbol}.
+tag_def(Tag, {def, _, _, _} = Def, Path) ->
+    {qualified_symbol, #{}, Path, Tag};
+tag_def(_, {keyword, _, _, _} = Keyword, _) -> Keyword;
+tag_def(_, {link, _, Path, Symbol}, _) -> {qualified_symbol, #{}, Path, Symbol}.
 
 
 % Step 3: tag all symbols
@@ -60,7 +59,7 @@ tag_symbols(expr, Scope, {symbol, _, variable, S} = Term) ->
 tag_symbols(pattern, _Scope, {symbol, Ctx, variable, S} = Term) ->
     {ok, S, {variable, Ctx, S, symbol:id([ast:get_tag(parent, Term), S])}};
 
-tag_symbols(Type, Scope, {symbol, Ctx, keyword, '_'} = Term) -> {ok, {keyword, Ctx, '_'}};
+tag_symbols(_, _, {symbol, Ctx, keyword, '_'}) -> {ok, {keyword, Ctx, '_'}};
 tag_symbols(Type, Scope, {symbol, Ctx, keyword, S} = Term) ->
     Parent = maps:get(parent, Ctx),
     Tag = symbol:tag([Parent, S]),

@@ -23,7 +23,7 @@ Nonterminals
     collection list dict sequence
     dict_elements dict_element
     sum_list sum_terms sum_elem
-    symbol symbols operator elements element
+    symbol operator elements element
     pair pair_key pair_val
     qualified_symbol
     separator secondary_separator clause_separator.
@@ -102,9 +102,6 @@ operator -> minus_operator        : make_symbol('$1', operator).
 operator -> comp_operator         : make_symbol('$1', operator).
 operator -> eq_operator           : make_symbol('$1', operator).
 operator -> other_operator        : make_symbol('$1', operator).
-
-symbols -> symbol           : ['$1'].
-symbols -> symbol symbols   : ['$1' | '$2'].
 
 qualified_symbol -> symbol slash symbol            : {qualified_symbol, ctx('$1'), ['$1', '$3']}.
 qualified_symbol -> symbol slash dict              : {qualified_symbol, ctx('$1'), ['$1', '$3']}.
@@ -330,16 +327,12 @@ sum_elem -> symbol                      : '$1'.
 sum_elem -> qualified_symbol            : '$1'.
 sum_elem -> literal                     : '$1'.
 
-secondary_separator -> newlines : '$1'.
-secondary_separator -> pipe newlines : '$1'.
-secondary_separator -> pipe     : '$1'.
+secondary_separator -> pipe newlines    : '$1'.
+secondary_separator -> pipe             : '$1'.
 
 
 
 Erlang code.
-
-unpack_sum([T]) -> T;
-unpack_sum([T | _] = Terms) -> {sum, ctx(T), Terms}.
 
 unwrap({_,V})   -> V;
 unwrap({_,_,V}) -> V;

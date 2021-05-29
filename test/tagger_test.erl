@@ -51,8 +51,7 @@ anonymous_function_test_() ->
                       {'fun', _,
                        [{clause, _,
                          [{variable, _, a, A2}],
-                         {application, _,
-                          {variable, _, blip, {blip, 1}},
+                         {qualified_application, _, [source, test_code], blip,
                           [{variable, _, a, A2},
                            {'fun', _,
                             [{clause, _, [{variable, _, b, B}], {variable, _, b, B}},
@@ -112,7 +111,7 @@ complex_sum_syntax_test_() ->
     Code =
         "\n"
         "def animal -> (Cat | Dog |\n"
-        "               Parrot | Seagull\n"
+        "               Parrot | Seagull |\n"
         "               Brontosaurus)",
     Defs = tag(Code),
     [?test(#{'animal' := {def, _, 'animal',
@@ -147,7 +146,7 @@ simple_product_type_test_() ->
 complex_type_test_() ->
     Code =
         "def booleanList -> (Cons: { value: (True | False)\n"
-        "                             cons: booleanList }\n"
+        "                             cons: booleanList } |\n"
         "                     Nil)",
     Defs = tag(Code),
     [?test(#{'booleanList' := {def,_,'booleanList',
@@ -161,7 +160,7 @@ complex_type_test_() ->
                                        {keyword,_,[source, test_code, 'booleanList'],'False'}]}},
                                     {pair,_,
                                      {keyword,_,cons},
-                                     {variable,_,'booleanList',{'booleanList', 0}}}]}},
+                                     {qualified_symbol,_,[source, test_code], 'booleanList'}}]}},
                                  {keyword,_,[source, test_code, 'booleanList'],'Nil'}]}}}, Defs),
      ?test(#{'booleanList/True' := {keyword, _, _, 'True'}}, Defs),
      ?test(#{'booleanList/False' := {keyword, _, _, 'False'}}, Defs)].

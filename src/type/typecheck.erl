@@ -280,30 +280,12 @@ pattern(Mode, _, Stack, Domain, {value, Ctx, _, Val}) ->
     end;
 
 % Pattern: `T`
-pattern(Mode, Env, Stack, Domain, {type, Ctx, _, _} = T) ->
-    Tag = symbol:tag(T),
-    EnvRes = case maps:get(Tag, Env, undefined) of
-                     undefined   -> Tag;
-                     EnvF        -> EnvF(Stack, Ctx)
-                 end,
-
-    case EnvRes of
-        {error, Errs}       -> {error, Errs};
-        EnvDomain           ->
-            case check(Mode, Stack, EnvDomain, Domain, Ctx) of
-                {error, Errs}    -> {error, Errs};
-                {ok, Res}        -> {ok, {#{}, Res}}
-            end
+pattern(Mode, Env, Stack, Domain, {keyword, Ctx, _, _} = T) ->
+    EnvDomain = symbol:tag(T),
+    case check(Mode, Stack, EnvDomain, Domain, Ctx) of
+        {error, Errs}    -> {error, Errs};
+        {ok, Res}        -> {ok, {#{}, Res}}
     end;
-
-% Pattern of form: `T(a)` where `T` is a recursive type (and so we want to not
-% call the type constructor in an infinite loop
-pattern(_Mode, _Env, _Stack, Domain, {recursive_type_application, _Ctx, _Tag, _Args}) ->
-    {ok, {#{}, Domain}};
-
-% expr of form `T` where T is recursive like `type T -> {a: Boolean, b: T}`
-pattern(_Mode, _Env, _Stack, Domain, {recursive_type, _Ctx, _Name, _Path}) ->
-    {ok, {#{}, Domain}};
 
 % Pattern: `a`
 pattern(Mode, Env, Stack, Domain, {variable, Ctx, Name, Tag}) ->
@@ -329,6 +311,13 @@ expr(Mode, Env, Stack, {qualified_application, Ctx, ModulePath, Name, Args}) ->
     case map_expr(Mode, Env, Stack, Args) of
         {error, Errs}         -> {error, Errs};
         {ok, {_, ArgDomains}} -> qualified_apply(Mode, Env, Stack, Ctx, ModulePath, Name, ArgDomains)
+    end;
+
+% Expr: `m/T(a)` or `m/f(b)`
+expr(Mode, Env, Stack, {beam_application, Ctx, ModulePath, Name, Args}) ->
+    case map_expr(Mode, Env, Stack, Args) of
+        {error, Errs}         -> {error, Errs};
+        {ok, {_, ArgDomains}} -> beam_apply(Env, ModulePath, Name, ArgDomains)
     end;
 
 % Expr: `kind/prelude/Boolean`
@@ -575,7 +564,7 @@ pivot([H | _] = ListOfLists) ->
     [lists:reverse(L) || L <- Rev].
 
 apply_domain(Mode, Stack, Ctx, Module, Tag, Params) ->
-    NewStack = [{Tag, Ctx, Params} | Stack],
+    NewStack = [{module:beam_name([Module, Tag]), Ctx, Params} | Stack],
     case check_stack_recursion(NewStack) of
         error   -> {recur, fun () -> erlang:apply(Module, Tag, [NewStack, Mode] ++ Params) end};
         ok      -> erlang:apply(Module, Tag, [NewStack, Mode] ++ Params)
@@ -595,40 +584,29 @@ apply_domain(Mode, Stack, Ctx, Module, Tag, Params) ->
 %   side-effects
 qualified_apply(Mode, Env, Stack, Ctx, ModulePath, Name, ArgDomains) ->
     ModuleName = module:beam_name(ModulePath),
-    NewStack = [{Name, Ctx, ArgDomains} | Stack],
-    % Check if function exists
-    case erlang:function_exported(ModuleName, Name, length(ArgDomains)) of
-        false   -> error:format({undefined_qualified_symbol, ModulePath, {Name, length(ArgDomains)}},
+    NewStack = [{module:beam_name(ModulePath ++ [Name]), Ctx, ArgDomains} | Stack],
+    DomainModuleName = module:beam_name(ModulePath ++ [domain]),
+    % Check if domain function exists
+    case erlang:function_exported(DomainModuleName, Name, length(ArgDomains)) of
+        false   -> error:format({undefined_qualified_symbol, module:kind_name(ModulePath ++ [domain]),
+                                 {Name, length(ArgDomains)}},
                                 {typecheck, Ctx, Stack});
-        true    ->
-            % Check if domain function exists
-            DomainModuleName = module:beam_name(ModulePath ++ [domain]),
-            case erlang:function_exported(DomainModuleName, Name, length(ArgDomains) + 1) of
-                true    ->
-                    case erlang:apply(DomainModuleName, Name, [NewStack, Mode] ++ ArgDomains) of
-                        {error, Errs}       -> {error, Errs};
-                        Res                 -> {ok, {#{}, Res}}
-                    end;
-                false   ->
-                    % Check if it's a type domain
-                    case erlang:function_exported(ModuleName, 'type-module?', 0) of
-                        true    ->
-                            case erlang:apply(ModuleName, Name, [NewStack, Mode] ++ ArgDomains) of
-                                {error, Errs}       -> {error, Errs};
-                                Res                 -> {ok, {#{}, Res}}
-                            end;
-                        false   ->
-                            % If the domain is literal and the function is whitelisted, call it directly
-                            % otherwise, return the `any` domain
-                            case domain:is_literal(Env, ArgDomains) of
-                                true    -> case import:is_whitelisted(ModuleName, Name) of
-                                               true     -> {ok, {#{}, erlang:apply(ModuleName, Name, ArgDomains)}};
-                                               false    -> {ok, {#{}, any}}
-                                           end;
-                                false   -> {ok, {#{}, any}}
-                            end
-                    end
-            end
+        true    -> case erlang:apply(DomainModuleName, Name, [NewStack, Mode] ++ ArgDomains) of
+                       {error, Errs}       -> {error, Errs};
+                       Res                 -> {ok, {#{}, Res}}
+                   end
+    end.
+
+% If the domain is literal and the function is whitelisted, call it directly
+% otherwise, return the `any` domain
+beam_apply(Env, ModulePath, Name, ArgDomains) ->
+    ModuleName = module:beam_name(ModulePath),
+    case domain:is_literal(Env, ArgDomains) of
+        true    -> case import:is_whitelisted(ModuleName, Name) of
+                       true     -> {ok, {#{}, erlang:apply(ModuleName, Name, ArgDomains)}};
+                       false    -> {ok, {#{}, any}}
+                   end;
+        false   -> {ok, {#{}, any}}
     end.
 
 check_stack_recursion(Stack) -> check_stack_recursion(Stack, #{}).

@@ -1,5 +1,5 @@
 -module(kind).
--export([load/1, load/2, run/2, run/3, type_compile_load/2]).
+-export([load/1, load/2, run/2, run/3, type_compile_load/3]).
 -import(lists, [zip/2, zip3/3, unzip/1]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -37,41 +37,42 @@ load(Sources) -> load(Sources, #{}).
 load([C | _] = Sources, Options) when is_list(C) ->
     case parser:parse([{text, S} || S <- Sources], Options) of
         {error, Errs}   -> {error, Errs};
-        {ok, ASTs}     ->
-            case error:collect([macros:expand(AST) || AST <- ASTs]) of
-                {error, Errs}      -> {error, Errs};
-                {ok, ExpandedASTs}  ->
-                    case error:collect([type_compile_load(AST, Options) || AST <- ExpandedASTs]) of
-                        {error, Errs}       -> {error, Errs};
-                        {ok, Modules}       -> {ok, lists:flatten(Modules)}
+        {ok, Modules}   ->
+            case error:collect([macros:expand(Mod) || Mod <- Modules]) of
+                {error, Errs}       -> {error, Errs};
+                {ok, ExpandedMods}  ->
+                    ModuleMap = maps:from_list([{Path, Mod} || {module, _, Path, _, _, _} = Mod <- ExpandedMods]),
+                    case error:collect([type_compile_load(Mod, ModuleMap, Options) || Mod <- ExpandedMods]) of
+                        {error, Errs}       -> ModuleNames = [module:beam_name(Path ++ [domain])
+                                                              || Path <- maps:keys(ModuleMap)],
+                                               unload_modules(ModuleNames),
+                                               {error, Errs};
+                        {ok, ModuleNames}   -> {ok, lists:flatten(ModuleNames)}
                     end
             end
     end;
 load(Code, Options) -> load([Code], Options).
 
-type_compile_load(AST, Options) ->
-    case typer:type(AST, Options) of
-        {error, Errs}                                   -> {error, Errs};
-        {ok, {TypedAST, TypesEnv, TypeModules}}  ->
-            case def_gen:gen(TypesEnv, TypedAST) of
-                {error, Errs}       -> unload_modules(TypeModules),
-                                       {error, Errs};
-                {ok, Forms}         ->
-                    case compile(Forms) of
-                        {error, Errs}       -> {error, Errs};
-                        {ok, ModuleNames}   -> {ok, ModuleNames ++ TypeModules}
+type_compile_load(Module, ModuleMap, Options) ->
+    LinkedModule = link_defs(Module, ModuleMap),
+    case typer:type(LinkedModule, Options) of
+        {type_error, ModuleName, Errs}      -> {error, Errs};
+        {ok, {TypesEnv, DomainModuleName}}  ->
+            case code_gen:gen(TypesEnv, LinkedModule) of
+                {error, Errs}               -> {error, Errs};
+                {ok, ModuleForm}            ->
+                    case compile(ModuleForm) of
+                	    {error, Errs}       -> {error, Errs};
+                        {ok, ModuleName}    -> {ok, [ModuleName, DomainModuleName]}
                     end
             end
     end.
 
-compile(Forms) ->
+compile(Form) ->
     Options = [report, verbose, from_core],
-    CompiledList = [compile_form(Form, Options) || {_, Form} <- Forms],
-    case error:collect(CompiledList) of
-        {error, Errs}   -> {error, Errs};
-        {ok, Bins}      ->
-            LoadedModules = [load_binary(ModuleName, Bin) || {ModuleName, Bin} <- Bins],
-            error:collect(LoadedModules)
+    case compile_form(Form, Options) of
+        {error, Errs}           -> {error, Errs};
+        {ok, {ModuleName, Bin}} -> load_binary(ModuleName, Bin)
     end.
 
 compile_form(Form, Options) ->
@@ -94,6 +95,24 @@ unload_modules(Modules) ->
         end,
     [F(M) || M <- Modules].
 
+link_defs({module, Ctx, Path, Imports, Exports, Defs}, ModuleMap) ->
+    Links = maps:from_list([{Name, linked_def(Name, Symbol, ModuleMap)} ||
+                            {Name, {link, _, Symbol}} <- maps:to_list(Defs)]),
+    {module, Ctx, Path, Imports, Exports, maps:merge(Defs, Links)}.
+
+linked_def(Name, {qualified_symbol, Ctx, ModulePath, DefName}, ModuleMap) ->
+    {module, _, ModulePath, _, _, ModuleDefs} = maps:get(ModulePath, ModuleMap),
+    Arity = arity(maps:get(DefName, ModuleDefs)),
+    Atom = fun(N) -> list_to_atom(integer_to_list(N)) end,
+    Args = [{variable, Ctx, Atom(N), symbol:id(Atom(N))} || N <- lists:seq(1, Arity)],
+    {def, Ctx, Name, {'fun', Ctx, [{clause, Ctx, Args,
+                                    {qualified_application, Ctx, ModulePath, DefName, Args}}]}}.
+
+arity({type_def, _, _, {'fun', _, [{clause, _, Ps, _} | _]}}) -> length(Ps);
+arity({type_def, _, _, _}) -> 0;
+arity({def, _, _, {'fun', _, [{clause, _, Ps, _} | _]}}) -> length(Ps);
+arity({def, _, _, _}) -> 0;
+arity(_) -> 0.
 
 -ifdef(TEST).
 

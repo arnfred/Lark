@@ -8,13 +8,12 @@ import({module, _, ModulePath, Imports, _, _}, ModuleMap, Options) ->
     FlatImports = lists:flatten([flatten(I) || I <- Imports]),
     case aliases(FlatImports, ModulePath, ModuleMap) of
         {error, Errs}       -> {error, Errs};
-        {ok, RawAliases}       ->
-            case whitelisted(RawAliases, ModuleMap, Options) of
+        {ok, Aliases}       ->
+            case whitelisted(Aliases, ModuleMap, Options) of
                 {error, Errs}       -> {error, Errs};
                 {ok, _Whitelisted}  ->
-                    {Local, Global} = lists:partition(fun(A) -> is_local(A, ModulePath) end, RawAliases),
-                    Deps = utils:unique(lists:flatten([dep(ModulePath, A) || A <- Global])),
-                    Aliases = [local(A, ModuleMap) || A <- Local] ++ Global,
+                    Deps = utils:unique(lists:flatten([dep(ModulePath, A) || A <- Aliases,
+                                                                             not(is_local(A, ModulePath))])),
                     case check_duplicates(Aliases, ModulePath) of
                         {error, Errs}   -> {error, Errs};
                         {ok, _}         ->
@@ -76,16 +75,11 @@ aliases([{Alias, IPath, Term} | Paths], Scope, ModuleMap, Errors, Res) ->
 
 dep(ModulePath, {alias, _, _, {qualified_symbol, _, P, _}}) -> [{dependency, #{}, ModulePath, P}];
 dep(ModulePath, {alias, _, _, {keyword, _, P, _}}) -> [{dependency, #{}, ModulePath, P}];
-dep(ModulePath, {alias, _, _, {beam_symbol, _, _, _}}) -> [].
+dep(_, {alias, _, _, {beam_symbol, _, _, _}}) -> [].
 
 is_local({alias, _, _, {qualified_symbol, _, ModulePath, _}}, ModulePath) -> true;
 is_local({alias, _, _, {keyword, _, ModulePath, _}}, ModulePath) -> true;
 is_local(_, _) -> false.
-
-local({alias, Ctx, Alias, {qualified_symbol, SymbolCtx, ModulePath, Name}}, ModuleMap) ->
-    Arity = utils:get_arity(ModulePath, Name, ModuleMap),
-    {alias, Ctx, Alias, {variable, #{}, ModulePath, {Name, Arity}}};
-local({alias, _, _, {keyword, _, _, _}} = Alias, _) -> Alias.
 
 trim_wildcard(Path) ->
     {Init, [Last]} = lists:split(length(Path) - 1, Path),

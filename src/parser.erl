@@ -142,8 +142,6 @@ normalize_applications(Module) ->
                   {ok, {qualified_application, Ctx, ModulePath, Name, Args}};
              (_, _, {application, Ctx, {beam_symbol, _, ModulePath, Name}, Args}) ->
                   {ok, {beam_application, Ctx, ModulePath, Name, Args}};
-             (_, _, {qualified_symbol, Ctx, ModulePath, Name}) ->
-                  {ok, {qualified_application, Ctx, ModulePath, Name, []}};
              (_, _, {beam_symbol, Ctx, ModulePath, Name}) ->
                   {ok, {beam_application, Ctx, ModulePath, Name, []}};
              (_, _, _) -> ok end,

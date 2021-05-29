@@ -12,23 +12,24 @@ traverse(Pre, Post, AST)                            -> step({Pre, Post}, top_lev
 traverse(Post, ASTs) when is_list(ASTs)             -> map_asts(fun(_,_,_) -> ok end, Post, #{}, ASTs);
 traverse(Post, AST)                                 -> step({fun(_, _, _) -> ok end, Post}, top_level, #{}, AST).
 
-traverse_term(Type, Pre, Post, Scope, Term)         -> climb({Pre, Post}, Type, Scope, Term).
+traverse_term(Type, Pre, Post, Scope, Term)         -> in({Pre, Post}, Type, Scope, Term).
 
-climb({Pre, Post}, Type, Scope, Term) ->
+in({Pre, Post}, Type, Scope, Term) ->
     case Pre(Type, Scope, Term) of
         {error, Errs}                   -> {error, Errs};
         skip                            -> {ok, {#{}, Term}};
+        {skip, NewTerm}                 -> {ok, {#{}, NewTerm}};
         leave_intact                    -> run_post(Post, #{}, Type, Scope, Term);
-        ok                              -> chew(Pre, Post, Type, Scope, Term);
-        {ok, NewTerm}                   -> chew(Pre, Post, Type, Scope, NewTerm);
-        {ok, Key, NewTerm}              -> chew(Pre, Post, Type, maps:put(Key, NewTerm, Scope), NewTerm);
-        {ok, Key, Val, NewTerm}         -> chew(Pre, Post, Type, maps:put(Key, Val, Scope), NewTerm);
-        {change, NewPost, NewTerm}      -> chew(Pre, NewPost, Type, Scope, NewTerm);
+        ok                              -> out(Pre, Post, Type, Scope, Term);
+        {ok, NewTerm}                   -> out(Pre, Post, Type, Scope, NewTerm);
+        {ok, Key, NewTerm}              -> out(Pre, Post, Type, maps:put(Key, NewTerm, Scope), NewTerm);
+        {ok, Key, Val, NewTerm}         -> out(Pre, Post, Type, maps:put(Key, Val, Scope), NewTerm);
+        {change, NewPost, NewTerm}      -> out(Pre, NewPost, Type, Scope, NewTerm);
         Other                           -> error:format({unrecognized_pre_response, Other}, {ast, Term})
 
     end.
 
-chew(Pre, Post, Type, Scope, Term) ->
+out(Pre, Post, Type, Scope, Term) ->
     case Term of
         {error, Errs}  -> {error, Errs};
         _              ->
@@ -40,13 +41,14 @@ chew(Pre, Post, Type, Scope, Term) ->
 
 run_post(Post, Env, Type, Scope, Term) ->
     case Post(Type, Scope, Term) of
-        {error, Errs}               -> {error, Errs};
-        skip                        -> {ok, {#{}, Term}};
-        ok                          -> {ok, {Env, Term}};
-        {ok, PostTerm}              -> {ok, {Env, PostTerm}};
-        {ok, Key, PostTerm}         -> {ok, {maps:put(Key, PostTerm, Env), PostTerm}};
-        {ok, Key, Value, PostTerm}  -> {ok, {maps:put(Key, Value, Env), PostTerm}};
-        Other                       -> error:format({unrecognized_post_response, Other}, {ast, Term})
+        {error, Errs}                           -> {error, Errs};
+        skip                                    -> {ok, {#{}, Term}};
+        ok                                      -> {ok, {Env, Term}};
+        {ok, PostTerm}                          -> {ok, {Env, PostTerm}};
+        {ok, PostE, PostT} when is_map(PostE)   -> {ok, {maps:merge(Env, PostE), PostT}};
+        {ok, Key, PostTerm}                     -> {ok, {maps:put(Key, PostTerm, Env), PostTerm}};
+        {ok, Key, Value, PostTerm}              -> {ok, {maps:put(Key, Value, Env), PostTerm}};
+        Other                                   -> error:format({unrecognized_post_response, Other}, {ast, Term})
     end.
 
 step(Meta, _Type, Scope, {module, Ctx, Path, Exports, Defs}) ->
@@ -71,13 +73,13 @@ step(Meta, top_level, Scope, {macro, Ctx, Name, Fun}) ->
     step(Meta, expr, Scope, {macro, Ctx, Name, Fun});
 
 step(Meta, Type, Scope, {def, Ctx, Name, Fun}) ->
-    case climb(Meta, Type, Scope, Fun) of
+    case in(Meta, Type, Scope, Fun) of
         {error, Errs}           -> {error, Errs};
         {ok, {FunEnv, TFun}}    -> {ok, {FunEnv, {def, Ctx, Name, TFun}}}
     end;
 
 step(Meta, Type, Scope, {macro, Ctx, Name, Fun}) ->
-    case climb(Meta, Type, Scope, Fun) of
+    case in(Meta, Type, Scope, Fun) of
         {error, Errs}           -> {error, Errs};
         {ok, {FunEnv, TFun}}    -> {ok, {FunEnv, {macro, Ctx, Name, TFun}}}
     end;
@@ -87,7 +89,7 @@ step(Meta, expr, Scope, {clause, Ctx, Patterns, Expr}) ->
         {error, Errs}                       -> {error, Errs};
         {ok, {PatternEnvs, TPatterns}}   -> 
             NewScope = merge([Scope | PatternEnvs]),
-            case climb(Meta, expr, NewScope, Expr) of
+            case in(Meta, expr, NewScope, Expr) of
                 {error, Errs}       -> {error, Errs};
                 {ok, {Env, TExpr}}  -> 
                     {ok, {merge([Env | PatternEnvs]), {clause, Ctx, TPatterns, TExpr}}}
@@ -101,20 +103,14 @@ step(Meta, expr, Scope, {'fun', Ctx, Clauses}) ->
     end;
 
 step(Meta, expr, Scope, {val, Ctx, Pattern, Expr}) ->
-    error:map2(climb(Meta, pattern, Scope, Pattern),
-               climb(Meta, expr, Scope, Expr),
+    error:map2(in(Meta, pattern, Scope, Pattern),
+               in(Meta, expr, Scope, Expr),
                fun({PatternEnv, TPattern}, {Env, TExpr}) ->
                        {merge(PatternEnv, Env), {val, Ctx, TPattern, TExpr}} end);
 
-step(Meta, expr, Scope, {match, Ctx, Expr, Clauses}) when is_list(Clauses) ->
-    error:map2(climb(Meta, expr, Scope, Expr),
-               map(Meta, expr, Scope, Clauses),
-               fun({ExprEnv, TExpr}, {ClauseEnvs, TClauses}) ->
-                       {merge([ExprEnv | ClauseEnvs]), {match, Ctx, TExpr, TClauses}} end);
-
 step(Meta, Type, Scope, {application, Ctx, Expr, Args}) ->
     error:map2(map(Meta, expr, Scope, Args),
-               climb(Meta, Type, Scope, Expr),
+               in(Meta, Type, Scope, Expr),
                fun({ArgsEnvs, TArgs}, {ExprEnv, TExpr}) -> 
                        {merge([ExprEnv | ArgsEnvs]), {application, Ctx, TExpr, TArgs}} end);
 
@@ -122,6 +118,11 @@ step(Meta, _Type, Scope, {qualified_application, Ctx, ModulePath, Name, Args}) -
     error:map(map(Meta, expr, Scope, Args),
               fun({ArgsEnvs, TArgs}) -> 
                       {merge(ArgsEnvs), {qualified_application, Ctx, ModulePath, Name, TArgs}} end);
+
+step(Meta, _Type, Scope, {local_application, Ctx, ModulePath, Name, Args}) ->
+    error:map(map(Meta, expr, Scope, Args),
+              fun({ArgsEnvs, TArgs}) -> 
+                      {merge(ArgsEnvs), {local_application, Ctx, ModulePath, Name, TArgs}} end);
 
 step(Meta, _Type, Scope, {beam_application, Ctx, ModulePath, Name, Args}) ->
     error:map(map(Meta, expr, Scope, Args),
@@ -132,12 +133,6 @@ step(Meta, _Type, Scope, {macro_application, Ctx, Name, Args}) ->
     error:map(map(Meta, expr, Scope, Args),
               fun({ArgsEnvs, TArgs}) -> 
                       {merge(ArgsEnvs), {macro_application, Ctx, Name, TArgs}} end);
-
-step(Meta, Type, Scope, {lookup, Ctx, Expr, Elems}) when is_list(Elems) ->
-    error:map2(climb(Meta, Type, Scope, Expr),
-               map(Meta, Type, Scope, Elems),
-               fun({ExprEnv, TExpr}, {ElemsEnvs, TElems}) ->
-                       {merge([ExprEnv | ElemsEnvs]), {lookup, Ctx, TExpr, TElems}} end);
 
 step(Meta, Type, Scope, {tuple, Ctx, Expressions}) when is_list(Expressions) ->
     case map(Meta, Type, Scope, Expressions) of
@@ -158,11 +153,11 @@ step(Meta, Type, Scope, {list, Ctx, Expressions}) when is_list(Expressions) ->
     end;
 
 step(Meta, expr, Scope, {'let', Ctx, Pattern, Expr, Term}) ->
-    error:flatmap2(climb(Meta, pattern, Scope, Pattern),
-                   climb(Meta, expr, Scope, Expr),
+    error:flatmap2(in(Meta, pattern, Scope, Pattern),
+                   in(Meta, expr, Scope, Expr),
                    fun({PatternEnv, TPattern}, {ExprEnv, TExpr}) ->
                            NewScope = merge(Scope, PatternEnv),
-                           case climb(Meta, expr, NewScope, Term) of
+                           case in(Meta, expr, NewScope, Term) of
                                {error, Errs}            -> {error, Errs};
                                {ok, {Env, TTerm}}    -> 
                                    {ok, {merge([PatternEnv, ExprEnv, Env]), 
@@ -171,10 +166,10 @@ step(Meta, expr, Scope, {'let', Ctx, Pattern, Expr, Term}) ->
                    end);
 
 step(Meta, expr, Scope, {seq, Ctx, First, Then}) ->
-    case climb(Meta, expr, Scope, First) of
+    case in(Meta, expr, Scope, First) of
         {error, Errs}               -> {error, Errs};
         {ok, {FirstEnv, TFirst}} -> 
-            case climb(Meta, expr, Scope, Then) of
+            case in(Meta, expr, Scope, Then) of
                 {error, Errs}           -> {error, Errs};
                 {ok, {ThenEnv, TThen}}   -> 
                     {ok, {merge(FirstEnv, ThenEnv), {seq, Ctx, TFirst, TThen}}}
@@ -189,13 +184,13 @@ step(Meta, Type, Scope, {dict, Ctx, Expressions}) when is_list(Expressions) ->
     end;
 
 step(Meta, Type, Scope, {tagged, Ctx, Path, Val}) ->
-    error:map(climb(Meta, Type, Scope, Val),
+    error:map(in(Meta, Type, Scope, Val),
 	      fun({ValEnv, TVal}) -> {ValEnv, {tagged, Ctx, Path, TVal}} end);
 
 step(Meta, Type, Scope, {TermType, Ctx, Key, Val}) when TermType =:= pair;
                                                         TermType =:= dict_pair ->
-    error:map2(climb(Meta, Type, Scope, Key),
-               climb(Meta, Type, Scope, Val),
+    error:map2(in(Meta, Type, Scope, Key),
+               in(Meta, Type, Scope, Val),
                fun({KeyEnv, TKey}, {ValEnv, TVal}) -> 
                        {merge(KeyEnv, ValEnv), {TermType, Ctx, TKey, TVal}} end);
 
@@ -215,14 +210,14 @@ step(_, Type, _, Term) ->
     error:format({unrecognized_term, Term, term_type(Term), Type}, {ast, Term}).
 
 map(Meta, Type, Scope, Elements) ->
-    Mapped = [climb(Meta, Type, Scope, Elem) || Elem <- Elements],
+    Mapped = [in(Meta, Type, Scope, Elem) || Elem <- Elements],
     case error:collect(Mapped) of
         {error, Errs} -> {error, Errs};
         {ok, Zipped} -> {ok, lists:unzip(Zipped)}
     end.
 
 map_asts(Pre, Post, Scope, ASTs) ->
-    case error:collect([climb({Pre, Post}, top_level, Scope, AST) || AST <- ASTs]) of
+    case error:collect([in({Pre, Post}, top_level, Scope, AST) || AST <- ASTs]) of
         {error, Errs}   -> {error, Errs};
         {ok, Res}       ->
             {Envs, Outs} = lists:unzip(Res),

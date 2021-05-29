@@ -15,12 +15,11 @@ clean(Modules) ->
 
 simple_def_test_() ->
     ?setup("module test { x }
-            import erlang/+
+            import beam/erlang/+
             def x (n: 5) -> n + 3",
            fun({ok, _}) ->
                    [?test(none, test_domain:x(lenient, 4)),
                     ?testError({domains_do_not_intersect, 4, 5}, test_domain:x(normal, 4)),
-                    ?testError({domain_not_subset, 4, 5}, test_domain:x(strict, 4)),
                     ?test(8, test_domain:x(any)),
                     ?testError({domain_not_subset, any, 5}, test_domain:x(strict, any)),
                     ?test(8, test_domain:x(5))]
@@ -28,7 +27,7 @@ simple_def_test_() ->
 
 application_test_() ->
     ?setup("module test { app }
-            import erlang/+
+            import beam/erlang/+
             def f n -> 4 + n
             def app m -> m.f",
            fun({ok, _}) ->

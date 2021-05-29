@@ -3,6 +3,8 @@
          domain_to_term/2, gen_tag/1, print_core/1, get_arity/1, get_arity/3, set/1, mapfun/2, mapfun/3,
          function/2, get_min_arity/2]).
 
+-include_lib("eunit/include/eunit.hrl").
+
 % All combinations of list elements:
 % [[a, b, c], [1, 2]] -> [[a, 1], [a, 2], [b, 1], [b, 2], [c, 1], [c, 2]]
 combinations(L) -> 
