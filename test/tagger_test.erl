@@ -25,15 +25,16 @@ identity_function_test_() ->
 
 pattern_match1_test_() ->
     Code = 
-        "def not\n"
-        " | b -> b",
+        "def not
+             b -> b",
     Defs = tag(Code),
     ?test(#{'not' := {def, _, 'not',
                       {'fun', _,
                        [{clause, _, [{variable, _, b, B}], {variable, _, b, B}}]}}}, Defs).
 
 tuple_test_() ->
-    Code = "def not a -> (a, a)",
+    Code = "def not a -> (a
+                          a)",
     Defs = tag(Code),
     ?test(#{'not' := {def, _, 'not',
                       {'fun', _,
@@ -43,9 +44,9 @@ tuple_test_() ->
     
 anonymous_function_test_() ->
     Code = 
-        "def blip a -> a\n"
-        "def blap a -> a.blip(| b -> b\n"
-        "                     | _ -> a)",
+        "def blip a -> a
+         def blap a -> a.blip(b -> b
+                              _ -> a)",
     Defs = tag(Code),
     [?test(#{blap := {def, _, blap,
                       {'fun', _,
@@ -76,24 +77,22 @@ dict_pair_test_() ->
 
 
 dict_value_test_() ->
-    Code = "def f d a -> d: {a}",
+    Code = "def f d a -> {a}",
     Defs = tag(Code),
     ?test(#{f := {def, _, f,
                   {'fun', _,
                    [{clause, _,
                      [{variable, _, d, D},
                       {variable, _, a, _A}],
-                     {pair,_,
-                      {variable, _, d, D},
-                      {dict, _,
-                       [{keyword, _, a}]}}}]}}}, Defs).
+                     {dict, _,
+                      [{keyword, _, a}]}}]}}}, Defs).
 
 
 simple_sum_type_test_() ->
     Code =
-        "def boolean -> (True | False)\n"
-        "def blah\n"
-        " | boolean/True -> boolean/False",
+        "def boolean -> (True | False)
+         def blah
+             boolean/True -> boolean/False",
     Defs = tag(Code),
     [?test(#{'boolean' := {def, _, 'boolean',
                            {sum, _,
@@ -110,9 +109,9 @@ simple_sum_type_test_() ->
 complex_sum_syntax_test_() ->
     Code =
         "\n"
-        "def animal -> (Cat | Dog |\n"
-        "               Parrot | Seagull |\n"
-        "               Brontosaurus)",
+        "def animal -> Cat | Dog |
+                       Parrot | Seagull |
+                       Brontosaurus",
     Defs = tag(Code),
     [?test(#{'animal' := {def, _, 'animal',
                           {sum, _,
@@ -129,25 +128,39 @@ complex_sum_syntax_test_() ->
 
 simple_product_type_test_() ->
     Code =
-        "def monkey -> Monkey: { food: Banana, plant: Trees }",
+        "def t -> Banana | Trees
+         def monkey (Monkey: { food: t/Banana, plant: t/Trees }) -> t/Banana",
     Defs = tag(Code),
-    [?test(#{'monkey' := {def, _, 'monkey',
-                          {tagged, _, [monkey, 'Monkey'],
-                           {dict, _,
-                            [{pair,_,
-                              {keyword,_,food},
-                              {keyword,_,[source, test_code, 'monkey'], 'Banana'}},
-                             {pair,_,
-                              {keyword,_,plant},
-                              {keyword,_,[source, test_code, 'monkey'], 'Trees'}}]}}}}, Defs),
-     ?test(#{'monkey/Banana' := {keyword, _, _, 'Banana'}}, Defs),
-     ?test(#{'monkey/Trees' := {keyword, _, _, 'Trees'}}, Defs)].
+    [?test(#{'monkey' := {def,_,
+                          monkey,
+                          {'fun',_,
+                           [{clause,_,
+                             [{tagged,_,
+                               [monkey,'Monkey'],
+                               {dict,_,
+                                [{pair,_,
+                                  {keyword,_,
+                                   food},
+                                  {keyword,_,
+                                   [source,test_code,t],
+                                   'Banana'}},
+                                 {pair,_,
+                                  {keyword,_,
+                                   plant},
+                                  {keyword,_,
+                                   [source,test_code,t],
+                                   'Trees'}}]}}],
+                             {keyword,_,
+                              [source,test_code,t],
+                              'Banana'}}]}}}, Defs),
+     ?test(#{'t/Banana' := {keyword, _, _, 'Banana'}}, Defs),
+     ?test(#{'t/Trees' := {keyword, _, _, 'Trees'}}, Defs)].
 
 complex_type_test_() ->
     Code =
-        "def booleanList -> (Cons: { value: (True | False)\n"
-        "                             cons: booleanList } |\n"
-        "                     Nil)",
+        "def booleanList -> (Cons: { value: True | False,
+                                      cons: booleanList }) |
+                            Nil",
     Defs = tag(Code),
     [?test(#{'booleanList' := {def,_,'booleanList',
                                {sum,_,
@@ -174,8 +187,8 @@ product_key_not_propagated_test_() ->
     ?testError({undefined_symbol, blup}, tag(Code)).
 
 pattern_product_key_propagated_test_() ->
-    Code = "def test\n"
-           " | {b, c} -> b(c)",
+    Code = "def test
+                {b, c} -> b(c)",
     Tagged = tag(Code),
     ?test(#{test := {def, _, test,
                      {'fun', _,
@@ -196,8 +209,8 @@ undefined_qualified_symbol_test_() ->
     ?testError({undefined_symbol, 'T/T'}, tag(Code)).
 
 val_test_() ->
-    Code = "def test a -> (val f = | b -> a,\n"
-           "               f(a))",
+    Code = "def test a -> (val f = (fn b -> a)
+                           f(a))",
     ?test(#{test := {def, _, test,
                      {'fun', _,
                       [{clause, _,
@@ -220,10 +233,9 @@ local_import_conflict_test_() ->
      ?test(#{'t/A' := {keyword, _, [source, test_code, 't'], 'A'}}, Defs),
      ?test(#{'t/B' := {keyword, _, [source, test_code, 't'], 'B'}}, Defs)].
 
-type_variable_test_() ->
-    Code = "def f a -> a",
+parens_variable_test_() ->
+    Code = "def f (((a))) -> (((a)))",
     Defs = tag(Code),
-
     ?test(#{'f' := {def, _, 'f',
                     {'fun', _,
                      [{clause, _,
@@ -231,7 +243,7 @@ type_variable_test_() ->
                        {variable, _, 'a', A}}]}}}, Defs).
 
 tag_sub_module_test_() ->
-    Code = "def list a -> (Nil | Cons: { head: a, tail: list(a) })",
+    Code = "def list a -> Nil | (Cons: { head: a, tail: list(a) })",
     {ok, Parsed} = parser:parse([{text, test_code, Code}], #{include_kind_libraries => false}),
     ModMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Parsed]),
     % Should result in `source_test_code` module and `source_test_code_List` module.

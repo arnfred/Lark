@@ -5,7 +5,7 @@
 -include("test/macros.hrl").
 
 preen(FileName, AST) -> 
-    case expand_tuples(AST) of
+    case expand_sums(AST) of
         {error, Errs}         -> {error, Errs};
         {ok, {_, DetupledAST}}  ->
             case dict_keys(DetupledAST) of
@@ -16,22 +16,14 @@ preen(FileName, AST) ->
             end
     end.
 
-expand_tuples(AST) -> ast:traverse(fun tuple_post/3, AST).
+expand_sums(AST) -> ast:traverse(fun sum_post/3, AST).
 
-tuple_post(_, _, {tuple, _, [Elem]})    -> {ok, Elem};
-tuple_post(_, _, {sum, _, [Elem]})      -> {ok, Elem};
-tuple_post(expr, _, {tuple, _, Elems})  -> clean_tuple_elements(Elems);
-tuple_post(_, _, _)                     -> ok.
+sum_post(_, _, {'or', Ctx, {sum, _, E1}, {sum, _, E2}}) -> {ok, {sum, Ctx, E1 ++ E2}};
+sum_post(_, _, {'or', Ctx, {sum, _, E1}, E2})           -> {ok, {sum, Ctx, E1 ++ [E2]}};
+sum_post(_, _, {'or', Ctx, E1, {sum, _, E2}})           -> {ok, {sum, Ctx, [E1 | E2]}};
+sum_post(_, _, {'or', Ctx, E1, E2})                     -> {ok, {sum, Ctx, [E1, E2]}};
+sum_post(_, _, _)                                       -> ok.
 
-clean_tuple_elements(Expressions) ->
-    F = fun({val, Ctx, Pattern, Expr}, Acc)         -> {'let', Ctx, Pattern, Expr, Acc};
-           ({def, Ctx, Name, _} = Expr, Acc)        -> Pattern = {symbol, Ctx, variable, Name},
-                                                       {'let', Ctx, Pattern, Expr, Acc};
-           (T, Acc)                                 -> {seq, ast:context(T), T, Acc} end,
-    case lists:reverse(Expressions) of
-        [{val, _, _, _} = T | _]    -> error:format({illegal_end_of_tuple, val}, {preener, T});
-        [E | Elems]                 -> {ok, lists:foldr(F, E, lists:reverse(Elems))}
-    end.
 
 dict_keys(AST) -> ast:traverse(fun dict_pre/3, fun dict_post/3, AST).
 
@@ -80,14 +72,8 @@ tagged_values(AST) ->
 
 do_preen(Code) ->
     {ok, Tokens, _} = lexer:string(Code),
-    io:format("Tokens are ~p~n", [Tokens]),
     {ok, Parsed} = syntax:parse(Tokens),
-    io:format("Parsed is ~p~n", [Parsed]),
     preener:preen("some_path", Parsed).
-
-illegal_end_of_tuple_test_() ->
-    Code = "def test a b -> (val a = b, val b = a)",
-    ?testError({illegal_end_of_tuple, val}, do_preen(Code)).
 
 unwrap_tuple_with_one_element_test_() ->
     Code = "def test b -> (b)",
@@ -97,7 +83,7 @@ unwrap_tuple_with_one_element_test_() ->
                     {symbol, _, variable, b}}]}}]}, do_preen(Code)).
 
 wrap_tuple_elems_in_seq_test_() ->
-    Code = "def test a b -> (a, a, b)",
+    Code = "def test a b -> (a; a; b)",
     ?test({ok, [{def, _, _,
                  {'fun', _,
                   [{clause, _, _,
@@ -106,7 +92,7 @@ wrap_tuple_elems_in_seq_test_() ->
                       {symbol, _, _, b}}}}]}}]}, do_preen(Code)). 
 
 translate_vals_to_let_statements_test_() ->
-    Code = "def test a -> (val b = a, b, val c = a, c)",
+    Code = "def test a -> (val b = a; b; val c = a; c)",
     ?test({ok, [{def, _, _,
                  {'fun', _,
                   [{clause, _, _,
@@ -126,7 +112,7 @@ dict_expr_test_() ->
 
 dict_pattern_test_() ->
     Code = "def test\n"
-           " | {a: b, b: c} -> c",
+           "    {a: b, b: c} -> c",
     ?test({ok, [{def, _, _,
                  {'fun', _,
                   [{clause, _,
@@ -137,7 +123,7 @@ dict_pattern_test_() ->
 
 dict_pattern_variable_test_() ->
     Code = "def test\n"
-           " | {a: b, b} -> b",
+           "    {a: b, b} -> b",
     ?test({ok, [{def, _, _,
                  {'fun', _,
                   [{clause, _,
@@ -152,7 +138,7 @@ dict_illegal_element_test_() ->
                {illegal_dict_pair_element, dict, expr}, do_preen(Code)).
 
 pair_expr_test_() ->
-    Code = "def test a -> A: {a: a, b}",
+    Code = "def test a -> (A: {a: a, b})",
     ?test({ok, [{def, _, _,
                  {'fun', _,
                   [{clause, _, _,
@@ -162,7 +148,7 @@ pair_expr_test_() ->
                        {keyword, _, b}]}}}]}}]}, do_preen(Code)).
 
 pair_expr_homonym_test_() ->
-    Code = "def A a -> A: {a: a, b}",
+    Code = "def A a -> (A: {a: a, b})",
     ?test({ok, [{def, _, _,
                  {'fun', _,
                   [{clause, _, _,
@@ -173,7 +159,7 @@ pair_expr_homonym_test_() ->
 
 pair_pattern_test_() ->
     Code = "def test\n"
-           " | (a: {a: b, c}) -> c",
+           "    (a: {a: b, c}) -> c",
     ?test({ok, [{def, _, _,
                  {'fun', _,
                   [{clause, _,

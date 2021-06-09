@@ -17,25 +17,28 @@ Rules.
 {SignedNumber}+             : {token, {value,               #{line => TokenLine}, integer, list_to_integer(TokenChars)}}.
 {SignedNumber}+\.{Number}+  : {token, {value,               #{line => TokenLine}, float, list_to_float(TokenChars)}}.
 {DivOperator}               : {token, {op_type(TokenChars), #{line => TokenLine}, list_to_atom(TokenChars)}}.
-\(                          : {token, {open,                #{line => TokenLine}, list_to_atom(TokenChars)}}.
-\)                          : {token, {close,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
-\{                          : {token, {curly_open,          #{line => TokenLine}, list_to_atom(TokenChars)}}.
-\}                          : {token, {curly_close,         #{line => TokenLine}, list_to_atom(TokenChars)}}.
-\[                          : {token, {square_open,         #{line => TokenLine}, list_to_atom(TokenChars)}}.
-\]                          : {token, {square_close,        #{line => TokenLine}, list_to_atom(TokenChars)}}.
-[\s]+\(                     : {token, {space_open,          #{line => TokenLine}, list_to_atom(TokenChars)}}.
-[\s]+\{                     : {token, {space_curly_open,    #{line => TokenLine}, list_to_atom(TokenChars)}}.
-[\s]+\[                     : {token, {space_square_open,   #{line => TokenLine}, list_to_atom(TokenChars)}}.
-\|                          : {token, {pipe,                #{line => TokenLine}, list_to_atom(TokenChars)}}.
+\([\s\n]*                   : {token, {open,                #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s\n]*\)                   : {token, {close,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
+\{[\s\n]*                   : {token, {curly_open,          #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s\n]*\}                   : {token, {curly_close,         #{line => TokenLine}, list_to_atom(TokenChars)}}.
+\[[\s\n]*                   : {token, {square_open,         #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s\n]*\]                   : {token, {square_close,        #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s]+\([\s\n]*              : {token, {space_open,          #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s]+\{[\s\n]*              : {token, {space_curly_open,    #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s]+\[[\s\n]*              : {token, {space_square_open,   #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s\n]*\|[\s\n]*            : {token, {pipe,                #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \/                          : {token, {slash,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \:                          : {token, {colon,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s\n]*\;[\s\n]*            : {token, {semicolon,           #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \.                          : {token, {apply,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
-,                           : {token, {comma,   	        #{line => TokenLine}, list_to_atom(TokenChars)}}.
-=                           : {token, {assign,              #{line => TokenLine}, list_to_atom(TokenChars)}}.
-{RightArrow}                : {token, {right_arrow,         #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s]+\.                     : {token, {op_type(TokenChars), #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s\n]*,[\s\n]*             : {token, {comma,   	        #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s\n]*=[\s\n]*             : {token, {assign,              #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s\n]*{RightArrow}[\s\n]*  : {token, {right_arrow,         #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {LeftArrow}                 : {token, {left_arrow,          #{line => TokenLine}, list_to_atom(TokenChars)}}.
 def                         : {token, {def,                 #{line => TokenLine}, list_to_atom(TokenChars)}}.
 val                         : {token, {val,                 #{line => TokenLine}, list_to_atom(TokenChars)}}.
+fn[\s\n]*                   : {token, {fun_decl,            #{line => TokenLine}, list_to_atom(TokenChars)}}.
 type                        : {token, {type,                #{line => TokenLine}, list_to_atom(TokenChars)}}.
 macro                       : {token, {macro,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
 import                      : {token, {import_keyword,      #{line => TokenLine}, list_to_atom(TokenChars)}}.
@@ -48,7 +51,7 @@ module                      : {token, {module_keyword,      #{line => TokenLine}
 {String}                    : {token, {value,               #{line => TokenLine}, string, build_string(TokenChars, TokenLen)}}.
 {Atom}                      : {token, {value,               #{line => TokenLine}, atom, build_atom(TokenChars, TokenLen)}}.
 [\s]+                       : skip_token.
-\%.*                         : skip_token.
+\%.*                        : skip_token.
 
 Erlang code.
 

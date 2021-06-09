@@ -194,6 +194,11 @@ step(Meta, Type, Scope, {TermType, Ctx, Key, Val}) when TermType =:= pair;
                fun({KeyEnv, TKey}, {ValEnv, TVal}) -> 
                        {merge(KeyEnv, ValEnv), {TermType, Ctx, TKey, TVal}} end);
 
+step(Meta, Type, Scope, {'or', Ctx, E1, E2}) ->
+    error:map2(in(Meta, Type, Scope, E1),
+               in(Meta, Type, Scope, E2),
+               fun({T1Env, T1}, {T2Env, T2}) -> 
+                       {merge(T1Env, T2Env), {'or', Ctx, T1, T2}} end);
 
 step(_, _, _, {symbol, _, _, _} = Term)             -> {ok, {#{}, Term}};
 step(_, _, _, {variable, _, _, _} = Term)           -> {ok, {#{}, Term}};

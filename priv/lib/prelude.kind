@@ -23,7 +23,7 @@ def compareTypes -> (GT | LT | EQ)
 import compare/_
 
 def compare a b -> (a > b).match(
-  | 'true'  -> GT
-  | 'false' -> (a < b).match(
-      | 'false' -> EQ
-      | 'true'  -> LT))
+    'true'  -> GT
+    'false' -> (a < b).match(
+        'false' -> EQ
+        'true'  -> LT))

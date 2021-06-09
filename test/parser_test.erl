@@ -6,16 +6,16 @@
 local_type_test_() ->
     Module = 
     "def xor\n"
-    " | True False -> True\n"
-    " | False True -> True\n"
-    " | _ _ -> False",
+    "    True False -> True\n"
+    "    False True -> True\n"
+    "    _ _ -> False",
     ?test({ok, _}, parser:parse([{text, Module}])).
 
 nested_local_type_test_() ->
     Module =
-    "def blup -> (Blip | Blap)
+    "def blup -> Blip | Blap
      import blup/_
-     def flup -> (Flip | Blap)
+     def flup -> Flip | Blap
      def main -> flup/Blap",
     {ok, Modules} = parser:parse([{text, test_code, Module}], #{include_kind_libraries => false}),
     ModuleMap = maps:from_list([{Path, Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
@@ -28,29 +28,29 @@ local_type_alias_test_() ->
     Module = 
     "import kind/prelude/boolean/{True: T, False: F}\n"
     "def xor\n"
-    " | T F -> T\n"
-    " | F T -> T\n"
-    " | _ _ -> F",
+    "    T F -> T\n"
+    "    F T -> T\n"
+    "    _ _ -> F",
     ?test({ok, _}, parser:parse([{text, Module}])).
 
 local_type_no_import_test_() ->
     Module = 
-    "def boolean -> (True | False)\n"
+    "def boolean -> True | False\n"
     "import boolean/False\n"
     "def notxor\n"
-    " | True False -> False\n"
-    " | False True -> False\n"
-    " | _ _ -> False",
+    "    True False -> False\n"
+    "    False True -> False\n"
+    "    _ _ -> False",
     ?testError({undefined_symbol, 'True'}, parser:parse([{text, Module}], #{import_prelude => false})).
 
 local_type_wildcard_test_() ->
     Module = 
-    "def boolean -> (True | False)\n"
+    "def boolean -> True | False\n"
     "import boolean/_\n"
     "def xor\n"
-    " | True False -> True\n"
-    " | False True -> True\n"
-    " | _ _ -> False",
+    "    True False -> True\n"
+    "    False True -> True\n"
+    "    _ _ -> False",
     ?test({ok, _}, parser:parse([{text, Module}], #{import_prelude => false})).
 
 external_type_test_() ->
@@ -58,13 +58,13 @@ external_type_test_() ->
     "module blup {\n"
     "  boolean\n"
     "}\n"
-    "def boolean -> (True | False)\n",
+    "def boolean -> True | False\n",
     Module2 =
     "import blup/boolean/_\n"
     "def xor\n"
-    " | True False -> True\n"
-    " | False True -> True\n"
-    " | _ _ -> False",
+    "    True False -> True\n"
+    "    False True -> True\n"
+    "    _ _ -> False",
     ?test({ok, _}, parser:parse([{text, Module1}, {text, Module2}], #{import_prelude => false})).
 
 undefined_external_type_test_() ->
@@ -72,7 +72,7 @@ undefined_external_type_test_() ->
     "module blup {\n"
     "  boolean\n"
     "}\n"
-    "def boolean -> (True | False)\n",
+    "def boolean -> True | False\n",
     Module2 =
     "import blup/Blap/_",
     ?testError({nonexistent_module, 'blup/Blap'},
@@ -152,10 +152,10 @@ wildcard_import_type_already_defined_test_() ->
     "module blip {\n"
     "  t\n"
     "}\n"
-    "def t -> (A | B)\n",
+    "def t -> A | B\n",
     Module2 =
     "import blip/_\n"
-    "def t -> (Q | R)",
+    "def t -> Q | R",
     ?testError({import_conflicts_with_local_def, 't', 'source/test_code_2', 'source/test_code_1/t'},
                parser:parse([{text, test_code_2, Module2}, {text, test_code_1, Module1}])).
 
