@@ -47,7 +47,7 @@ expr(GlobalScope, LocalScope, History, Term) ->
     case ast:traverse_term(expr, Pre, Post, LocalScope, Term) of
         {error, Errs}       -> {error, Errs};
         {ok, {Env, Tree}}   ->
-            {Local, Global} = lists:partition(fun({{KeyPath, _}, _V}) -> length(KeyPath) =:= 1 end, maps:to_list(Env)),
+            {Local, _} = lists:partition(fun({{KeyPath, _}, _V}) -> length(KeyPath) =:= 1 end, maps:to_list(Env)),
             case linearize_local_defs(Local, History, Tree) of
                 {error, Errs}               -> {error, Errs};
                 {ok, {DefsEnv, DefsTree}}   -> {ok, {maps:merge(Env, DefsEnv), DefsTree}}
@@ -100,7 +100,7 @@ clauses(Scopes, History, ArgDomains, [Clause | Cs], Res) ->
             % which all the pattern domains are subsets of the argument
             % domains. There's no point in keeping on scanning patterns if we
             % can infer from the argument domains that they will not be reached
-            ClauseRes = [{ok, {Env, C}} || C <- Clauses],
+            ClauseRes = lists:reverse([{ok, {Env, C}} || C <- Clauses]),
             IsClauseSubset = fun({clause, _, PsTs, _}) -> domain:subset(ArgDomains, [domain(T) || T <- PsTs]) end,
             case lists:any(IsClauseSubset, Clauses) of
                 true    -> clauses(Scopes, History, ArgDomains, [], ClauseRes ++ Res);
@@ -109,34 +109,37 @@ clauses(Scopes, History, ArgDomains, [Clause | Cs], Res) ->
     end.
 
 
-clause({GlobalScope, LocalScope}, History, ArgDomains, {clause, Ctx, Patterns, Expr}) ->
+
+clause({GlobalScope, LocalScope} = Scopes, History, ArgDomains, {clause, Ctx, Patterns, Expr}) ->
     case error:collect([pattern(GlobalScope, LocalScope, History, D, P) || {D, P} <- zip(ArgDomains, Patterns)]) of
         {error, Errs}       -> {error, Errs};
         {ok, PatternRes}    ->
-            {PsEnvs, PsTrees} = unzip(PatternRes),
-            % When a pattern domain doesn't intersect the argument domain, a
-            % 'no_match_possible' term is returned in which case we skip this
-            % clause as it can't possibly match at runtime
-            case lists:any(fun(Term) -> element(1, Term) =:= no_match_possible end, lists:flatten(PsTrees)) of
-                true    -> {ok, {#{}, []}};
-                false   ->
-                    ClauseScope = utils:merge([LocalScope | PsEnvs]),
-                    case expr(GlobalScope, ClauseScope, History, Expr) of
-                        {error, Errs}           -> {error, Errs};
-                        {ok, {Env, ExprTree}}   ->
-                            % set_domain will substitute the term for the domain if the
-                            % domain is a literal We don't want that to happen for
-                            % clauses
-                            ClauseCtx = maps:put(domain, domain(ExprTree), Ctx),
-                            % Only create clauses for pattern sets where none of
-                            % the patterns contain the `none` domain
-                            Clauses = [{clause, ClauseCtx, PsTs, ExprTree}
-                                       || PsTs <- combinations(PsTrees),
-                                          not(lists:member(none, lists:map(fun domain/1, PsTs)))],
-                            {ok, {Env, Clauses}}
-                    end
+            {_, PsTrees} = unzip(PatternRes),
+            case error:collect([expand_clause(Scopes, History, PsTs, Expr, Ctx)
+                                || PsTs <- combinations(PsTrees),
+                                   not(lists:member(none, lists:map(fun domain/1, PsTs)))]) of
+                {error, Errs}       -> {error, Errs};
+                {ok, ClausesRes}    -> {Envs, Clauses} = unzip(ClausesRes),
+                                       {ok, {utils:merge(Envs), Clauses}}
             end
     end.
+
+
+
+expand_clause({GlobalScope, LocalScope}, History, Patterns, Expr, Ctx) -> 
+    ClauseEnv = utils:merge([env(P) || P <- Patterns]),
+    case lists:any(fun(Term) -> element(1, Term) =:= no_match_possible end, lists:flatten(Patterns)) of
+        true    -> {ok, {#{}, []}};
+        false   ->
+            ClauseScope = maps:merge(LocalScope, ClauseEnv),
+            case expr(GlobalScope, ClauseScope, History, Expr) of
+                {error, Errs}           -> {error, Errs};
+                {ok, {Env, ExprTree}}   -> ClauseCtx = maps:put(domain, domain(ExprTree), Ctx),
+                                           {ok, {Env, {clause, ClauseCtx, Patterns, ExprTree}}}
+            end
+    end.
+
+
 
 pattern_pre(_, Domain, {tagged, Ctx, Path, Expr}) ->
     case domain:intersection(Domain, {tagged, Path, any}) of
@@ -145,6 +148,7 @@ pattern_pre(_, Domain, {tagged, Ctx, Path, Expr}) ->
         {tagged, Path, ExprDomain}  -> {ok, {tagged, Ctx, Path, set_domain(Expr, ExprDomain)}};
         _                           -> {skip, {no_match_possible, Ctx, Domain}}
     end;
+
 pattern_pre(_, Domain, {dict, Ctx, Elems}) ->
     Keys = [symbol:name(E) || E <- Elems],
     case domain:intersection(Domain, maps:from_list(zip(Keys, [any || _ <- Elems]))) of
@@ -154,6 +158,7 @@ pattern_pre(_, Domain, {dict, Ctx, Elems}) ->
                                {ok, {dict, Ctx, [set_domain(E, D) || {E, D} <- zip(Elems, Ds)]}};
         _                   -> {skip, {no_match_possible, Ctx, Domain}}
     end;
+
 pattern_pre(_, Domain, {list, Ctx, Elems}) ->
     case domain:intersection(Domain, [any || _ <- Elems]) of
         {sum, ListDs}       -> Ds = [domain:union(L) || L <- pivot(ListDs)],
@@ -161,25 +166,36 @@ pattern_pre(_, Domain, {list, Ctx, Elems}) ->
         Ds when is_list(Ds) -> {ok, {list, Ctx, [set_domain(E, D) || {E, D} <- zip(Elems, Ds)]}};
         _                   -> {skip, {no_match_possible, Ctx, Domain}}
     end;
+
 pattern_pre(_, Domain, {sum, Ctx, Elems}) -> {ok, {sum, Ctx, [set_domain(E, Domain) || E <- Elems]}};
+
 pattern_pre(_, Domain, {keyword, _, _, _} = Term) ->
     D = domain:intersection(symbol:tag(Term), Domain),
     {ok, set_domain(Term, D)};
+
 pattern_pre(_, Domain, {keyword, _, _} = Term) ->
     {ok, set_domain(Term, Domain)};
+
 pattern_pre(_, Domain, {value, _, _, Val} = Term) ->
     D = domain:intersection(Val, Domain),
     {ok, set_domain(Term, D)};
+
 pattern_pre(_, Domain, {variable, _, _, _} = Term) ->
     {ok, set_domain(Term, Domain)};
+
 pattern_pre(_, Domain, {application, Ctx, Expr, Args}) ->
     {ok, {application, Ctx, set_domain(Expr, Domain), [set_domain(A, any) || A <- Args]}};
+
 pattern_pre(_, _, {qualified_application, Ctx, ModulePath, Name, Args}) ->
     {ok, {qualified_application, Ctx, ModulePath, Name, [set_domain(A, any) || A <- Args]}};
+
 pattern_pre(_, _, {beam_application, Ctx, ModulePath, Name, Args}) ->
     {ok, {beam_application, Ctx, ModulePath, Name, [set_domain(A, any) || A <- Args]}};
+
 pattern_pre(_, Domain, {pair, Ctx, Key, Val}) ->
     {ok, {pair, Ctx, set_domain(Key, Domain), set_domain(Val, Domain)}}.
+
+
 
 expr_pre(_, _, {'fun', _, _}) -> leave_intact;
 expr_pre(_, _, {'let', _, _, _, _}) -> leave_intact;
@@ -230,8 +246,8 @@ post(expr, {GlobalScope, LocalScope}, History, {'let', Ctx, Pattern, Expr, NextE
                             Domain = domain(NTree),
                             {ok, {maps:merge(NEnv, EEnv), set_domain({'let', Ctx, PTree, ETree, NTree}, Domain)}}
                     end;
-                {ok, {PScope, PTrees}} -> error:format({sum_type_in_let_pattern, Pattern, domain(ETree)},
-                                                       {linearize, Ctx, History})
+                {ok, {_, _}}                -> error:format({sum_type_in_let_pattern, Pattern, domain(ETree)},
+                                                            {linearize, Ctx, History})
             end
     end;
 
@@ -376,14 +392,17 @@ post(_, _, _, {dict, _, Elems} = Term) ->
 post(pattern, {GlobalScope, LocalScope}, History, {pair, Ctx, Key, Val}) ->
     case pattern(GlobalScope, LocalScope, History, domain(Val), Key) of
         {error, Errs}           -> {error, Errs};
-        {ok, {KeyEnv, [KTree]}} -> Term = {pair, Ctx, KTree, Val},
-                                   {ok, {KeyEnv, set_domain(Term, domain(Val))}};
-        {ok, _}                 -> error:format({sum_type_in_pair_key, domain(Key)},
-                                                {linearize, Ctx, History})
+        {ok, {KeyEnv, [KTree]}} ->
+            Term = {pair, Ctx, KTree, Val},
+            Env = maps:merge(KeyEnv, child_env(Term)),
+            case domain:is_literal(#{}, domain(KTree)) of
+                false   -> {ok, {Env, set_domain(Term, domain(Val))}};
+                true    -> {ok, {Env, domain:to_term(domain(KTree), symbol:ctx(Term))}}
+            end
     end;
 
-% Expr of type `k: v` or more complicated like `x.t(q): [T, R]`
-post(expr, _, History, {pair, Ctx, Key, Val} = Term) ->
+% Expr of type `k: v`
+post(expr, _, _, {pair, _, _, Val} = Term) ->
     {ok, {#{}, set_domain(Term, domain(Val))}};
 
 
@@ -397,14 +416,6 @@ post(pattern, {_, LocalScope}, _, {variable, _, _, _} = Term) ->
                            true     -> {ok, {#{symbol:tag(Term) => Domain}, domain:to_term(Domain, symbol:ctx(Term))}}
                        end
     end;
-% Pattern like `T` -- Domain has already been set in pre_pattern
-post(pattern, _, _, {keyword, _, _, _} = Term) -> {ok, {#{}, Term}};
-% Pattern like `key: ...` in dictionary -- Domain has already been set in pre_pattern
-post(pattern, _, _, {keyword, _, _} = Term) -> {ok, {#{}, Term}};
-% Pattern like `5` -- Domain has already been set in pre_pattern
-post(pattern, _, _, {value, _, _, _} = Term) -> {ok, {#{}, Term}};
-
-
 
 % Expr of type `x`
 post(expr, {_, LocalScope}, _, {variable, _, _, _} = Term) ->
@@ -416,12 +427,21 @@ post(expr, {_, LocalScope}, _, {variable, _, _, _} = Term) ->
 
 
 
+% Pattern like `T` -- Domain has already been set in pre_pattern
+post(pattern, _, _, {keyword, _, _, _} = Term) -> {ok, {#{}, Term}};
+% Pattern like `key: ...` in dictionary -- Domain has already been set in pre_pattern
+post(pattern, _, _, {keyword, _, _} = Term) -> {ok, {#{}, Term}};
+
 % Expr of type `T`
 post(expr, _, _, {keyword, _, _, _} = Term) ->
     {ok, {#{}, set_domain({value, symbol:ctx(Term), type, symbol:tag(Term)}, symbol:tag(Term))}};
 post(expr, _, _, {keyword, _, _} = Term) ->
     {ok, {#{}, set_domain(Term, none)}};
 
+
+
+% Pattern like `5` -- Domain has already been set in pre_pattern
+post(pattern, _, _, {value, _, _, _} = Term) -> {ok, {#{}, Term}};
 
 % Expr/Patterns of type `1` or `"sdfgsf"` or `'atom'`
 post(expr, _, _, {value, _, _, Val} = Term) -> {ok, {#{}, set_domain(Term, Val)}}.
@@ -518,27 +538,39 @@ combinations([])                -> [[]].
 % in erlang core, each pattern can only be for a single value. For this reason
 % we'll have to expand each pattern of domains to possibly multiple literal
 % patterns.
-unpack({dict, Ctx, ElemList}) -> [{dict, Ctx, Elems} || Elems <- combinations(ElemList)];
-unpack({list, Ctx, ElemList}) -> [{list, Ctx, Elems} || Elems <- combinations(ElemList)];
-unpack({tagged, Ctx, Path, ExprList}) -> [{tagged, Ctx, Path, Expr} || Expr <- ExprList];
-unpack({pair, Ctx, KeyList, ValList}) -> [{pair, Ctx, Key, Val} || [Key, Val] <- combinations([KeyList, ValList])];
-unpack({application, Ctx, ExprList, ArgsList}) ->
+expand({dict, Ctx, ElemList}) -> [{dict, Ctx, Elems} || Elems <- combinations(ElemList)];
+expand({list, Ctx, ElemList}) -> [{list, Ctx, Elems} || Elems <- combinations(ElemList)];
+expand({sum, Ctx, ElemList}) -> [{sum, Ctx, Elems} || Elems <- combinations(ElemList)];
+expand({tagged, Ctx, Path, ExprList}) -> [{tagged, Ctx, Path, Expr} || Expr <- ExprList];
+expand({pair, Ctx, KeyList, ValList}) -> [{pair, Ctx, Key, Val} || [Key, Val] <- combinations([KeyList, ValList])];
+expand({application, Ctx, ExprList, ArgsList}) ->
     [{application, Ctx, Expr, Args} || [Expr | Args] <- combinations([ExprList | ArgsList])];
-unpack({qualified_application, Ctx, ModulePath, ArgsList}) ->
+expand({qualified_application, Ctx, ModulePath, ArgsList}) ->
     [{qualified_application, Ctx, ModulePath, Args} || Args <- combinations(ArgsList)];
-unpack({beam_application, Ctx, ModulePath, ArgsList}) ->
+expand({beam_application, Ctx, ModulePath, ArgsList}) ->
     [{beam_application, Ctx, ModulePath, Args} || Args <- combinations(ArgsList)];
-unpack(Term) -> [Term].
+expand(Term) -> [Term].
 
-unpack_sum({sum, _, Elems}) -> Elems;
-unpack_sum(Term) -> [Term].
+expand_sum({sum, _, Elems}) -> Elems;
+expand_sum(Term) -> [Term].
+
+env(Term) -> maps:get(env, symbol:ctx(Term), #{}).
+child_env({dict, _, Elems}) -> utils:merge([env(E) || E <- Elems]);
+child_env({list, _, Elems}) -> utils:merge([env(E) || E <- Elems]);
+child_env({tagged, _, _, Expr}) -> env(Expr);
+child_env({pair, _, Key, Val}) -> maps:merge(env(Key), env(Val));
+child_env(_) -> #{}.
+
+set_env(Term, Env) ->
+    Ctx = symbol:ctx(Term),
+    NewCtx = maps:put(env, utils:merge([child_env(Term), Env, env(Term)]), Ctx),
+    setelement(2, Term, NewCtx).
 
 pattern_post(Type, Scopes, History, Term) ->
-    case error:collect([post(Type, Scopes, History, T) || T <- unpack(Term)]) of
+    case error:collect([post(Type, Scopes, History, T) || T <- expand(Term)]) of
         {error, Errs}   -> {error, Errs};
-        {ok, ResList}   -> {Envs, Trees} = unzip(ResList),
-                           UnpackedTrees = [T || PackedTree <- Trees, T <- unpack_sum(PackedTree)],
-                           {ok, utils:merge(Envs), UnpackedTrees}
+        {ok, ResList}   -> Trees = [set_env(T, Env) || {Env, Tree} <- ResList, T <- expand_sum(Tree)],
+                           {ok, Trees}
     end.
 
 expr_post(Type, Scopes, History, Term) ->

@@ -36,7 +36,7 @@ identity_function_test_() ->
      ?test({ok, [any, 4]}, domain(Res, [[any, 4]]))].
 
 dynamic_function_test_() ->
-    Code = "def f a -> (val g = (| {key1: b} -> b)
+    Code = "def f a -> (val g = (fn {key1: b} -> b)
                         g({key1: 6})
                         g(a))",
     Res = linearize(Code, f),
@@ -78,6 +78,38 @@ static_function_test_() ->
                                                                            {variable, _, a, A}}]}}]}}},
            env(Res, [{sum, [a, b]}])),
     ?test({ok, #{key := {sum, [a, b]}}}, domain(Res, [{sum, [a, b]}]))].
+
+sum_clause_test_() ->
+    Code = "def f (a: 1 | 2) (b: 3 | 4) -> a | b
+                  _ _ -> 0",
+    Res = linearize(Code, f),
+    [?test({ok, {'fun', _, [{clause, _, [{value, _, _, 1}, {value, _, _, 3}],
+                             {sum, _, [{value, _, _, 1}, {value, _, _, 3}]}},
+                            {clause, _, [{value, _, _, 1}, {value, _, _, 4}],
+                             {sum, _, [{value, _, _, 1}, {value, _, _, 4}]}},
+                            {clause, _, [{value, _, _, 2}, {value, _, _, 3}],
+                             {sum, _, [{value, _, _, 2}, {value, _, _, 3}]}},
+                            {clause, _, [{value, _, _, 2}, {value, _, _, 4}],
+                             {sum, _, [{value, _, _, 2}, {value, _, _, 4}]}},
+                            {clause, _, [{variable, _, '_', _}, {variable, _, '_', _}],
+                             {value, _, _, 0}}]}},
+           tree(Res, [any, any])),
+     ?test({ok, {sum, [0, 1, 2, 3, 4]}}, domain(Res, [any, any])),
+     ?test({ok, {'fun', _, [{clause, _, [{value, _, _, 2}, {value, _, _, 3}],
+                             {sum, _, [{value, _, _, 2}, {value, _, _, 3}]}}]}},
+           tree(Res, [2, 3]))].
+
+clause_subset_test_() ->
+    Code = "def f 1 2             -> 3
+                  1 4             -> 5
+                  3 2             -> 6
+                  (1 | 3) (2 | 4) -> 7",
+    Res = linearize(Code, f),
+    [?test({ok, {'fun', _, [{clause, _, [{value, _, _, 1}, {value, _, _, 2}],
+                             {value, _, _, 3}}]}},
+           tree(Res, [1, 2]))].
+
+
 
 
 
