@@ -72,6 +72,11 @@ intersection_tagged_diff_test_() ->
     Actual = domain:intersection(D1, D2),
     ?_assertEqual(none, domain:diff(Expected, Actual)).
 
+tagged_none_test_() ->
+    D1 = {tagged, t, 3},
+    D2 = {tagged, t, 4},
+    ?_assertEqual(none, domain:intersection(D1, D2)).
+
 intersection_sum_of_products_test_() ->
     D1 = {sum, ordsets:from_list([#{a => 1, b => 2}])},
     D2 = {sum, ordsets:from_list([#{a => 1, b => {sum, ordsets:from_list([2,3])}}])},
@@ -96,10 +101,8 @@ intersection_sum_with_any_test_() ->
 intersection_f_test_() ->
     D1 = fun(A) -> A end,
     D2 = fun(A) -> {sum, ordsets:from_list([A, b])} end,
-    DomainFun = domain:intersection(D1, D2),
-    Actual = DomainFun(a),
-    Expected = a,
-    ?_assertEqual(none, domain:diff(Expected, Actual)).
+    [?_assertEqual(none, domain:intersection(D1, D2)),
+     ?_assertEqual(D1, domain:intersection(D1, D1))].
 
 intersection_map_map_test_() ->
     D1 = #{a => any, b => any},
@@ -162,3 +165,9 @@ list_unqeual_length_test_() ->
     L2 = [1, 2, 3],
     Expected = none,
     ?testEqual(Expected, domain:intersection(L1, L2)).
+
+list_prefix_test_() ->
+    L1 = [1, 2],
+    L2 = [1, 2, 3],
+    ?testEqual(L1, domain:intersection(L1, L2)).
+

@@ -29,35 +29,46 @@ intersection(F1, F2) when is_function(F1), is_function(F2) ->
         false   -> none
     end;
 
-intersection({sum, D1}, {sum, D2}) -> 
-    {sum, ordsets:from_list([intersection(Dj, Di) || Di <- D1, Dj <- D2])}; 
-intersection({sum, D1}, D) -> 
-    {sum, ordsets:from_list([intersection(D, Di) || Di <- D1])};
+intersection({sum, D1}, {sum, D2}) ->
+    {sum, ordsets:from_list([Elem || Di <- D1,
+                                     Dj <- D2,
+                                     Elem <- [intersection(Di, Dj)],
+                                     not(Elem =:= none)])};
+intersection({sum, D1}, D) ->
+    {sum, ordsets:from_list([Elem || Di <- D1,
+                                     Elem <- [intersection(D, Di)],
+                                     not(Elem =:= none)])};
 intersection(D, {sum, D1}) -> intersection({sum, D1}, D);
 
-intersection(L1, L2) when is_list(L1) andalso is_list(L2) andalso length(L1) =:= length(L2) ->
-    propagate_none([intersection(E1, E2) || {E1, E2} <- lists:zip(L1, L2)]);
+% For two lists where one is a prefix of the other, the intersection is the
+% shorter list. For example, the intersection of `[1, 2]` and `[1, 2, 3]` would
+% be `[1, 2]`
+intersection(L1, L2) when is_list(L1) andalso is_list(L2) ->
+    Length = min(length(L1), length(L2)),
+    LL1 = lists:sublist(L1, Length),
+    LL2 = lists:sublist(L2, Length),
+    propagate_none([intersection(E1, E2) || {E1, E2} <- lists:zip(LL1, LL2)]);
 
-intersection({tagged, Tag, D1}, {tagged, Tag, D2}) -> 
+intersection({tagged, Tag, D1}, {tagged, Tag, D2}) ->
     propagate_none({tagged, Tag, intersection(D1, D2)});
 intersection(D1, D2) when is_map(D1), is_map(D2) -> propagate_none(intersect_map(D1, D2));
 
 intersection(_, _) -> none.
 
-propagate_none(Map) when is_map(Map) -> 
+propagate_none(Map) when is_map(Map) ->
     case lists:member(none, maps:values(Map)) of
         true -> none;
         false -> Map
     end;
-propagate_none(List) when is_list(List) -> 
+propagate_none(List) when is_list(List) ->
     case lists:member(none, List) of
         true -> none;
         false -> List
     end;
-propagate_none({tagged, T, Map}) when is_map(Map) -> 
-    case lists:member(none, maps:values(Map)) of
-        true -> none;
-        false -> {tagged, T, Map}
+propagate_none({tagged, _, D} = Term) ->
+    case propagate_none(D) of
+        none    -> none;
+        _       -> Term
     end;
 propagate_none(D) -> D.
 
