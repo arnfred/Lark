@@ -128,43 +128,39 @@ clause({GlobalScope, LocalScope} = Scopes, History, ArgDomains, {clause, Ctx, Pa
 
 expand_clause({GlobalScope, LocalScope}, History, Patterns, Expr, Ctx) -> 
     ClauseEnv = utils:merge([env(P) || P <- Patterns]),
-    case lists:any(fun(Term) -> element(1, Term) =:= no_match_possible end, lists:flatten(Patterns)) of
-        true    -> {ok, {#{}, []}};
-        false   ->
-            ClauseScope = maps:merge(LocalScope, ClauseEnv),
-            case expr(GlobalScope, ClauseScope, History, Expr) of
-                {error, Errs}           -> {error, Errs};
-                {ok, {Env, ExprTree}}   -> ClauseCtx = maps:put(domain, domain(ExprTree), Ctx),
-                                           {ok, {Env, {clause, ClauseCtx, Patterns, ExprTree}}}
-            end
+    ClauseScope = maps:merge(LocalScope, ClauseEnv),
+    case expr(GlobalScope, ClauseScope, History, Expr) of
+        {error, Errs}           -> {error, Errs};
+        {ok, {Env, ExprTree}}   -> ClauseCtx = maps:put(domain, domain(ExprTree), Ctx),
+                                   {ok, {Env, {clause, ClauseCtx, Patterns, ExprTree}}}
     end.
 
 
 
-pattern_pre(_, Domain, {tagged, Ctx, Path, Expr}) ->
+pattern_pre(_, Domain, {tagged, Ctx, Path, Expr} = Term) ->
     case domain:intersection(Domain, {tagged, Path, any}) of
         {sum, Ds}                   -> ExprDomain = domain:union([D || {tagged, _, D} <- Ds]),
                                        {ok, {tagged, Ctx, Path, set_domain(Expr, ExprDomain)}};
         {tagged, Path, ExprDomain}  -> {ok, {tagged, Ctx, Path, set_domain(Expr, ExprDomain)}};
-        _                           -> {skip, {no_match_possible, Ctx, Domain}}
+        _                           -> {skip, [set_domain(Term, none)]}
     end;
 
-pattern_pre(_, Domain, {dict, Ctx, Elems}) ->
+pattern_pre(_, Domain, {dict, Ctx, Elems} = Term) ->
     Keys = [symbol:name(E) || E <- Elems],
     case domain:intersection(Domain, maps:from_list(zip(Keys, [any || _ <- Elems]))) of
         {sum, MapDs}        -> Ds = [domain:union([maps:get(K, D) || D <- MapDs]) || K <- Keys],
                                {ok, {dict, Ctx, [set_domain(E, D) || {E, D} <- zip(Elems, Ds)]}};
         M when is_map(M)    -> Ds = [maps:get(K, M) || K <- Keys],
                                {ok, {dict, Ctx, [set_domain(E, D) || {E, D} <- zip(Elems, Ds)]}};
-        _                   -> {skip, {no_match_possible, Ctx, Domain}}
+        _                   -> {skip, [set_domain(Term, none)]}
     end;
 
-pattern_pre(_, Domain, {list, Ctx, Elems}) ->
+pattern_pre(_, Domain, {list, Ctx, Elems} = Term) ->
     case domain:intersection(Domain, [any || _ <- Elems]) of
         {sum, ListDs}       -> Ds = [domain:union(L) || L <- pivot(ListDs)],
                                {ok, {list, Ctx, [set_domain(E, D) || {E, D} <- zip(Elems, Ds)]}};
         Ds when is_list(Ds) -> {ok, {list, Ctx, [set_domain(E, D) || {E, D} <- zip(Elems, Ds)]}};
-        _                   -> {skip, {no_match_possible, Ctx, Domain}}
+        _                   -> {skip, [set_domain(Term, none)]}
     end;
 
 pattern_pre(_, Domain, {sum, Ctx, Elems}) -> {ok, {sum, Ctx, [set_domain(E, Domain) || E <- Elems]}};
@@ -365,7 +361,7 @@ post(expr, Scopes, History, {beam_application, _Ctx, _Path, _Name, _Args} = Term
 
 % Expr/Patterns of type `T: S`
 post(_, _, _, {tagged, _, Path, Expr} = Term) ->
-    {ok, {#{}, set_domain(Term, domain({tagged, Path, Expr}))}};
+    {ok, {#{}, set_domain(Term, {tagged, Path, domain(Expr)})}};
 
 
 
@@ -385,6 +381,12 @@ post(_, _, _, {sum, _, Elems} = Term) ->
 post(_, _, _, {dict, _, Elems} = Term) ->
     Domain = maps:from_list([{symbol:name(E), domain(E)} || E <- Elems]),
     {ok, {#{}, set_domain(Term, Domain)}};
+
+
+
+% Dict key/val pattern of type `k: v`
+post(pattern, {GlobalScope, LocalScope}, History, {pair, Ctx, {keyword, _, Key}, Val} = Term) ->
+    {ok, {#{}, set_domain(Term, domain(Val))}};
 
 
 

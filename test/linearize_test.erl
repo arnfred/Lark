@@ -107,8 +107,28 @@ clause_subset_test_() ->
     Res = linearize(Code, f),
     [?test({ok, {'fun', _, [{clause, _, [{value, _, _, 1}, {value, _, _, 2}],
                              {value, _, _, 3}}]}},
-           tree(Res, [1, 2]))].
+           tree(Res, [1, 2])),
+     ?testError({arguments_not_subset_of_clauses, [any, any], _}, tree(Res, [any, any]))].
 
+pattern_sum_arg_test_() ->
+    Code = "def t (T: a) -> a
+                  {a: 5} -> 5
+                  [6, 7] -> 8
+                  _      -> 99",
+    Res = linearize(Code, t),
+    [?test({ok, 4}, domain(Res, [{tagged, [t, 'T'], 4}])),
+     ?test({ok, {sum, [4, 44, 99]}}, domain(Res, [{sum, ordsets:from_list([{tagged, [t, 'T'], 4},
+                                                                           {tagged, [t, 'T'], 44},
+                                                                           {tagged, [s, 'T'], 6},
+                                                                           6])}])),
+     ?test({ok, 5}, domain(Res, [#{a => 5}])),
+     ?test({ok, {sum, [5, 99]}}, domain(Res, [{sum, ordsets:from_list([#{a => 5},
+                                                                       #{b => 6},
+                                                                       7])}])),
+     ?test({ok, 8}, domain(Res, [[6, 7]])),
+     ?test({ok, {sum, [8, 99]}}, domain(Res, [{sum, ordsets:from_list([[4, 5],
+                                                                       [6, 7],
+                                                                       8])}]))].
 
 
 
