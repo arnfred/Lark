@@ -82,7 +82,7 @@ dict_value_test_() ->
     ?test(#{f := {def, _, f,
                   {'fun', _,
                    [{clause, _,
-                     [{variable, _, d, D},
+                     [{variable, _, d, _D},
                       {variable, _, a, _A}],
                      {dict, _,
                       [{keyword, _, a}]}}]}}}, Defs).
@@ -128,15 +128,15 @@ complex_sum_syntax_test_() ->
 
 simple_product_type_test_() ->
     Code =
-        "def t -> Banana | Trees
-         def monkey (Monkey: { food: t/Banana, plant: t/Trees }) -> t/Banana",
+        "def t -> Banana | Trees | (Monkey: 'any')
+         def monkey (t/Monkey: { food: t/Banana, plant: t/Trees }) -> t/Banana",
     Defs = tag(Code),
     [?test(#{'monkey' := {def,_,
                           monkey,
                           {'fun',_,
                            [{clause,_,
                              [{tagged,_,
-                               [monkey,'Monkey'],
+                               [source, test_code, t, 'Monkey'],
                                {dict,_,
                                 [{pair,_,
                                   {keyword,_,
@@ -164,7 +164,7 @@ complex_type_test_() ->
     Defs = tag(Code),
     [?test(#{'booleanList' := {def,_,'booleanList',
                                {sum,_,
-                                [{tagged,_,['booleanList','Cons'],
+                                [{tagged,_,[source, test_code, 'booleanList','Cons'],
                                   {dict,_,
                                    [{pair,_,
                                      {keyword,_,value},
@@ -268,3 +268,13 @@ local_constant_test_() ->
     Defs = tag(Code),
     [?test(#{'s' := {def, _, 's', {keyword, _, [source, test_code, 't'], 'A'}}}, Defs),
      ?test(#{'r' := {def, _, 'r', {keyword, _, [source, test_code, 't'], 'A'}}}, Defs)].
+
+tagged_type_test_() ->
+    Code = "def tagged-type -> (T: 4 | 5)
+            import tagged-type/_
+            def t (T: 4) -> 4",
+    Defs = tag(Code),
+    [?test(#{'t' := {def, _, 't', {'fun', _,
+                                   [{clause, _,
+                                    [{tagged, _, [source, test_code, 'tagged-type', 'T'], {value, _, integer, 4}}],
+                                    {value, _, integer, 4}}]}}}, Defs)].

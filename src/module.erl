@@ -43,7 +43,7 @@ root_module_and_types(FileName, RootPath, RootImports, Types, DefList) ->
     RootName = kind_name(RootPath),
     Ctx = #{filename => FileName, line => 0, module => RootName},
     Defs = maps:from_list([{Name, Def} || {_, _, Name, _} = Def <- DefList]),
-    SubDefs = sub_defs(Types, Defs),
+    SubDefs = sub_defs(Types),
     Exports = maps:from_list([{Name, {export, DefCtx, [Name], none}} || {_, DefCtx, Name, _} <- DefList]),
     {tag_symbols({module, Ctx, RootPath, RootImports, Exports, maps:merge(SubDefs, Defs)}), Types}.
 
@@ -62,7 +62,7 @@ parse_module({module, ModuleCtx, Path, Exports, Statements},
 
             Types = maps:merge(RootTypes, LocalTypes),
             GlobalDefMap = maps:merge(RootDefMap, LocalDefMap),
-            SubDefMap = sub_defs(LocalTypes, LocalDefMap),
+            SubDefMap = sub_defs(LocalTypes),
 
             case error:collect([parse_export(E, Types, GlobalDefMap) || E <- Exports]) of
                 {error, Errs}       -> {error, Errs};
@@ -88,11 +88,8 @@ parse_module({module, ModuleCtx, Path, Exports, Statements},
             end
     end.
 
-sub_defs(Types, DefMap) ->
-    SubTypeEnv = maps:from_list([{symbol:tag(T), T}
-                                 || {tagged, _, _, _} = T <- lists:flatten(maps:values(Types))]),
-    TypeEnv = maps:merge(DefMap, SubTypeEnv),
-    maps:from_list([{sub_symbol(Parent, Child), tagged_gen:term(TypeEnv, Term)} ||
+sub_defs(Types) ->
+    maps:from_list([{sub_symbol(Parent, Child), tagged_gen:term(Term)} ||
                     {Parent, Children} <- maps:to_list(Types), {Child, Term} <- Children]).
 
 % For each export we transform the term to an `export` term and check that if
@@ -250,7 +247,7 @@ keywords(Imported, P, Terms, BasePath) ->
            ({symbol, Ctx, keyword, S}) ->
                 {keyword, Ctx, BasePath ++ [maps:get(parent, Ctx)], S};
            ({tagged, Ctx, Path, Term}) ->
-                {tagged, Ctx, BasePath ++ Path, Term}
+                {tagged, Ctx, Path, Term}
         end,
 
     [{symbol:name(T), F(T)} || T <- Terms].

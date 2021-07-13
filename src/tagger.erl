@@ -44,7 +44,7 @@ tag_macros(_, Scope, {application, _, {symbol, Ctx, _, S}, Args} = Term) ->
 tag_macros(_, _, _) -> ok.
 
 % Step 2: Build local scope of all top-level module definitions
-tag_def(Tag, {def, _, _, _} = Def, Path) ->
+tag_def(Tag, {def, _, _, _}, Path) ->
     {qualified_symbol, #{}, Path, Tag};
 tag_def(_, {keyword, _, _, _} = Keyword, _) -> Keyword;
 tag_def(_, {link, _, Path, Symbol}, _) -> {qualified_symbol, #{}, Path, Symbol}.
@@ -79,6 +79,17 @@ tag_symbols(Type, Scope, {qualified_symbol, _, Symbols} = Term) ->
     case maps:is_key(Tag, Scope) of
         false   -> error:format({undefined_symbol, Tag}, {tagger, Type, Term});
         true    -> {ok, replace(Scope, Tag, Term)}
+    end;
+
+tag_symbols(Type, Scope, {tagged, Ctx, Path, Expr} = Term) ->
+    Tag = symbol:tag(Path),
+    case maps:get(Tag, Scope, maps:get(lists:last(Path), Scope, undefined)) of
+        undefined                           -> error:format({undefined_symbol, Tag},
+                                                            {tagger, Type, Term});
+        {qualified_symbol, _, ModPath, Key} -> NewPath = ModPath ++ symbol:path(Key),
+                                               {ok, {tagged, Ctx, NewPath, Expr}};
+        Keyword                             -> error:format({misdefined_symbol, Tag, Keyword},
+                                                            {tagger, Type, Term})
     end;
 
 tag_symbols(_, _, _) -> ok.

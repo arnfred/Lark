@@ -1,33 +1,28 @@
 -module(tagged_gen).
--export([term/2]).
+-export([term/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
-term(TypesEnv, {tagged, Ctx, Path, Val} = Term) -> tagged(Path, Ctx, term(TypesEnv, symbol:name(Term), Val));
-term(TypesEnv, Term) -> term(TypesEnv, symbol:name(Term), Term).
+term({tagged, Ctx, Path, Val} = Term) -> tagged(Path, Ctx, term(symbol:name(Term), Val));
+term(Term) -> term(symbol:name(Term), Term).
 
-term(_, _, {link, _, _} = Term) -> Term;
-term(_, Tag, {keyword, _, _, _} = Term) -> Term;
-term(TypesEnv, Tag, Term) ->
+term(_, {link, _, _} = Term) -> Term;
+term(_Tag, {keyword, _, _, _} = Term) -> Term;
+term(Tag, Term) ->
     Ctx = element(2, Term),
-    case domain:is_literal(TypesEnv, Term) of
-        % For literals we generate a function with no arguments that return the domain
-        true    -> {def, Ctx, Tag, Term};
-        % For non literals, we replace the non-literal components with function arguments
-        false   -> {def, Ctx, Tag, sub(TypesEnv, Ctx, Term)}
-    end.
+    {def, Ctx, Tag, sub(Ctx, Term)}.
 
 
-sub(TypesEnv, Ctx, {list, ListCtx, Elems}) -> 
-    {Args, Patterns, Terms} = substitute_domains(TypesEnv, Elems),
+sub(Ctx, {list, ListCtx, Elems}) ->
+    {Args, Patterns, Terms} = substitute_domains(Elems),
     {'fun', Ctx, [{clause, Ctx, patterns(Args, Patterns, Ctx), {list, ListCtx, Terms}}]};
 
-sub(TypesEnv, Ctx, {dict, DictCtx, Elems}) -> 
-    {Args, Patterns, Terms} = substitute_domains(TypesEnv, Elems),
+sub(Ctx, {dict, DictCtx, Elems}) ->
+    {Args, Patterns, Terms} = substitute_domains(Elems),
     {'fun', Ctx, [{clause, Ctx, patterns(Args, Patterns, Ctx), {dict, DictCtx, Terms}}]};
 
-sub(_TypesEnv, Ctx, {sum, SumCtx, Elems}) -> 
+sub(Ctx, {sum, SumCtx, Elems}) ->
 	Arg = {symbol, Ctx, variable, arg(1)},
     Defs = [{[Arg], [E], Arg} || E <- Elems],
     MakeClause = fun(Args, Patterns, Body) -> 
@@ -36,7 +31,7 @@ sub(_TypesEnv, Ctx, {sum, SumCtx, Elems}) ->
     Clauses = [MakeClause(Args, Patterns, Body) || {Args, Patterns, Body} <- Defs],
     {'fun', Ctx, Clauses};
 
-sub(_, Ctx, Term) ->
+sub(Ctx, Term) ->
     TermCtx = element(2, Term),
     Var = symbol:id(substituted),
     VarTerm = {symbol, TermCtx, variable, Var},
@@ -53,29 +48,21 @@ tagged(Path, TagCtx, Term) -> {tagged, TagCtx, Path, Term}.
 
 patterns(Args, Patterns, Ctx) -> [{pair, Ctx, A, sanitize_pattern(P)} || {A, P} <- lists:zip(Args, Patterns)].
 
-substitute_domains(TypesEnv, Elems) -> substitute_domains(TypesEnv, Elems, 1, [], [], []).
+substitute_domains(Elems) -> substitute_domains(Elems, 1, [], [], []).
 
-substitute_domains(_, [], _, Args, Patterns, Terms) ->
+substitute_domains([], _, Args, Patterns, Terms) ->
     {lists:reverse(Args),
      lists:reverse(Patterns),
      lists:reverse(Terms)};
 
-substitute_domains(TypesEnv, [{pair, Ctx, Key, Val} = Pair | Rest], N, Args, Patterns, Terms) ->
-    case domain:is_literal(TypesEnv, Val) of
-        true -> substitute_domains(TypesEnv, Rest, N, Args, Patterns, [Pair | Terms]);
-        false ->
-            Arg = {symbol, symbol:ctx(Val), variable, arg(N)},
-            ArgPair = {pair, Ctx, Key, Arg},
-            substitute_domains(TypesEnv, Rest, N+1, [Arg | Args], [Val | Patterns], [ArgPair | Terms])
-    end;
+substitute_domains([{pair, Ctx, Key, Val} | Rest], N, Args, Patterns, Terms) ->
+    Arg = {symbol, symbol:ctx(Val), variable, arg(N)},
+    ArgPair = {pair, Ctx, Key, Arg},
+    substitute_domains(Rest, N+1, [Arg | Args], [Val | Patterns], [ArgPair | Terms]);
 
-substitute_domains(TypesEnv, [Term | Rest], N, Args, Patterns, NewTerms) ->
-    case domain:is_literal(TypesEnv, Term) of
-        true -> substitute_domains(TypesEnv, Rest, N, Args, Patterns, [Term | NewTerms]);
-        false ->
-            Arg = {symbol, symbol:ctx(Term), variable, arg(N)},
-            substitute_domains(TypesEnv, Rest, N+1, [Arg | Args], [Term | Patterns], [Arg | NewTerms])
-    end.
+substitute_domains([Term | Rest], N, Args, Patterns, NewTerms) ->
+    Arg = {symbol, symbol:ctx(Term), variable, arg(N)},
+    substitute_domains(Rest, N+1, [Arg | Args], [Term | Patterns], [Arg | NewTerms]).
 
 % When we substitute an expression for a variable, we use the expression as a
 % pattern guard in the generated function. To give an example, the generated function for `S: Boolean` is:
@@ -113,11 +100,10 @@ arg(N) -> list_to_atom("substituted_" ++ integer_to_list(N)).
 
 -ifdef(TEST).
 
--define(setup(Term, Tests), {setup, fun() -> term(#{}, Term) end, fun clean/1, Tests}).
--define(setup(Term, TypesEnv, Tests), {setup, fun() -> load(Term, TypesEnv) end, fun clean/1, Tests}).
+-define(setup(Term, Tests), {setup, fun() -> load(Term) end, fun clean/1, Tests}).
 
-load(Term, TypesEnv) ->
-    case term(TypesEnv, Term) of
+load(Term) ->
+    case term(Term) of
         {error, Errs}       	-> {error, Errs};
         {ok, {Export, _} = Def} ->
             ModuleForm = cerl:c_module(cerl:c_atom(tagged), [Export], [], [Def]),

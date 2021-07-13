@@ -64,6 +64,12 @@ tagged_post(_, _, {pair, Ctx, {symbol, _, keyword, Name}, Val} = Term) ->
         true    -> {ok, {tagged, Ctx, [Name], Val}};
         false   -> {ok, {tagged, Ctx, [Parent, Name], Val}}
     end;
+tagged_post(_, _, {pair, Ctx, {qualified_symbol, _, Symbols}, Val} = Term) ->
+    case lists:last(Symbols) of
+        {symbol, _, keyword, _} -> Path = [S || {symbol, _, _, S} <- Symbols],
+                                   {ok, {tagged, Ctx, Path, Val}};
+        _                       -> {ok, Term}
+    end;
 tagged_post(_, _, _) -> ok.
 tagged_values(AST) ->
     ast:traverse(fun tagged_pre/3, fun tagged_post/3, AST).

@@ -145,7 +145,7 @@ subtype_test_() ->
 
 subtype_tagged_test_() ->
     ?setup("test/file.kind",
-           "def t -> R: A",
+           "def t -> (R: A)",
            fun({ok, Modules}) ->
                    [?test(#{[source, test, file] :=
                             {module, _, _, _, _,
@@ -153,7 +153,12 @@ subtype_tagged_test_() ->
                                        {tagged, _, ['t', 'R'], {symbol, _, keyword, 'A'}}},
                                't/A' := {keyword, _, [source, test, file, t], 'A'},
                                't/R' := {def, _, 'R',
-                                         {tagged, _, [source, test, file, 't', 'R'], {symbol, _, keyword, 'A'}}}}}}, Modules),
+                                         {'fun', _,
+                                          [{clause, _,
+                                            [{pair, _,
+                                              {symbol, _, variable, Subst},
+                                              {symbol, _, keyword, 'A'}}],
+                                            {tagged, _, ['t', 'R'], {symbol, _, variable, Subst}}}]}}}}}, Modules),
                     ?test(#{['source', 'test', 'file', 't'] :=
                             {module,
                              #{line := 1},
