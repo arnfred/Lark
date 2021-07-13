@@ -1,6 +1,6 @@
-type Args -> (A | B | C)
+def args -> A | B | C
 
 def rotate
- | Args/A -> Args/B
- | Args/B -> Args/C
- | Args/C -> Args/A
+   args/A -> args/B
+   args/B -> args/C
+   args/C -> args/A
