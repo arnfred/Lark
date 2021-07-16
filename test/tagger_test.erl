@@ -253,8 +253,7 @@ tag_sub_module_test_() ->
            {'fun', _,
             [{clause, _,
               [{pair, _, {variable, _, _, Sub1}, {variable, _, a, _}},
-               {pair, _, {variable, _, _, Sub2}, {application, _,
-                                                  {variable, _, 'list', _},
+               {pair, _, {variable, _, _, Sub2}, {qualified_application, _, [source, test_code], list,
                                                   [{keyword, _, '_'}]}}],
               {tagged, _, [source, test_code, 'list', 'Cons'],
                {dict, _, [{pair, _, {keyword, _, head}, {variable, _, _, Sub1}},
@@ -278,3 +277,15 @@ tagged_type_test_() ->
                                    [{clause, _,
                                     [{tagged, _, [source, test_code, 'tagged-type', 'T'], {value, _, integer, 4}}],
                                     {value, _, integer, 4}}]}}}, Defs)].
+
+def_tag_test_() ->
+    Code = "def d a -> {a: a}
+            def f (b: d(T)) -> b",
+    Defs = tag(Code),
+    [?test(#{'f' := {def, _, 'f', {'fun', _,
+                                   [{clause, _,
+                                     [{pair, _,
+                                       {variable, _, b, B},
+                                       {qualified_application, _, [source, test_code], d,
+                                        [{keyword, _, _, 'T'}]}}],
+                                     {variable, _, b, B}}]}}}, Defs)].

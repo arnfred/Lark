@@ -8,16 +8,17 @@ linearize(Code, Name) ->
         {error, Errs} -> {error, Errs};
         {ok, Modules} ->
             ModuleMap = maps:from_list([{module:path(M), M} || M <- Modules]),
-            {module, _, _, _, _, Defs} = maps:get([source, test_code], ModuleMap),
+            ModulePath = [source, test_code],
+            {module, _, _, _, _, Defs} = maps:get(ModulePath, ModuleMap),
             Term = maps:get(Name, Defs),
             linearize:term(Term, ModuleMap)
     end.
 
-tree(Def, Args) -> error:flatmap(Def, fun({_, {def, _, _, F}}) ->
+tree(Def, Args) -> error:flatmap(Def, fun({_, F}) ->
                                               error:map(F(Args, []), fun({_, Tree}) -> Tree end)
                                       end).
 
-env(Def, Args) -> error:flatmap(Def, fun({_, {def, _, _, F}}) ->
+env(Def, Args) -> error:flatmap(Def, fun({_, F}) ->
                                               error:map(F(Args, []), fun({Env, _}) -> Env end)
                                       end).
 domain(Term, Args) -> error:map(tree(Term, Args), fun(Tree) ->
@@ -111,15 +112,18 @@ clause_subset_test_() ->
      ?testError({arguments_not_subset_of_clauses, [any, any], _}, tree(Res, [any, any]))].
 
 pattern_sum_arg_test_() ->
-    Code = "def t (T: a) -> a
+    Code = "def a -> (T: Q)
+            import a/T
+            def t (T: v) -> v
                   {a: 5} -> 5
                   [6, 7] -> 8
                   _      -> 99",
     Res = linearize(Code, t),
-    [?test({ok, 4}, domain(Res, [{tagged, [t, 'T'], 4}])),
-     ?test({ok, {sum, [4, 44, 99]}}, domain(Res, [{sum, ordsets:from_list([{tagged, [t, 'T'], 4},
-                                                                           {tagged, [t, 'T'], 44},
-                                                                           {tagged, [s, 'T'], 6},
+    Tag = [source, test_code, a, 'T'],
+    [?test({ok, 4}, domain(Res, [{tagged, Tag, 4}])),
+     ?test({ok, {sum, [4, 44, 99]}}, domain(Res, [{sum, ordsets:from_list([{tagged, Tag, 4},
+                                                                           {tagged, Tag, 44},
+                                                                           {tagged, [t, 'T'], 6},
                                                                            6])}])),
      ?test({ok, 5}, domain(Res, [#{a => 5}])),
      ?test({ok, {sum, [5, 99]}}, domain(Res, [{sum, ordsets:from_list([#{a => 5},
@@ -130,6 +134,17 @@ pattern_sum_arg_test_() ->
                                                                        [6, 7],
                                                                        8])}]))].
 
+pattern_application_test_() ->
+    Code = "def d a -> {b: a}
+            def t (a: d(T)) -> a",
+    Res = linearize(Code, t),
+    [?test({ok, {'fun', _, [{clause, _,
+                             [{dict, _, [{pair, _, {keyword, _, b}, {value, _, atom, 'source/test_code/t/T'}}]}],
+                             {dict, _,
+                              [{pair, _,
+                                {keyword, _, b},
+                                {value, _, atom, 'source/test_code/t/T'}}]}}]}}, 
+           tree(Res, [#{b => 'source/test_code/t/T'}]))].
 
 
 

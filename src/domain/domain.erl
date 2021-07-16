@@ -1,6 +1,6 @@
 -module(domain).
 -export([diff/2, union/1, union/2, intersection/1, intersection/2, function/1,
-         unroll/2, normalize/1, subset/2, lookup/2, expand/2, is_literal/2,
+         unroll/2, normalize/1, subset/2, lookup/2, expand/2, is_literal/1,
          to_term/2]).
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("test/macros.hrl").
@@ -49,50 +49,28 @@ expand_(N, S) -> case ordsets:is_set(S) of
 % create a function domain matching any function
 function(N) -> utils:function(N, fun(_) -> any end).
 
-is_literal(_TypesEnv, any)                                      -> false;
-is_literal(_TypesEnv, none)                                     -> false;
-is_literal(_TypesEnv, {value, _, _, _})                         -> true;
-is_literal(_TypesEnv, D) when is_atom(D)                        -> true;
-is_literal(_TypesEnv, N) when is_number(N)                      -> true;
-is_literal(_TypesEnv, S) when is_binary(S)                      -> true;
-is_literal(_TypesEnv, F) when is_function(F)                    -> false;
-is_literal(_TypesEnv, {sum, _})                                 -> false;
-is_literal(_TypesEnv, {variable, _, _, _})                      -> false;
-is_literal(TypesEnv, L) when is_list(L)         -> lists:all(fun(E) -> is_literal(TypesEnv, E) end, L);
-is_literal(TypesEnv, M) when is_map(M)          -> lists:all(fun(E) -> is_literal(TypesEnv, E) end, maps:values(M));
-is_literal(_TypesEnv, {symbol, _, variable, _})                 -> false;
-is_literal(_TypesEnv, {keyword, _, _, _})                       -> false;
-is_literal(_TypesEnv, {application, _, _, _})                   -> false;
-is_literal(_TypesEnv, {sum, _, _})                              -> false;
-is_literal(TypesEnv, {link, _, Term})                          -> is_literal(TypesEnv, Term);
-is_literal(TypesEnv, {list, _, Elems})          -> lists:all(fun(E) -> is_literal(TypesEnv, E) end, Elems);
-is_literal(TypesEnv, {dict, _, Elems})          -> lists:all(fun(E) -> is_literal(TypesEnv, E) end, Elems);
-is_literal(TypesEnv, {tuple, _, Elems})         -> lists:all(fun(E) -> is_literal(TypesEnv, E) end, Elems);
-is_literal(TypesEnv, {pair, _, _, Val})         -> is_literal(TypesEnv, Val);
-is_literal(TypesEnv, {dict_pair, _, _, Val})    -> is_literal(TypesEnv, Val);
-is_literal(TypesEnv, {tagged, _, _, Val})       -> is_literal(TypesEnv, Val);
-is_literal(TypesEnv, {symbol, _, _, _} = T)     -> not(maps:is_key(symbol:tag(T), TypesEnv));
-is_literal(TypesEnv, {qualified_symbol, Ctx, ModulePath, Name}) ->
-    case module:kind_name(ModulePath) of
-        'kind/domain/Domain' -> false;
-        _                    ->
-            ModuleName = module:beam_name(ModulePath),
-            case erlang:function_exported(ModuleName, Name, 0) of
-                false   -> false;
-                true    -> Domain = erlang:apply(ModuleName, Name, []),
-                           is_literal(TypesEnv, utils:domain_to_term(Domain, Ctx))
-            end
-    end.
+is_literal(any)                          -> false;
+is_literal(none)                         -> false;
+is_literal(D) when is_atom(D)            -> true;
+is_literal(N) when is_number(N)          -> true;
+is_literal(S) when is_binary(S)          -> true;
+is_literal(F) when is_function(F)        -> false;
+is_literal({sum, _})                     -> false;
+is_literal(L) when is_list(L)            -> lists:all(fun(E) -> is_literal(E) end, L);
+is_literal(M) when is_map(M)             -> lists:all(fun(E) -> is_literal(E) end, maps:values(M));
+is_literal( {sum, _, _})                 -> false;
+is_literal({tagged, _, Val})             -> is_literal(Val).
 
 to_term(Domain, Ctx) -> to_term_(Domain, maps:put(domain, Domain, Ctx)).
 to_term_(Domain, Ctx) when is_list(Domain) -> {list, Ctx, [to_term(D, Ctx) || D <- Domain]};
 to_term_(Domain, Ctx) when is_map(Domain) -> {dict, Ctx, [{pair, Ctx, {keyword, Ctx, K}, to_term(D, Ctx)}
                                                           || {K, D} <- maps:to_list(Domain)]};
+to_term_({tagged, Path, Val}, Ctx) -> {tagged, Ctx, Path, to_term(Val, Ctx)};
+to_term_({sum, Elems}, Ctx) -> {sum, Ctx, [to_term(E, Ctx) || E <- Elems]};
 to_term_(Domain, Ctx) when is_atom(Domain) -> {value, Ctx, atom, Domain};
 to_term_(Domain, Ctx) when is_integer(Domain) -> {value, Ctx, integer, Domain};
 to_term_(Domain, Ctx) when is_float(Domain) -> {value, Ctx, float, Domain};
-to_term_(Domain, Ctx) when is_binary(Domain) -> {value, Ctx, string, Domain};
-to_term_({tagged, Path, Val}, Ctx) -> {tagged, Ctx, Path, Val}.
+to_term_(Domain, Ctx) when is_binary(Domain) -> {value, Ctx, string, Domain}.
 
 
 -ifdef(TEST).

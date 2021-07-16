@@ -56,8 +56,14 @@ tag_symbols(expr, Scope, {symbol, _, variable, S} = Term) ->
         false   -> error:format({undefined_symbol, S}, {tagger, expr, Term});
         true    -> {ok, replace(Scope, S, Term)}
     end;
-tag_symbols(pattern, _Scope, {symbol, Ctx, variable, S} = Term) ->
-    {ok, S, {variable, Ctx, S, symbol:id([ast:get_tag(parent, Term), S])}};
+tag_symbols(pattern, Scope, {symbol, Ctx, variable, S} = Term) ->
+    case maps:get(S, Scope, undefined) of
+        % If variable is a qualified symbol (i.e. a def), replace it
+        {qualified_symbol, _, _, _} -> {ok, replace(Scope, S, Term)};
+        % Otherwise create it
+        _                           -> {ok, S, {variable, Ctx, S, symbol:id([ast:get_tag(parent, Term), S])}}
+    end;
+
 
 tag_symbols(_, _, {symbol, Ctx, keyword, '_'}) -> {ok, {keyword, Ctx, '_'}};
 tag_symbols(Type, Scope, {symbol, Ctx, keyword, S} = Term) ->
