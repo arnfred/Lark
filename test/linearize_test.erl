@@ -147,4 +147,12 @@ pattern_application_test_() ->
            tree(Res, [#{b => 'source/test_code/t/T'}]))].
 
 
-
+pattern_application_sum_test_() ->
+    Code = "def d -> X | Y
+            def t (a: d()) -> a",
+    Res = linearize(Code, t),
+    [?test({ok, {'fun', _, [{clause, _, [{value, _, atom, 'source/test_code/d/X'}],
+                                        {value, _, atom, 'source/test_code/d/X'}},
+                            {clause, _, [{value, _, atom, 'source/test_code/d/Y'}],
+                                        {value, _, atom, 'source/test_code/d/Y'}}]}},
+           tree(Res, [{sum, ['source/test_code/d/X', 'source/test_code/d/Y']}]))].

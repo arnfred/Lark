@@ -90,7 +90,7 @@ expr(GlobalScope, LocalScope, History, Term) ->
 %   Errors: Only if there's no intersection between domains in for example
 %           pattern applications
 pattern(GlobalScope, LocalScope, History, Domain, Term) -> 
-    Pre = fun(_, LclScp, T) -> pattern_pre({GlobalScope, LclScp}, domain(T), T) end,
+    Pre = fun(_, _, T) -> pattern_pre(History, domain(T), T) end,
     Post = fun(Type, LclScp, T) -> pattern_post(Type, {GlobalScope, LclScp}, History, T) end,
     case ast:traverse_term(pattern, Pre, Post, LocalScope, set_domain(Term, Domain)) of
         {error, Errs}       -> {error, Errs};
@@ -208,11 +208,14 @@ pattern_pre(_, Domain, {variable, _, _, _} = Term) ->
 pattern_pre(_, Domain, {application, Ctx, Expr, Args}) ->
     {ok, set_domain({application, Ctx, set_domain(Expr, any), [set_domain(A, any) || A <- Args]}, Domain)};
 
-pattern_pre(_, _, {qualified_application, Ctx, ModulePath, Name, Args}) ->
-    {ok, {qualified_application, Ctx, ModulePath, Name, [set_domain(A, any) || A <- Args]}};
+pattern_pre(_, Domain, {qualified_application, Ctx, ModulePath, Name, Args}) ->
+    {ok, set_domain({qualified_application, Ctx, ModulePath, Name, [set_domain(A, any) || A <- Args]}, Domain)};
 
-pattern_pre(_, _, {beam_application, Ctx, ModulePath, Name, Args}) ->
-    {ok, {beam_application, Ctx, ModulePath, Name, [set_domain(A, any) || A <- Args]}};
+pattern_pre(_, Domain, {beam_application, Ctx, ModulePath, Name, Args}) ->
+    {ok, set_domain({beam_application, Ctx, ModulePath, Name, [set_domain(A, any) || A <- Args]}, Domain)};
+
+pattern_pre(History, Domain, {qualified_symbol, Ctx, _, _} = Term) ->
+    error:format({unapplied_function_in_pattern, symbol:tag(Term)}, {linearize, Ctx, History});
 
 pattern_pre(_, Domain, {pair, Ctx, Key, Val}) ->
     {ok, {pair, Ctx, set_domain(Key, Domain), set_domain(Val, Domain)}}.
@@ -225,6 +228,16 @@ expr_pre(_, _, _) -> ok.
 
 
 post(expr, _, _, {def, _, _, {'fun', _, F}}) -> {ok, {#{}, F}};
+post(expr, _, _, {def, Ctx, _, Expr}) ->
+    F = fun(ArgDomains, History) ->
+            case length(ArgDomains) =:= 0 of
+                false   -> error:format({wrong_function_arity, 0, length(ArgDomains)},
+                                        {linearize, Ctx, History});
+                true    -> {ok, {#{}, Expr}}
+            end
+        end,
+    % A def with no clauses is linearized to a function with zero arguments.
+    {ok, {#{}, F}};
 
 % Expr of type `a b -> a + b` (e.g. a function)
 % When we linearize a def, we can compile several versions of the def in the
@@ -288,6 +301,28 @@ post(pattern, {GlobalScope, _}, History, {qualified_application, Ctx, Path, Name
 post(expr, {GlobalScope, _}, History, {qualified_application, Ctx, Path, Name, Args} = Term) ->
     F = maps:get(Path ++ [Name], GlobalScope),
     expr_apply(F, Args, Path ++ [Name], History, Ctx, Term);
+
+
+
+% Patterns of type `x.t(a, b, c)` where `x` is a beam function
+post(pattern, _, _History, {beam_application, Ctx, Path, Name, Args}) ->
+    ModuleName = module:beam_name(Path),
+    ArgDomains = [domain(A) || A <- Args],
+    Domain = case domain:is_literal(ArgDomains) of
+                 true    -> case import:is_whitelisted(ModuleName, Name) of
+                                true     -> erlang:apply(ModuleName, Name, ArgDomains);
+                                false    -> any
+                            end;
+                 false   -> any % TODO: Get type information for beam function
+             end,
+    {ok, {#{}, set_domain({value, Ctx, unknown, Domain}, Domain)}};
+
+% Expr of type `x.t(a, b, c)` where `x` is a beam function
+post(expr, Scopes, History, {beam_application, _Ctx, _Path, _Name, _Args} = Term) ->
+    case post(pattern, Scopes, History, Term) of
+        {error, Errs}               -> {error, Errs};
+        {ok, {value, _, _, Domain}} -> {ok, {#{}, set_domain(Term, Domain)}}
+    end;
 
 
 
@@ -355,28 +390,6 @@ post(expr, _, History, {application, Ctx, Expr, Args} = Term) ->
                                        {ok, {utils:union(Envs), set_domain(Term, Domain)}}
             end;
         F           -> Apply(F)
-    end;
-
-
-
-% Patterns of type `x.t(a, b, c)` where `x` is a beam function
-post(pattern, _, _History, {beam_application, Ctx, Path, Name, Args}) ->
-    ModuleName = module:beam_name(Path),
-    ArgDomains = [domain(A) || A <- Args],
-    Domain = case domain:is_literal(ArgDomains) of
-                 true    -> case import:is_whitelisted(ModuleName, Name) of
-                                true     -> erlang:apply(ModuleName, Name, ArgDomains);
-                                false    -> any
-                            end;
-                 false   -> any % TODO: Get type information for beam function
-             end,
-    {ok, {#{}, set_domain({value, Ctx, unknown, Domain}, Domain)}};
-
-% Expr of type `x.t(a, b, c)` where `x` is a beam function
-post(expr, Scopes, History, {beam_application, _Ctx, _Path, _Name, _Args} = Term) ->
-    case post(pattern, Scopes, History, Term) of
-        {error, Errs}               -> {error, Errs};
-        {ok, {value, _, _, Domain}} -> {ok, {#{}, set_domain(Term, Domain)}}
     end;
 
 
