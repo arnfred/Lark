@@ -185,8 +185,20 @@ arglist -> arg                                      : ['$1'].
 arglist -> arg comma                                : ['$1'].
 arglist -> arg comma arglist                        : ['$1' | '$3'].
 
+% Why can an arg be a pattern?
+% -- When parsing for example `f(g(a))`, the argument `g(a)` can be parsed
+%    either as a pattern or as an expression. Because `pattern` is declared as
+%    `nonassoc` it takes precedence over expression. This is a problem because
+%    the `fun` nonterminal starts with `pattern`, and when we don't list
+%    `pattern` as one of the options below and a pattern is parsed, the parser
+%    will expect the result of the `fun` syntax. By adding a `pattern` as one
+%    of the options, the parser can parse an `expression` that happens to also
+%    look like a `pattern` but isn't part of a `fun`.
+%    : '$1'.
+arg -> pattern                                      : '$1'.                                       
 arg -> expression                                   : '$1'.
 arg -> fun_decl fun                                 : '$2'.
+arg -> fun                                          : '$1'.
 
 infix -> leftbias_infix                             : '$1'.
 infix -> rightbias_infix                            : '$1'.

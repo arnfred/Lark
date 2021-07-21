@@ -45,8 +45,8 @@ tuple_test_() ->
 anonymous_function_test_() ->
     Code = 
         "def blip a -> a
-         def blap a -> a.blip(fn b -> b
-                                 _ -> a)",
+         def blap a -> a.blip(b -> b
+                              _ -> a)",
     Defs = tag(Code),
     [?test(#{blap := {def, _, blap,
                       {'fun', _,
