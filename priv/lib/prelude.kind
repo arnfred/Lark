@@ -22,8 +22,8 @@ def get ['tagged', _, domain] -> domain
 def compareTypes -> (GT | LT | EQ)
 import compare/_
 
-def compare a b -> (a > b).match(
+def compare a b -> (a > b).match(fn
     'true'  -> GT
-    'false' -> (a < b).match(
+    'false' -> (a < b).match(fn
         'false' -> EQ
         'true'  -> LT))

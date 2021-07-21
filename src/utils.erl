@@ -1,7 +1,7 @@
 -module(utils).
 -export([combinations/1, duplicates/2, group_by/2, group_by/3, unique/1, merge/1, pivot/1,
          domain_to_term/2, gen_tag/1, print_core/1, get_arity/1, get_arity/3, set/1, mapfun/2, mapfun/3,
-         function/2, get_min_arity/2]).
+         function/2, get_arities/2, get_min_arity/2, get_max_arity/2]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -81,7 +81,7 @@ get_arity(Path, Name, ModuleMap) ->
     {module, _, Path, _, _, Defs} = maps:get(Path, ModuleMap),
     case maps:get(Name, Defs) of
         {link, _, LinkPath, LinkName}   -> get_arity(LinkPath, LinkName, ModuleMap);
-        Def                             -> get_arity(maps:get(Name, Defs))
+        _                               -> get_arity(maps:get(Name, Defs))
     end.
 
 get_arities(Module, Name) ->
@@ -89,8 +89,10 @@ get_arities(Module, Name) ->
         false   -> [];
         true    -> proplists:get_all_values(Name, erlang:get_module_info(Module, exports))
     end.
- get_min_arity(Module, Name) ->
-     lists:foldl(fun min/2, none, get_arities(Module, Name)).
+get_min_arity(Module, Name) ->
+    lists:foldl(fun min/2, none, get_arities(Module, Name)).
+get_max_arity(Module, Name) ->
+    lists:foldl(fun max/2, 0, get_arities(Module, Name)).
 
 set(Elems) -> lists:foldl(fun ordsets:add_element/2, ordsets:new(), Elems).
 

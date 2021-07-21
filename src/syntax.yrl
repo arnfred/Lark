@@ -173,7 +173,7 @@ verb -> symbol                  : '$1'.
 verb -> qualified_symbol        : '$1'.
 verb -> literal                 : '$1'.
 
-application -> verb arguments                       : {application, ctx('$1'), '$1', '$2'}.
+application -> noun arguments                       : {application, ctx('$1'), '$1', '$2'}.
 application -> noun apply verb                      : {application, ctx('$1'), '$3', ['$1']}.
 application -> noun apply verb arguments            : {application, ctx('$1'), '$3', ['$1' | '$4']}.
 application -> infix                                : '$1'.
@@ -186,7 +186,6 @@ arglist -> arg comma                                : ['$1'].
 arglist -> arg comma arglist                        : ['$1' | '$3'].
 
 arg -> expression                                   : '$1'.
-arg -> fun                                          : '$1'.
 arg -> fun_decl fun                                 : '$2'.
 
 infix -> leftbias_infix                             : '$1'.

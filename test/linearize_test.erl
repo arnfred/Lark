@@ -14,11 +14,11 @@ linearize(Code, Name) ->
             linearize:term(Term, ModuleMap)
     end.
 
-tree(Def, Args) -> error:flatmap(Def, fun({_, F}) ->
+tree(Def, Args) -> error:flatmap(Def, fun({_, {'fun', _, F}}) ->
                                               error:map(F(Args, []), fun({_, Tree}) -> Tree end)
                                       end).
 
-env(Def, Args) -> error:flatmap(Def, fun({_, F}) ->
+env(Def, Args) -> error:flatmap(Def, fun({_, {'fun', _, F}}) ->
                                               error:map(F(Args, []), fun({Env, _}) -> Env end)
                                       end).
 domain(Term, Args) -> error:map(tree(Term, Args), fun(Tree) ->
@@ -156,3 +156,42 @@ pattern_application_sum_test_() ->
                             {clause, _, [{value, _, atom, 'source/test_code/d/Y'}],
                                         {value, _, atom, 'source/test_code/d/Y'}}]}},
            tree(Res, [{sum, ['source/test_code/d/X', 'source/test_code/d/Y']}]))].
+
+qualified_symbol_test_() ->
+    Code = "def d -> X | Y
+            def t -> (val f = d
+                      val q = (fn f() -> d/X)
+                      q(d/Y))",
+    Res = linearize(Code, t),
+    [?test({ok, {'fun', _, [{clause, _, [],
+                             {'let', _, {variable, _, f, _F},
+                              {qualified_symbol, _, [source, test_code], d},
+                              {'let', _, {variable, _, q, Q},
+                               {'fun', _, [{clause, _, [{value, _, atom, 'source/test_code/d/Y'}],
+                                                       {value, _, atom, 'source/test_code/d/X'}}]},
+                               {application, _, {variable, _, q, Q},
+                                                [{value, _, atom, 'source/test_code/d/Y'}]}}}}]}},
+           tree(Res, [])),
+     ?test({ok, 'source/test_code/d/X'}, domain(Res, []))].
+
+beam_application_test_() ->
+    Code = "import beam/lists/append
+            def t a b c -> (val f = append
+                            val q = (fn f(a, append(b, c)) -> f)
+                            q(append([a, b, c]))(a, b))",
+    Res = linearize(Code, t),
+    [?test({ok, {'fun', _, [{clause, _, [_, _, _],
+                             {'let', _, {variable, _, f, F},
+                              {'fun', _, [{clause, _, [_, _],
+                                           {beam_application, _, [lists], append, [_, _]}}]},
+                              {'let', _, {variable, _, q, Q},
+                               {'fun', _, [{clause, _, [{list, _, [{value, _, integer, 1},
+                                                                   {value, _, integer, 2},
+                                                                   {value, _, integer, 3}]}],
+                                            {variable, _, f, F}}]},
+                               {application, _,
+                                {application, _, {variable, _, q, Q},
+                                 [{beam_application, _, [lists], append, [{list, _, [_, _, _]}]}]},
+                                [_, _]}}}}]}},
+           tree(Res, [[1], [2], [3]])),
+    ?test({ok, [1, 2]}, domain(Res, [[1], [2], [3]]))].

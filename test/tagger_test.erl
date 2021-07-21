@@ -45,8 +45,8 @@ tuple_test_() ->
 anonymous_function_test_() ->
     Code = 
         "def blip a -> a
-         def blap a -> a.blip(b -> b
-                              _ -> a)",
+         def blap a -> a.blip(fn b -> b
+                                 _ -> a)",
     Defs = tag(Code),
     [?test(#{blap := {def, _, blap,
                       {'fun', _,
@@ -289,3 +289,19 @@ def_tag_test_() ->
                                        {qualified_application, _, [source, test_code], d,
                                         [{keyword, _, _, 'T'}]}}],
                                      {variable, _, b, B}}]}}}, Defs)].
+
+pattern_application_test_() ->
+    Code = "def d -> X | Y
+            def t -> (val f = d
+                      val q = (fn f() -> d/X)
+                      q(d/Y))",
+    Defs = tag(Code),
+    [?test(#{'t' := {def, _, 't',
+                     {'let', _, {variable, _, f, F},
+                                {qualified_symbol, _, [source, test_code], d},
+                                {'let', _, {variable, _, q, Q},
+                                           {'fun', _, [{clause, _, [{application, _, {variable, _, f, F}, []}],
+                                                                   {keyword, _, [source, test_code, d], 'X'}}]},
+                                           {application, _, {variable, _, q, Q},
+                                                            [{keyword, _, [source, test_code, d], 'Y'}]}}}}},
+           Defs)].

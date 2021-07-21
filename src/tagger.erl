@@ -57,11 +57,11 @@ tag_symbols(expr, Scope, {symbol, _, variable, S} = Term) ->
         true    -> {ok, replace(Scope, S, Term)}
     end;
 tag_symbols(pattern, Scope, {symbol, Ctx, variable, S} = Term) ->
-    case maps:get(S, Scope, undefined) of
-        % If variable is a qualified symbol (i.e. a def), replace it
-        {qualified_symbol, _, _, _} -> {ok, replace(Scope, S, Term)};
-        % Otherwise create it
-        _                           -> {ok, S, {variable, Ctx, S, symbol:id([ast:get_tag(parent, Term), S])}}
+    case maps:is_key(S, Scope) of
+        % When variables are in scope, using them in a pattern will refer to their domain
+        true    -> {ok, replace(Scope, S, Term)};
+        % When variables aren't in scope, they are created
+        false   -> {ok, S, {variable, Ctx, S, symbol:id([ast:get_tag(parent, Term), S])}}
     end;
 
 

@@ -183,11 +183,15 @@ multiple_beam_import_test_() ->
 
 qualified_beam_import_test_() ->
     Module =
-    "import beam/lists/_\n"
-    "def blap -> reverse",
+    "import beam/lists/_
+     def blap -> reverse
+     def blop a -> reverse(a)",
     ?test({ok, [{module, _, _, _, _,
                  #{blap := {def, _, 'blap',
-                            {beam_application, _, [lists], reverse, []}}}}]},
+                            {beam_symbol, _, [lists], reverse}},
+                   blop := {def, _, _, {'fun', _, [{clause, _, [{variable, _, a, A}],
+                                                    {beam_application, _, [lists], reverse,
+                                                     [{variable, _, a, A}]}}]}}}}]},
           parser:parse([{text, Module}], #{include_kind_libraries => false})).
 
 qualified_source_import_test_() ->
