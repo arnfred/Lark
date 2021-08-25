@@ -252,3 +252,11 @@ local_constant_test_() ->
     Actual = test_import([test, 's', 'A'], ModuleMap),
     [?test({ok, {#{'A' := {keyword, _, [test, t], 'A'}},
                 [{dependency, _, [test_module], [test, t]}]}}, Actual)].
+
+nested_module_import_conflict_test_() ->
+    Code = "module test {boolean} (def boolean -> True | False)
+            def t test/boolean -> test/boolean/True",
+    ModuleMap = module_map("test/file.kind", Code),
+    Actual = import:import(maps:get([test], ModuleMap), ModuleMap),
+    [?test({ok, {#{'t' := {qualified_symbol, _, [source, test, file], 't'}},
+                 [{dependency, _, [test], [source, test, file]}]}}, Actual)].

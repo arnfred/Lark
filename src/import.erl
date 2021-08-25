@@ -99,7 +99,9 @@ kind(AliasPath, Path, ModuleMap, Term) ->
     {ModulePath, [DefName]} = lists:split(length(Path) -1, Path),
     {module, _, _, _, _, Defs} = maps:get(ModulePath, ModuleMap),
     case maps:get(DefName, Defs) of
-        {keyword, Ctx, _, _} = Keyword  -> {alias, Ctx, AliasPath, Keyword};
+        {keyword, Ctx, _, _} = Keyword  -> NewCtx = maps:put(import, Term, Ctx),
+                                           KeywordTerm = setelement(2, Keyword, NewCtx),
+                                           {alias, NewCtx, AliasPath, KeywordTerm};
         {link, Ctx, LinkPath, Name}     -> NewCtx = maps:put(import, Term, Ctx),
                                            LinkTerm = {qualified_symbol, NewCtx, LinkPath, Name},
                                            {alias, Ctx, AliasPath, LinkTerm};
@@ -197,7 +199,7 @@ is_whitelisted(Module, Name) ->
                   'digraph' => [],
                   'digraph_utils' => [],
                   'erl_anno' => [],
-                  'io_li' => [],
+                  'io_lib' => [],
                   'lists' => [],
                   'maps' => [],
                   'math' => [],
@@ -219,7 +221,10 @@ is_whitelisted(Module, Name) ->
                                check_process_cod, disconnect_node, error, exit,
                                halt, load_module, load_nif, open_port, port_call,
                                port_close, port_command, port_connect, port_control,
-                               purge_module, put, self],
+                               purge_module, put, self, cancel_timer, delete_module,
+                               hibernate, nif_error, spawn, spawn_link, spawn_monitor,
+                               spawn_opt, spawn_request, suspend_process, system_flag,
+                               system_info, system_monitor, system_profile, throw],
                   'persistent_term' => [],
                   'zlib' => []},
     maps:is_key(Module, Whitelist) andalso not(lists:member(Name, maps:get(Module, Whitelist))).

@@ -89,8 +89,7 @@ module_export_test_() ->
                            ['test', 'module1'] := {module,
                                            #{},
                                            [test, module1],
-                                           [{import, #{}, [source, test, file, #{}]},
-                                            {import, #{}, ['t']}],
+                                           [{import, #{}, [source, test, file, #{}]}],
                                            #{'t' := {export, #{}, ['t'], {symbol, #{}, keyword, 'A'}},
                                              'A' := {export, #{}, ['t', 'A'], none}},
                                            #{'t' := _}}}, Modules)

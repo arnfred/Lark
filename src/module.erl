@@ -78,9 +78,8 @@ parse_module({module, ModuleCtx, Path, Exports, Statements},
                     % alongside the explicitly stated imports within and outside the
                     % module and finally all types defined within the module
                     ImportOfRootItself = base_import(ModuleCtx, RootPath, RootExports, LinkMap),
-                    TypeImports = [{import, ModuleCtx, [Parent]} || Parent <- maps:keys(LocalTypes)],
                     NonLocalRootImports = [I || I <- RootImports, not(is_local_non_wildcard_import(I, RootDefs))],
-                    Imports = [ImportOfRootItself | NonLocalRootImports ++ TypeImports ++ LocalImports],
+                    Imports = [ImportOfRootItself | NonLocalRootImports ++ LocalImports],
 
                     DefMap = maps:merge(maps:merge(SubDefMap, LocalDefMap), LinkMap),
 

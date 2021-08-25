@@ -305,3 +305,15 @@ pattern_application_test_() ->
                                            {application, _, {variable, _, q, Q},
                                                             [{keyword, _, [source, test_code, d], 'Y'}]}}}}},
            Defs)].
+
+nested_module_import_conflict_test_() ->
+    Code = "module test {boolean} (def boolean -> True | False)
+            module test2 {} (import test
+                             def t test/boolean -> test/boolean/True)",
+    {ok, Modules} = parser:parse([{text, test_code, Code}], #{include_kind_libraries => false}),
+    ModuleMap = maps:from_list([{module:path(M), M} || M <- Modules]),
+    {module, _, _, _, _, Defs} = maps:get([test2], ModuleMap),
+    [?test(#{'t' := {def, _, 't', {'fun', _,
+                                   [{clause, _, [{qualified_symbol, _, [test], boolean}],
+                                     {keyword, _, [test, boolean], 'True'}}]}}},
+           Defs)].

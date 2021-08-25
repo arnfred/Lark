@@ -3,12 +3,12 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
-linearize(Code, Name) ->
+linearize(Code, Name) -> linearize(Code, Name, [source, test_code]).
+linearize(Code, Name, ModulePath) ->
     case parser:parse([{text, test_code, Code}], #{include_kind_libraries => false}) of
         {error, Errs} -> {error, Errs};
         {ok, Modules} ->
             ModuleMap = maps:from_list([{module:path(M), M} || M <- Modules]),
-            ModulePath = [source, test_code],
             {module, _, _, _, _, Defs} = maps:get(ModulePath, ModuleMap),
             Term = maps:get(Name, Defs),
             linearize:term(Term, ModuleMap)
@@ -195,3 +195,40 @@ beam_application_test_() ->
                                 [_, _]}}}}]}},
            tree(Res, [[1], [2], [3]])),
     ?test({ok, [1, 2]}, domain(Res, [[1], [2], [3]]))].
+
+qualified_pattern_symbol_test_() ->
+    Code = "module test {boolean} (def boolean -> True | False)
+            module test2 {} (import test
+                             def t test/boolean -> test/boolean/True)",
+    Res = linearize(Code, t, [test2]),
+    [?test({ok, 'test/boolean/True'}, domain(Res, ['test/boolean/False']))].
+
+beam_symbol_in_pattern_test_() ->
+    Code = "import beam/rand/uniform
+            def t uniform -> 0",
+    Res = linearize(Code, t),
+    [?testError({unapplied_beam_function_in_pattern, 'beam/rand/uniform'}, tree(Res, [1]))].
+
+% If this test starts failing, but only while the erlang debugger is also
+% running, then have a look at the comment in this commit on line 79 of
+% src/utils.erl detailing what might be causing the issue.
+ambigious_fun_test_() ->
+    Code = "import beam/rand/uniform
+            def match a f -> f(a)
+            def t -> (val f = uniform(2).match(1 -> (fn _ -> One)
+                                               _ -> (fn _ -> Two))
+                      f('_'))",
+    Res = linearize(Code, t),
+    [?test({ok, {'fun', _, [{clause, _, [],
+                             {'let', _, {variable, _, f, F},
+                                        {qualified_application, _, [source, test_code], match,
+                                         [{beam_application, _, [rand], uniform, [{value, _, integer, 2}]},
+                                          {'fun', _, [{clause, _, [{value, _, integer, 1}],
+                                                       {'fun', _, [{clause, _, [{value, _, atom, '_'}],
+                                                                    {value, _, atom, 'source/test_code/t/One'}}]}},
+                                                      {clause, _, [{variable, _, '_', _}],
+                                                       {'fun', _, [{clause, _, [{value, _, atom, '_'}],
+                                                                    {value, _, atom, 'source/test_code/t/Two'}}]}}]}]},
+                                        {application, _, {variable, _, f, F}, [{value, _, atom, '_'}]}}}]}},
+           tree(Res, [])),
+    ?test({ok, {sum, ['source/test_code/t/One', 'source/test_code/t/Two']}}, domain(Res, []))].
