@@ -112,7 +112,13 @@ kind(AliasPath, Path, ModuleMap, Term) ->
     end.
 
 
-beam(_, [ModulePath], Term) -> beam('_', '_', [ModulePath], Term);
+beam(_, [ModulePath], Term) -> 
+    case beam('_', '_', [ModulePath], Term) of
+        {error, Errs}   -> {error, Errs};
+        {ok, Aliases}   -> QualifiedAliases = [{alias, Ctx, [ModulePath, Alias], Term} ||
+                                               {alias, Ctx, [Alias], Term} <- Aliases],
+                           {ok, QualifiedAliases}
+    end;
 beam(Alias, Path, Term) ->
     {ModulePath, [Name]} = lists:split(length(Path) - 1, Path),
     beam(Alias, Name, ModulePath, Term).

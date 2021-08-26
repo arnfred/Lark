@@ -22,7 +22,7 @@ erlang_import_test_() ->
 
 erlang_module_import_test_() ->
     Actual = test_import([beam, lists], #{}),
-    ?test({ok, {#{reverse := {beam_symbol, _, [lists], reverse}}, []}}, Actual).
+    ?test({ok, {#{'lists/reverse' := {beam_symbol, _, [lists], reverse}}, []}}, Actual).
 
 source_import_test_() ->
     Code = "module test/mod {test_fun} (def test_fun -> noop)",

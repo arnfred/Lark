@@ -204,8 +204,8 @@ qualified_pattern_symbol_test_() ->
     [?test({ok, 'test/boolean/True'}, domain(Res, ['test/boolean/False']))].
 
 beam_symbol_in_pattern_test_() ->
-    Code = "import beam/rand/uniform
-            def t uniform -> 0",
+    Code = "import beam/rand
+            def t rand/uniform -> 0",
     Res = linearize(Code, t),
     [?testError({unapplied_beam_function_in_pattern, 'beam/rand/uniform'}, tree(Res, [1]))].
 

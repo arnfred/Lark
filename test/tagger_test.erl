@@ -317,3 +317,10 @@ nested_module_import_conflict_test_() ->
                                    [{clause, _, [{qualified_symbol, _, [test], boolean}],
                                      {keyword, _, [test, boolean], 'True'}}]}}},
            Defs)].
+
+beam_symbol_test_() ->
+    Code = "import beam/rand
+            def t -> rand/uniform",
+    Defs = tag(Code),
+    [?test(#{'t' := {def, _, 't',
+                     {beam_symbol, _, [rand], uniform}}}, Defs)].
