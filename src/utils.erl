@@ -63,7 +63,7 @@ domain_to_term({recur, _F}, Ctx) ->
     {variable, Ctx, '_', '_'}.
 
 % Generate tag for domain function
-gen_tag(F) -> 
+gen_tag(F) when is_function(F) -> 
     % It's difficult to generate a unique tag for domain functions.
     %
     % To generate domain functions we use a generalised function which given an
@@ -101,7 +101,8 @@ gen_tag(F) ->
                _ -> erlang:phash2(Env)
            end,
     {name, Tag} = erlang:fun_info(F, name),
-    symbol:tag([Tag, list_to_atom(integer_to_list(Hash))]).
+    symbol:tag([Tag, list_to_atom(integer_to_list(Hash))]);
+gen_tag(Term) -> erlang:phash2(Term).
 
 print_core(Name) ->
     {ok, FileContents} = file:read_file(Name),

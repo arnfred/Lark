@@ -232,3 +232,41 @@ ambigious_fun_test_() ->
                                         {application, _, {variable, _, f, F}, [{value, _, atom, '_'}]}}}]}},
            tree(Res, [])),
     ?test({ok, {sum, ['source/test_code/t/One', 'source/test_code/t/Two']}}, domain(Res, []))].
+
+wrong_arity_test_() ->
+    Code = "def f a -> 1
+            def t -> f(2, 3)",
+    Res = linearize(Code, t),
+    [?testError({wrong_function_arity, 1, 2}, tree(Res, []))].
+
+variable_arity_test_() ->
+    Code = "def t 1 2 -> 2
+                  1   -> 1",
+    Res = linearize(Code, t),
+    [?testError({variable_arity, [2, 1]}, tree(Res, [1, 2]))].
+
+pattern_pair_sum_type_test_() ->
+    Code = "def boolean -> True | False
+            def t (b: boolean) -> b",
+    Res = linearize(Code, t),
+    [?test({ok, 'source/test_code/boolean/True'}, domain(Res, ['source/test_code/boolean/True'])),
+     ?test({ok, 'source/test_code/boolean/False'}, domain(Res, ['source/test_code/boolean/False'])),
+     ?testError({no_intersection_between_clauses_and_argdomains, [otherwise]}, domain(Res, ['otherwise']))].
+
+let_pattern_sum_type_test_() ->
+    Code = "def boolean -> True | False
+            def t -> (val (b: boolean) = boolean()
+                      b)",
+    Res = linearize(Code, t),
+    [?testError({sum_type_in_let_pattern, {pair, _, _, _}, {sum, _}}, tree(Res, []))].
+
+pair_pattern_unpack_test_() ->
+    Code = "def f -> [1, 2]
+            def t ([a, b]: f) -> [b, a]",
+    Res = linearize(Code, t),
+    [?test({ok, [2, 1]}, domain(Res, [[1, 2]]))].
+
+function_domain_expected_test_() ->
+    Code = "def t -> 1(2)",
+    Res = linearize(Code, t),
+    [?testError({function_domain_expected, 1}, tree(Res, []))].
