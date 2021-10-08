@@ -1,7 +1,10 @@
-module kind/domain {
-    domain
-    domain/Any
-    domain/None
-}
+module kind/domain (
 
-def domain -> (Any | None)
+  export {
+      domain
+      domain/Any
+      domain/None
+  }
+
+  def domain -> (Any | None)
+)

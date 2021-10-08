@@ -14,12 +14,13 @@ root_def_test_() ->
     ?setup("test/file.kind",
            "def blah -> noop",
            fun({ok, Modules}) ->
-                   ?test(#{['source', 'test', 'file'] := {module,
-                                                #{filename := "test/file.kind", line := 0},
-                                                [source, test, file],
-                                                [],
-                                                #{blah := {export, _, [blah], none}},
-                                                #{blah := {def, #{}, blah, _}}}}, Modules)
+                   ?test(#{['source', 'test', 'file'] :=
+                           {module,
+                            #{filename := "test/file.kind", line := 0},
+                            [source, test, file],
+                            [],
+                            #{},
+                            #{blah := {def, #{}, blah, _}}}}, Modules)
            end).
 
 root_import_test_() ->
@@ -36,20 +37,20 @@ root_import_test_() ->
 
 empty_module_test_() ->
     ?setup("test/file.kind",
-           "module test/module1 {}",
+           "module test/module1 ()",
            fun({ok, Modules}) ->
-                   ?test(#{['source', 'test', 'file'] := {module, _, _, _, _, _},
+                   ?test(#{['source', 'test', 'file'] := {module, #{}, _, [], _, _},
                            ['test', 'module1'] := {module,
                                            #{},
                                            [test, module1],
-                                           [{import, #{}, [source, test, file, #{}]}],
+                                           [],
                                            #{},
                                            #{}}}, Modules)
            end).
 
 module_def_test_() ->
     ?setup("test/file.kind",
-           "module test/module1 {} (
+           "module test/module1 (
                 def blah -> noop
             )",
            fun({ok, Modules}) ->
@@ -57,14 +58,14 @@ module_def_test_() ->
                            ['test', 'module1'] := {module,
                                            #{},
                                            [test, module1],
-                                           [{import, #{}, [source, test, file, #{}]}],
+                                           [],
                                            #{},
                                            #{blah := {def, #{}, blah, {symbol, _, variable, noop}}}}}, Modules)
            end).
 
 module_import_test_() ->
     ?setup("test/file.kind",
-           "module test/module1 {} (
+           "module test/module1 (
                 import blah/_
             )",
            fun({ok, Modules}) ->
@@ -72,15 +73,15 @@ module_import_test_() ->
                            ['test', 'module1'] := {module,
                                            #{},
                                            [test, module1],
-                                           [{import, #{}, [source, test, file, #{}]},
-                                            {import, #{}, [blah, '_']}],
+                                           [{import, #{}, [blah, '_']}],
                                            #{},
                                            #{}}}, Modules)
            end).
 
 module_export_test_() ->
     ?setup("test/file.kind",
-           "module test/module1 {t: A, t/A} (
+           "module test/module1 (
+                export {t: A, t/A} 
                 def t -> A
             )",
            fun({ok, Modules}) ->
@@ -89,7 +90,27 @@ module_export_test_() ->
                            ['test', 'module1'] := {module,
                                            #{},
                                            [test, module1],
-                                           [{import, #{}, [source, test, file, #{}]}],
+                                           [],
+                                           #{'t' := {export, #{}, ['t'], {symbol, #{}, keyword, 'A'}},
+                                             'A' := {export, #{}, ['t', 'A'], none}},
+                                           #{'t' := _}}}, Modules)
+           end).
+
+
+module_multiple_export_test_() ->
+    ?setup("test/file.kind",
+           "module test/module1 (
+                export {t: A} 
+                def t -> A
+                export {t/A} 
+            )",
+           fun({ok, Modules}) ->
+                   ?test(#{['source', 'test', 'file'] := {module, _, _, _, _, _},
+                           ['test', 'module1', 't'] := {module, _, _, _, _, _},
+                           ['test', 'module1'] := {module,
+                                           #{},
+                                           [test, module1],
+                                           [],
                                            #{'t' := {export, #{}, ['t'], {symbol, #{}, keyword, 'A'}},
                                              'A' := {export, #{}, ['t', 'A'], none}},
                                            #{'t' := _}}}, Modules)
@@ -97,32 +118,24 @@ module_export_test_() ->
 
 root_export_test_() ->
     ?setup("test/file.kind",
-           "module test/module1 {t: A, t/A}
+           "module test/module1 (export {t: A, t/A})
             def t -> A",
-           fun({ok, Modules}) ->
-                   ?test(#{['source', 'test', 'file'] := {module, _, _, _, _, _},
-                           ['source', 'test', 'file', 't'] := {module, _, _, _, _, _},
-                           ['test', 'module1'] := {module,
-                                           #{},
-                                           [test, module1],
-                                           [{import, #{}, [source, test, file, #{}]}],
-                                           #{'t' := {export, #{}, ['t'], {symbol, #{}, keyword, 'A'}},
-                                             'A' := {export, #{}, ['t', 'A'], none}},
-                                           #{}}}, Modules)
+           fun(Error) ->
+                   ?testError({export_missing, t}, {export_missing, 't/A'}, Error)
            end).
 
 export_missing_test_() ->
     ?setup("test/file.kind",
-           "module test/module1 {t, t/A}",
+           "module test/module1 (export {t, t/A})",
            fun(Error) ->
                     [?testError({export_missing, 't'}, Error)]
            end).
 
-export_unsupported_test_() ->
+export_qualified_symbol_test_() ->
     ?setup("test/file.kind",
-           "module test/module1 {t/t/A}",
+           "module test/module1 (export {t/t/A})",
            fun(Error) ->
-                    [?testError({export_unsupported, 't/t/A'}, Error)]
+                    [?testError({export_missing, 't/t/A'}, Error)]
            end).
 
 subtype_test_() ->
@@ -138,7 +151,7 @@ subtype_test_() ->
                              #{line := 1},
                              [source, test, file, 't'],
                              [],
-                             #{'A' := {export, _, ['A'], _}},
+                             #{},
                              #{'A' := {keyword, _, [source, test, file, t], 'A'}}}}, Modules)]
            end).
 
@@ -163,77 +176,29 @@ subtype_tagged_test_() ->
                              #{line := 1},
                              [source, test, file, 't'],
                              _,
-                             #{'A' := {export, _, ['A'], _},
-                               'R' := {export, _, ['R'], _}},
+                             #{},
                              #{'A' := {keyword, _, [source, test, file, t], 'A'},
                                'R' := {link, _, [source, test, file], 't/R'}}}}, Modules)]
            end).
 
 duplicate_module_error_test_() ->
     ?setup("test/file.kind",
-           "module test/module1 {}
-            module test/module1 {}",
+           "module test/module1 ()
+            module test/module1 ()",
            fun(Error) ->
                     [?testError({duplicate_module, 'test/module1', "test/file.kind", "test/file.kind"}, Error)]
            end).
 
-module_def_link_test_() ->
-    ?setup("test/file.kind",
-           "def f -> noop
-            module test/module1 {f}",
-           fun({ok, Modules}) ->
-                   ?test(#{['source', 'test', 'file'] := {module, _, _, _, _, #{f := _}},
-                           ['test', 'module1'] := {module,
-                                           #{line := 2},
-                                           [test, module1],
-                                           _,
-                                           #{f := {export, _, [f], _}},
-                                           #{f := {link, _, [source, test, file], f}}}}, Modules)
-           end).
-
-module_sub_def_link_test_() ->
-    ?setup("test/file.kind",
-           "def t -> (A | B)
-            module test/module1 {t}",
-           fun({ok, Modules}) ->
-                   [?test(#{['source', 'test', 'file'] :=
-                            {module, _, _, _, _, 
-                             #{'t' := {def, _, 't', _},
-                               't/A' := {keyword, _, _, 'A'},
-                               't/B' := {keyword, _, _, 'B'}}}},
-                          Modules),
-                    ?test(#{['test', 'module1'] :=
-                            {module,
-                             #{line := 2},
-                             [test, module1],
-                             _,
-                             #{'t' := {export, _, ['t'], _}},
-                             #{'t' := {link, _, [source, test, file], 't'}}}},
-                          Modules),
-                    ?test(#{['test', 'module1', 't'] :=
-                            {module, _, [test, module1, 't'], _,
-                             #{'A' := _, 'B' := _},
-                             #{'A' := {keyword, _, [source, test, file, t], 'A'},
-                               'B' := {keyword, _, [source, test, file, t], 'B'}}}},
-                          Modules),
-                    ?test(#{['source', 'test', 'file', 't'] :=
-                            {module, _, [source, test, file, 't'], _,
-                             #{'A' := _, 'B' := _},
-                             #{'A' := {keyword, _, [source, test, file, t], 'A'},
-                               'B' := {keyword, _, [source, test, file, t], 'B'}}}},
-                         Modules)]
-           end).
-
 nested_link_test_() ->
     ?setup("test/file.kind",
-           "def blup -> (Blip | Blap)
-            import blup/_
-            def flup -> (Flip | Blap)
-            import flup/{Flip, Blap: Blop}
-            def blonk -> (Blank | Blop)
-            module t {blonk}",
+            "module t (def blup -> (Blip | Blap)
+                       import blup/_
+                       def flup -> (Flip | Blap)
+                       import flup/{Flip, Blap: Blop}
+                       def blonk -> (Blank | Blop)
+                       export {blonk})",
            fun({ok, Modules}) ->
-                   [?test(#{['source', 'test', 'file'] :=
+                   [?test(#{['t'] :=
                             {module, _, _, _, _, 
                              #{'blup' := _,
                                'blup/Blap' := _,
@@ -244,20 +209,16 @@ nested_link_test_() ->
                                'blonk' := _,
                                'blonk/Blank' := _,
                                'blonk/Blop' := _}}}, Modules),
-                    ?test(#{['source', 'test', 'file', 'blup'] :=
+                    ?test(#{['t', 'blup'] :=
                             {module, _, _, _, _, #{'Blip' := _, 'Blap' := _}}}, Modules),
-                    ?test(#{['source', 'test', 'file', 'flup'] :=
+                    ?test(#{['t', 'flup'] :=
                             {module, _, _, _, _,
-                             #{'Flip' := {keyword, _, [source, test, file, flup], 'Flip'},
-                               'Blap' := {keyword, _, [source, test, file, blup], 'Blap'}}}}, Modules),
-                    ?test(#{['source', 'test', 'file', 'blonk'] :=
+                             #{'Flip' := {keyword, _, [t, flup], 'Flip'},
+                               'Blap' := {keyword, _, [t, blup], 'Blap'}}}}, Modules),
+                    ?test(#{['t', 'blonk'] :=
                             {module, _, _, _, _,
-                             #{'Blank' := {keyword, _, [source, test, file, blonk], 'Blank'},
-                               'Blop' := {keyword, _, [source, test, file, blup], 'Blap'}}}}, Modules),
-                   ?test(#{['t', 'blonk'] :=
-                           {module, _, _, _, _,
-                            #{'Blank' := {keyword, _, [source, test, file, blonk], 'Blank'},
-                              'Blop' := {keyword, _, [source, test, file, blup], 'Blap'}}}}, Modules)]
+                             #{'Blank' := {keyword, _, [t, blonk], 'Blank'},
+                               'Blop' := {keyword, _, [t, blup], 'Blap'}}}}, Modules)]
            end).
 
 local_keyword_test_() ->
@@ -281,10 +242,11 @@ local_keyword_test_() ->
 
 local_module_keyword_test_() ->
     ?setup("test/file.kind",
-           "module test {s} (def t -> A
-                             import t/A
-                             def s -> A
-                             def r -> s/A)",
+           "module test (export {s}
+                         def t -> A
+                         import t/A
+                         def s -> A
+                         def r -> s/A)",
     fun({ok, Modules}) ->
             [?test(#{[test] := 
                      {module, _, _, _, _,
@@ -297,3 +259,22 @@ local_module_keyword_test_() ->
                      {module, _, _, _, _,
                       #{'A' := {keyword, _, [test, t], 'A'}}}}, Modules)]
     end).
+
+
+empty_module_import_test_() ->
+    ?setup("test/file.kind",
+           "module non-empty (export {boolean}
+                              def boolean -> True | False)
+            module empty ()",
+    fun({ok, Modules}) ->
+            [?test(#{[source, test, file] := {module, _, _, [{import, _, ['non-empty']}], _, _}}, Modules)]
+    end).
+
+no_fictionous_root_modules_test_() ->
+    % When a module implements a submodule (because it contains keywords or
+    % tagged values) we don't want the root module to also create this
+    % submodule
+    ?setup("test/file.kind",
+           "module non-empty (export {boolean}
+                              def boolean -> True | False)",
+    fun({ok, Modules}) -> [?testEqual(maps:is_key([source, test, file, boolean], Modules), false)] end).

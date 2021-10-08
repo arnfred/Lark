@@ -51,12 +51,12 @@ run_post(Post, Env, Type, Scope, Term) ->
         Other                                   -> error:format({unrecognized_post_response, Other}, {ast, Term})
     end.
 
-step(Meta, _Type, Scope, {module, Ctx, Path, Exports, Defs}) ->
-    case map(Meta, top_level, Scope, Defs) of
+step(Meta, _Type, Scope, {module, Ctx, Path, Statements}) ->
+    case map(Meta, top_level, Scope, Statements) of
         {error, Errs}    -> {error, Errs};
-        {ok, {DefEnvs, NewDefs}} ->
-            NewEnv = merge(DefEnvs),
-            {ok, {NewEnv, {module, Ctx, Path, Exports, NewDefs}}}
+        {ok, {StatEnvs, NewStatements}} ->
+            NewEnv = merge(StatEnvs),
+            {ok, {NewEnv, {module, Ctx, Path, NewStatements}}}
     end;
 step(Meta, _Type, Scope, {module, Ctx, Path, Imports, Exports, Defs}) ->
     case map(Meta, top_level, Scope, maps:values(Defs)) of
@@ -67,6 +67,7 @@ step(Meta, _Type, Scope, {module, Ctx, Path, Imports, Exports, Defs}) ->
             {ok, {NewEnv, {module, Ctx, Path, Imports, Exports, NewDefs}}}
     end;
 step(_Meta, _Type, _Scope, {import, _, _} = Term) -> {ok, {#{}, Term}};
+step(_Meta, _Type, _Scope, {exports, _, _} = Term) -> {ok, {#{}, Term}};
 step(Meta, top_level, Scope, {def, Ctx, Name, Fun}) ->
     step(Meta, expr, Scope, {def, Ctx, Name, Fun});
 step(Meta, top_level, Scope, {macro, Ctx, Name, Fun}) ->

@@ -55,24 +55,18 @@ local_type_wildcard_test_() ->
 
 external_type_test_() ->
     Module1 = 
-    "module blup {\n"
-    "  boolean\n"
-    "}\n"
-    "def boolean -> True | False\n",
-    Module2 =
-    "import blup/boolean/_\n"
-    "def xor\n"
-    "    True False -> True\n"
-    "    False True -> True\n"
-    "    _ _ -> False",
+    "module blup (export {boolean}; def boolean -> True | False)",
+    Module2 = "import blup/boolean/_
+               def xor
+                   True False -> True
+                   False True -> True
+                   _ _ -> False",
     ?test({ok, _}, parser:parse([{text, Module1}, {text, Module2}], #{import_prelude => false})).
 
 undefined_external_type_test_() ->
     Module1 = 
-    "module blup {\n"
-    "  boolean\n"
-    "}\n"
-    "def boolean -> True | False\n",
+    "module blup (export {boolean}
+                  def boolean -> True | False)",
     Module2 =
     "import blup/Blap/_",
     ?testError({nonexistent_module, 'blup/Blap'},
@@ -80,10 +74,8 @@ undefined_external_type_test_() ->
 
 source_def_test_() ->
     Module1 = 
-    "module blup {\n"
-    "  identity\n"
-    "}\n"
-    "def identity a -> a\n",
+    "module blup (export {identity}
+                  def identity a -> a)",
     Module2 =
     "import blup/identity\n"
     "def blap a -> a.identity",
@@ -91,8 +83,7 @@ source_def_test_() ->
 
 unexported_source_def_test_() ->
     Module1 = 
-    "module blup {}\n"
-    "def identity a -> a\n",
+    "module blup (def identity a -> a)",
     Module2 =
     "import blup/identity\n"
     "def blap a -> a.identity",
@@ -118,67 +109,54 @@ wildcard_beam_def_test_() ->
 
 import_conflict_test_() ->
     Module1 = 
-    "module blup {\n"
-    "  identity\n"
-    "}\n"
-    "def identity a -> a\n",
+    "module blup (export {identity}
+                  def identity a -> a)",
     Module2 = 
-    "module blip {\n"
-    "  identity\n"
-    "}\n"
-    "def identity a -> a\n",
+    "module blip (export {identity}
+                  def identity a -> a)",
     Module3 =
     "import blup/identity\n"
     "import blip/_\n"
     "def blap a -> a.identity",
-    ?testError({duplicate_import, 'identity',
-                'source/test_code_3', 'source/test_code_2/identity', 'source/test_code_1/identity'},
+    ?testError({duplicate_import, 'identity', 'source/test_code_3', 'blip/identity', 'blup/identity'},
                parser:parse([{text, test_code_2, Module2}, {text, test_code_1, Module1}, {text, test_code_3, Module3}])).
 
 import_already_defined_test_() ->
     Module1 = 
-    "module blip {\n"
-    "  identity\n"
-    "}\n"
-    "def identity a -> a\n",
+    "module blip (export {identity}
+                  def identity a -> a)",
     Module2 =
     "import blip/identity\n"
     "def identity a -> a",
-    ?testError({import_conflicts_with_local_def, 'identity', 'source/test_code_2', 'source/test_code_1/identity'},
+    ?testError({import_conflicts_with_local_def, 'identity', 'source/test_code_2', 'blip/identity'},
                parser:parse([{text, test_code_2, Module2}, {text, test_code_1, Module1}])).
 
 wildcard_import_type_already_defined_test_() ->
     Module1 = 
-    "module blip {\n"
-    "  t\n"
-    "}\n"
-    "def t -> A | B\n",
+    "module blip (export {t}
+                  def t -> A | B)",
     Module2 =
     "import blip/_\n"
     "def t -> Q | R",
-    ?testError({import_conflicts_with_local_def, 't', 'source/test_code_2', 'source/test_code_1/t'},
+    ?testError({import_conflicts_with_local_def, 't', 'source/test_code_2', 'blip/t'},
                parser:parse([{text, test_code_2, Module2}, {text, test_code_1, Module1}])).
 
 import_alias_already_defined_test_() ->
     Module1 = 
-    "module blip {\n"
-    "  identity\n"
-    "}\n"
-    "def identity a -> a\n",
+    "module blip (export {identity}
+                  def identity a -> a)",
     Module2 =
     "import blip/{identity: id}\n"
     "def id a -> a",
-    ?testError({import_conflicts_with_local_def, 'id', 'source/test_code_2', 'source/test_code_1/identity'},
+    ?testError({import_conflicts_with_local_def, 'id', 'source/test_code_2', 'blip/identity'},
                parser:parse([{text, test_code_2, Module2}, {text, test_code_1, Module1}])).
 
 multiple_beam_import_test_() ->
     Module =
-    "import beam/lists/_\n"
-    "import beam/maps/_\n"
-    "def blap a -> a.reverse.from_list",
-    ?testError({duplicate_import, filter, 'source/test_code', 'maps/filter', 'lists/filter'},
-               {duplicate_import, map, 'source/test_code', 'maps/map', 'lists/map'},
-               {duplicate_import, merge, 'source/test_code', 'maps/merge', 'lists/merge'},
+    "import beam/maps/_
+     import beam/lists/_
+     def blap a -> a.reverse.from_list",
+    ?testError({duplicate_import, merge, 'source/test_code', 'lists/merge','maps/merge' },
                parser:parse([{text, test_code, Module}], #{include_kind_libraries => false})).
 
 qualified_beam_import_test_() ->
@@ -196,8 +174,8 @@ qualified_beam_import_test_() ->
 
 qualified_source_import_test_() ->
     Module1 = 
-    "module blip {t}\n"
-    "def t -> (A | B)\n",
+    "module blip (export {t}
+                  def t -> (A | B))",
     Module2 =
     "import blip/t\n"
     "def blap -> t/A",
@@ -206,7 +184,7 @@ qualified_source_import_test_() ->
     ModuleMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
     ?test(#{'source/test_code_2' := {module, _, [source, test_code_2], _, _,
                  #{blap := {def, _, 'blap',
-                            {keyword, _, [source, test_code_1, t], 'A'}}}}}, ModuleMap).
+                            {keyword, _, [blip, t], 'A'}}}}}, ModuleMap).
 
 qualified_local_import_test_() ->
     Module = 
@@ -221,8 +199,8 @@ qualified_local_import_test_() ->
                                               {keyword, _, [source, test_code, 't'], 'A'}}}}}, ModuleMap).
 
 module_order_test_() ->
-    Module = "def t -> (A | B)
-              module test {t}",
+    Module = "module test (export {t}
+                           def t -> (A | B))",
     {ok, Modules} = parser:parse([{text, test_code, Module}], #{include_kind_libraries => false}),
     ModuleNames = [module:kind_name(M) || M <- Modules],
-    ?test(['source/test_code', 'source/test_code/t', 'test', 'test/t'], ModuleNames).
+    ?test(['test', 'test/t'], ModuleNames).

@@ -1,6 +1,8 @@
 import beam/erlang/{<, >}
 
-module kind/prelude {
+module kind/prelude (
+
+  export {
     boolean
     boolean/True
     boolean/False
@@ -9,21 +11,22 @@ module kind/prelude {
     match
     get
     compare
-}
+  }
 
-def boolean -> (True | False)
-
-def option a -> (a | Nil)
-
-def match a f -> f(a)
-
-def get ['tagged', _, domain] -> domain
-
-def compareTypes -> (GT | LT | EQ)
-import compare/_
-
-def compare a b -> (a > b).match(
-    'true'  -> GT
-    'false' -> (a < b).match(
-        'false' -> EQ
-        'true'  -> LT))
+  def boolean -> (True | False)
+  
+  def option a -> (a | Nil)
+  
+  def match a f -> f(a)
+  
+  def get ['tagged', _, domain] -> domain
+  
+  def compareTypes -> (GT | LT | EQ)
+  import compare/_
+  
+  def compare a b -> (a > b).match(
+      'true'  -> GT
+      'false' -> (a < b).match(
+          'false' -> EQ
+          'true'  -> LT))
+)

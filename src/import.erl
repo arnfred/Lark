@@ -6,7 +6,8 @@
 import(Module, ModuleMap) -> import(Module, ModuleMap, #{sandboxed => ?DEFAULT_SANDBOXED}).
 import({module, _, ModulePath, Imports, _, _}, ModuleMap, Options) ->
     FlatImports = lists:flatten([flatten(I) || I <- Imports]),
-    case aliases(FlatImports, ModulePath, ModuleMap) of
+    Scope = scope(ModulePath, ModuleMap),
+    case aliases(FlatImports, Scope, ModuleMap) of
         {error, Errs}       -> {error, Errs};
         {ok, Aliases}       ->
             case whitelisted(Aliases, ModuleMap, Options) of
@@ -23,26 +24,40 @@ import({module, _, ModulePath, Imports, _, _}, ModuleMap, Options) ->
             end
     end.
 
+
+
 flatten({import, _, ImportPath} = I)        -> [{Alias, Path, I} || {Alias, Path} <- flatten(ImportPath, [[]])].
 flatten([D], Res) when is_map(D)           -> [{V, lists:reverse([K | R])} || R <- Res, {K, V} <- maps:to_list(D)];
 flatten([E], Res)                           -> [{E, lists:reverse([E | R])} || R <- Res];
 flatten([D | Rest], Res) when is_map(D)    -> flatten(Rest, [[Name | R] || R <- Res, Name <- maps:keys(D)]);
 flatten([E | Rest], Res)                    -> flatten(Rest, [[E | R] || R <- Res]).
 
-aliases(Paths, ModulePath, ModuleMap) -> 
 
-    % Scope is a pair of paths {K, P}. For a module `a/b/c` and an import of
-    % `a/b` then K would be `c` and P would be `a/b/c`
+
+scope(ModulePath, ModuleMap) ->
+    % The export scope is a pair of paths {K, P}. For any module `a/b/c` with
+    % an import of `a/b` then K would be `c` and P would be `a/b/c`
     ExportScope = [{P ++ [D], P ++ ExportPath} || {P, {module, _, _, _, Exports, _}} <- maps:to_list(ModuleMap),
                                                   {D, {export, _, ExportPath, _}} <- maps:to_list(Exports)],
-    % We include in the local scope all modules for which the local module path
-    % is a prefix. Example: If the local module is `a/b` then we include
+
+    % We include in the prefix scope all modules for which the local module
+    % path is a prefix. Example: If the local module is `a/b` then we include
     % `a/b/c` as `c` and `a/b/c/d` as `c/d`
-    LocalScope = [{P -- ModulePath, P} || {_, P} <- ExportScope, lists:prefix(ModulePath, P)],
+    PrefixScope = [{P -- ModulePath, P} || {_, P} <- ExportScope, lists:prefix(ModulePath, P)],
 
-    Scope = utils:unique(LocalScope ++ ExportScope),
-    aliases(Paths, Scope, ModuleMap, [], []).
+    % We include in the local scope any keywords or tagged values defined in
+    % the current module, so that if the local module defines `def t -> (A |
+    % B)`, then `t/A` and `t/B` are in the import scope.
+    {module, _, _, _, _, LocalDefs} = maps:get(ModulePath, ModuleMap),
+    LocalScope = [{(P -- ModulePath) ++ [D], P ++ [D]} || {P, {module, _, Path, _, _, Defs}} <- maps:to_list(ModuleMap),
+                                                           D <- maps:keys(Defs),
+                                                           maps:is_key(module:kind_name([lists:last(P), D]),  LocalDefs)],
 
+    utils:unique(PrefixScope ++ ExportScope ++ LocalScope).
+
+
+
+aliases(ImportPaths, Scope, ModuleMap) -> aliases(ImportPaths, Scope, ModuleMap, [], []).
 aliases([], _, _, [], Res) -> {ok, Res};
 aliases([], _, _, Errors, _) -> error:collect(lists:reverse(Errors));
 aliases([{Alias, [beam | IPath], Term} | Paths], Scope, ModuleMap, Errors, Res) ->

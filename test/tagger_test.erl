@@ -194,11 +194,11 @@ pattern_product_key_propagated_test_() ->
                      {'fun', _,
                       [{clause,_,
                         [{dict,_,
-                          [{variable,_,b, _B},
-                           {variable,_,c, _C}]}],
+                          [{variable,_,b, B},
+                           {variable,_,c, C}]}],
                         {application,_,
-                         {variable,_,b, _B},
-                         [{variable,_,c, _C}]}}]}}}, Tagged).
+                         {variable,_,b, B},
+                         [{variable,_,c, C}]}}]}}}, Tagged).
 
 undefined_variable_test_() ->
     Code = "def test -> a",
@@ -222,16 +222,6 @@ val_test_() ->
                             {variable, _, a, A1}}]},
                          {application, _, {variable, _, f, F},
                           [{variable, _, a, A1}]}}}]}}}, tag(Code)).
-
-local_import_conflict_test_() ->
-    Code = "def t -> (A | B)
-            import t/_",
-    Defs = tag(Code),
-    [?test(#{'t' := {def, _, 't', {sum, _,
-                                   [{keyword, _, [source, test_code, 't'], 'A'},
-                                    {keyword, _, [source, test_code, 't'], 'B'}]}}}, Defs),
-     ?test(#{'t/A' := {keyword, _, [source, test_code, 't'], 'A'}}, Defs),
-     ?test(#{'t/B' := {keyword, _, [source, test_code, 't'], 'B'}}, Defs)].
 
 parens_variable_test_() ->
     Code = "def f (((a))) -> (((a)))",
@@ -307,9 +297,10 @@ pattern_application_test_() ->
            Defs)].
 
 nested_module_import_conflict_test_() ->
-    Code = "module test {boolean} (def boolean -> True | False)
-            module test2 {} (import test
-                             def t test/boolean -> test/boolean/True)",
+    Code = "module test (export {boolean}
+                         def boolean -> True | False)
+            module test2 (import test
+                          def t test/boolean -> test/boolean/True)",
     {ok, Modules} = parser:parse([{text, test_code, Code}], #{include_kind_libraries => false}),
     ModuleMap = maps:from_list([{module:path(M), M} || M <- Modules]),
     {module, _, _, _, _, Defs} = maps:get([test2], ModuleMap),

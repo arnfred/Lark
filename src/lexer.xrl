@@ -43,6 +43,7 @@ type                        : {token, {type,                #{line => TokenLine}
 macro                       : {token, {macro,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
 import                      : {token, {import_keyword,      #{line => TokenLine}, list_to_atom(TokenChars)}}.
 module                      : {token, {module_keyword,      #{line => TokenLine}, list_to_atom(TokenChars)}}.
+export                      : {token, {export_keyword,      #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {Operator}                  : {token, {op_type(TokenChars), #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {RightBiasOperator}         : {token, {rightbias_operator,  #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {Symbol}                    : {token, {var_symbol,          #{line => TokenLine}, list_to_atom(TokenChars)}}.

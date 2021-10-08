@@ -1,8 +1,8 @@
 -module(module).
 -export([parse/1, path/1, beam_name/1, kind_name/1, is_submodule/1, empty/1]).
 
--include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
+-include_lib("eunit/include/eunit.hrl").
 
 parse(Sources) ->
     case error:collect([prepare(FileName, AST) || {FileName, AST} <- Sources]) of
@@ -22,70 +22,52 @@ parse(Sources) ->
     end.
 
 prepare(FileName, Code) ->
-    Modules = [M || M = {module, _, _, _, _} <- Code],
-    DefList = [D || D = {Type, _, _, _} <- Code, Type == def orelse Type == macro],
-    RootPath = filename_to_module_path(FileName),
-    RootImports = [import(I) || I = {import, _, _} <- Code],
-    case types(DefList, RootImports, RootPath) of
-        {error, Errs}   -> {error, Errs};
-        {ok, RootTypes} ->
-            Root = root_module_and_types(FileName, RootPath, RootImports, RootTypes, DefList),
-            case error:collect([parse_module(M, Root) || M <- Modules]) of
-                {error, Errs}       -> {error, Errs};
-                {ok, ModsAndTypes}  -> SubModules = lists:flatten([sub_modules(M, Ts, RootPath, RootTypes) ||
-                                                                   {M, Ts} <- [Root | ModsAndTypes]]),
-                                       {Mods, _} = lists:unzip([Root | ModsAndTypes]),
-                                       {ok, {FileName, Mods ++ SubModules}}
-            end
+    RootModule = root_module(FileName, Code),
+    Modules = [M || M = {module, _, _, _} <- Code],
+    case error:collect([parse_module(M, Code) || M <- [RootModule | Modules]]) of
+        {error, Errs}       -> {error, Errs};
+        {ok, ModsAndTypes}  -> SubModules = lists:flatten([sub_modules(M, Ts) || {M, Ts} <- ModsAndTypes]),
+                               {Mods, _} = lists:unzip(ModsAndTypes),
+                               {ok, {FileName, Mods ++ SubModules}}
     end.
 
-root_module_and_types(FileName, RootPath, RootImports, Types, DefList) ->
-    RootName = kind_name(RootPath),
+root_module(FileName, Statements) ->
+    RootPath = filename_to_module_path(FileName),
+    ModuleImports = [{import, Ctx, Path} || {module, Ctx, Path, ModStatements} <- Statements,
+                                            {exports, _, Exports} <- ModStatements,
+                                            length(Exports) > 0],
+    RootName = kind_name([P || {symbol, _, _, P} <- RootPath]),
     Ctx = #{filename => FileName, line => 0, module => RootName},
-    Defs = maps:from_list([{Name, Def} || {_, _, Name, _} = Def <- DefList]),
-    SubDefs = sub_defs(Types),
-    Exports = maps:from_list([{Name, {export, DefCtx, [Name], none}} || {_, DefCtx, Name, _} <- DefList]),
-    {tag_symbols({module, Ctx, RootPath, RootImports, Exports, maps:merge(SubDefs, Defs)}), Types}.
+    {module, Ctx, RootPath, Statements ++ ModuleImports}.
 
-parse_module({module, ModuleCtx, Path, Exports, Statements},
-             {{module, _RootCtx, RootPath, RootImports, RootExports, RootDefs}, RootTypes}) ->
+parse_module({module, Ctx, Path, Statements}, RootStatements) ->
     ModulePath = [S || {symbol, _, _, S} <- Path],
-    LocalImports = [import(I) || I = {import, _, _} <- Statements],
-    LocalDefMap = maps:from_list([{Name, D} || D = {Type, _, Name, _} <- Statements,
-                                             Type == def orelse Type == macro]),
-    RootDefMap = maps:from_list([{Name, T} || T = {Type, _, Name, _} <- maps:values(RootDefs),
-                                             Type == def orelse Type == macro]),
+    Exports = lists:append([Exs || {exports, _, Exs} <- Statements]),
+    RootImports = [I || I = {import, _, _} <- RootStatements],
+    ModuleImports = [I || I = {import, _, _} <- Statements],
+    Imports = [import(I) || I <- utils:unique(RootImports ++ ModuleImports)],
+    DefMap = maps:from_list([{Name, D} || D = {Type, _, Name, _} <- Statements,
+                                          Type == def orelse Type == macro]),
     
-    case types(Statements, LocalImports, ModulePath) of
+    case types(maps:values(DefMap), Imports, ModulePath) of
         {error, Errs}       -> {error, Errs};
-        {ok, LocalTypes}    ->
-
-            Types = maps:merge(RootTypes, LocalTypes),
-            GlobalDefMap = maps:merge(RootDefMap, LocalDefMap),
-            SubDefMap = sub_defs(LocalTypes),
-
-            case error:collect([parse_export(E, Types, GlobalDefMap) || E <- Exports]) of
+        {ok, Types}    ->
+            SubDefMap = sub_defs(Types),
+            case error:collect([parse_export(E, Types, DefMap) || E <- Exports]) of
                 {error, Errs}       -> {error, Errs};
                 {ok, ExportTerms}   ->
                     ExportMap = maps:from_list(ExportTerms),
-
-                    % Any def we export but don't define is linked to the root module
-                    LinkF = fun(Ctx, Name) -> {link, Ctx, RootPath, Name} end,
-                    LinkMap = maps:from_list([{Name, LinkF(Ctx, Name)} || {_, {export, Ctx, [Name], _}} <- ExportTerms,
-                                                                          not(maps:is_key(Name, LocalDefMap))]),
-
-                    % Import all defs in the source file defined outside a module
-                    % alongside the explicitly stated imports within and outside the
-                    % module and finally all types defined within the module
-                    ImportOfRootItself = base_import(ModuleCtx, RootPath, RootExports, LinkMap),
-                    NonLocalRootImports = [I || I <- RootImports, not(is_local_non_wildcard_import(I, RootDefs))],
-                    Imports = [ImportOfRootItself | NonLocalRootImports ++ LocalImports],
-
-                    DefMap = maps:merge(maps:merge(SubDefMap, LocalDefMap), LinkMap),
-
-                    {ok, {tag_symbols({module, ModuleCtx, ModulePath, Imports, ExportMap, DefMap}), LocalTypes}}
+                    Module = {module, Ctx, ModulePath, Imports, ExportMap, maps:merge(SubDefMap, DefMap)},
+                    {ok, {tag_symbols(Module), Types}}
             end
     end.
+
+% If we export 'Boolean' in 'prelude', then we want to be able to import
+% 'prelude/Boolean/_'.  To do this, we need a module for 'prelude/Boolean',
+% which exports anything defined by 'Boolean'.
+sub_modules({module, _, BasePath, _, _, _} = BaseMod, BaseTypes) ->
+    [link_submodule(T, Members, BaseMod, BasePath) || {T, Members} <- maps:to_list(BaseTypes)].
+
 
 sub_defs(Types) ->
     maps:from_list([{sub_symbol(Parent, Child), tagged_gen:term(Term)} ||
@@ -108,7 +90,7 @@ parse_export({qualified_symbol, Ctx, Symbols} = Elem, Types, DefMap) when (lengt
 
 % Unsupported qualified symbol
 parse_export({qualified_symbol, _, Symbols} = Elem, _Types, _DefMap) ->
-    error:format({export_unsupported, kind_name([S || {_, _, _, S} <- Symbols])},
+    error:format({export_missing, kind_name([S || {_, _, _, S} <- Symbols])},
                  {module, Elem});
 
 % any other symbol (say `blah`)
@@ -118,17 +100,6 @@ parse_export({symbol, Ctx, _, Val} = Elem, _Types, DefMap) ->
         false -> error:format({export_missing, symbol:tag(Elem)}, {module, Elem})
     end.
 
-
-% If we export 'Boolean' in 'prelude', then we want to be able to import
-% 'prelude/Boolean/_'.  To do this, we need a module for 'prelude/Boolean',
-% which exports anything defined by 'Boolean'.
-sub_modules({module, _, BasePath, _, BaseExports, _} = BaseMod, BaseTypes, RootPath, RootTypes) ->
-    ExportMap = maps:from_list([{P, true} || {export, _, [P | _], _ } <- maps:values(BaseExports)]),
-    BaseLinks = [link_submodule(T, Members, BaseMod, BasePath) || {T, Members} <- maps:to_list(BaseTypes)],
-    RootLinks = [link_submodule(T, Members, BaseMod, RootPath) || {T, Members} <- maps:to_list(RootTypes),
-                                                                  maps:is_key(T, ExportMap),
-                                                                  not(maps:is_key(T, BaseTypes))],
-    BaseLinks ++ RootLinks.
 
 % Sub module for keywords and tagged values exported from the base module, but not defined there
 link_submodule(Parent, Children, {module, BaseCtx, BasePath, _, BaseExports, BaseDefs}, RootPath) ->
@@ -145,14 +116,6 @@ link_submodule(Parent, Children, {module, BaseCtx, BasePath, _, BaseExports, Bas
     tag_symbols({module, Ctx, BasePath ++ [Parent], Imports, Exports, Links}).
 
 sub_symbol(Parent, ChildName) -> list_to_atom(atom_to_list(Parent) ++ "/" ++ atom_to_list(ChildName)).
-
-% A def might have the same name as a subtype in the def. For
-% this reason we import only the base exports that don't match
-% the names of any of the keys in the ExludeMap
-base_import(Ctx, Path, Exports, ExcludeMap) ->
-                IncludedExports = [E || {K, E} <- maps:to_list(Exports), not(maps:is_key(K, ExcludeMap))],
-                ImportDict = maps:from_list([{lists:last(P), lists:last(P)} || {export, _, P, _} <- IncludedExports]),
-                {import, Ctx, Path ++ [ImportDict]}.
 
 % At this point in the compilation, we don't know if a symbol is defined
 % elsewhere or created within this def. We assume any symbol is a new keyword,
@@ -189,10 +152,6 @@ types(Defs, Imports, Path) ->
 
             {ok, Types}
     end.
-
-is_local_non_wildcard_import({import, _, [_, '_']}, _) -> false;
-is_local_non_wildcard_import({import, _, [D, _]}, Defs) -> maps:is_key(D, Defs);
-is_local_non_wildcard_import({import, _, _}, _) -> false.
 
 local_imports(Imports, TypeList) ->
     Tag = fun(Cs, '_')                  -> [{C, C} || C <- Cs];
@@ -277,7 +236,7 @@ filename_to_module_path(FileName) ->
                    false    -> lists:droplast(FilePath)
                end,
     BaseName = list_to_atom(filename:basename(FileName, ".kind")),
-    [source] ++ FileTail ++ [BaseName].
+    [{symbol, #{}, variable, P} || P <- [source] ++ FileTail ++ [BaseName]].
 
 import({import, Ctx, Path}) -> {import, Ctx, import(Path, [])}.
 import([], Path) -> lists:reverse(Path);

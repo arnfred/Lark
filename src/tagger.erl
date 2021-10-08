@@ -46,6 +46,8 @@ tag_macros(_, _, _) -> ok.
 % Step 2: Build local scope of all top-level module definitions
 tag_def(Tag, {def, _, _, _}, Path) ->
     {qualified_symbol, #{}, Path, Tag};
+tag_def(Tag, {macro, _, _, _}, Path) ->
+    {macro_symbol, #{}, Path, Tag};
 tag_def(_, {keyword, _, _, _} = Keyword, _) -> Keyword;
 tag_def(_, {link, _, Path, Symbol}, _) -> {qualified_symbol, #{}, Path, Symbol}.
 

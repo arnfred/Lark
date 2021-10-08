@@ -7,13 +7,13 @@ Terminals
     open close square_open square_close curly_open curly_close
     space_open space_square_open space_curly_open
     apply comma newlines assign
-    module_keyword import_keyword
+    module_keyword export_keyword import_keyword
     pipe right_arrow slash colon semicolon.
 
 Nonterminals
     literal
     root statements statement module_statements
-    module import implies
+    module import export implies
     pattern patterns pattern_application pattern_verb braced_pattern
     clauses clause fun definition
     application arguments arglist arg
@@ -24,7 +24,7 @@ Nonterminals
     symbol operator
     pair pair_key
     qualified_symbol
-    arg_separator separator clause_separator.
+    arg_separator separator line_separator.
 
 Rootsymbol root.
 
@@ -44,7 +44,7 @@ Left 745 leftbias_infix.
 %Right 701 rightbias_infix.
 
 Left 50 pipe.
-Right 50 clause_separator.
+%Right 50 line_separator.
 
 Nonassoc 200 pattern.
 Nonassoc 200 braced_pattern.
@@ -60,20 +60,20 @@ literal -> value : '$1'.
 % Statements
 % ----------
 
-statements -> statement                                  : ['$1'].
-statements -> statement statements                       : ['$1' | '$2'].
-statements -> statement newlines statements              : ['$1' | '$3'].
+statements -> statement            : ['$1'].
+statements -> statement statements : ['$1' | '$2'].
 
-statement -> definition         : '$1'.
-statement -> module             : '$1'.
-statement -> import             : '$1'.
+statement -> definition                 : '$1'.
+statement -> module                     : '$1'.
+statement -> import                     : '$1'.
+statement -> export                     : '$1'.
+statement -> statement line_separator   : '$1'.
 
 implies -> right_arrow          : '$1'.
 
 definition -> def symbol fun                            : {def, ctx('$1'), unwrap('$2'), '$3'}.
 definition -> def symbol newlines fun                   : {def, ctx('$1'), unwrap('$2'), '$4'}.
 definition -> def symbol implies expression             : {def, ctx('$1'), unwrap('$2'), '$4'}.
-definition -> def symbol implies expression newlines    : {def, ctx('$1'), unwrap('$2'), '$4'}.
 definition -> macro symbol fun                          : {macro, ctx('$1'), unwrap('$2'), '$3'}.
 definition -> macro symbol newlines fun                 : {macro, ctx('$1'), unwrap('$2'), '$4'}.
 definition -> macro symbol implies expression           : {macro, ctx('$1'), unwrap('$2'), '$4'}.
@@ -106,12 +106,14 @@ qualified_symbol -> symbol slash qualified_symbol  : {qualified_symbol, ctx('$1'
 % Module
 % ------
 
-module -> module_keyword symbol dict                                : {module, ctx('$1'), ['$2'], unwrap('$3'), []}.
-module -> module_keyword qualified_symbol dict                      : {module, ctx('$1'), unwrap('$2'), unwrap('$3'), []}.
-module -> module_keyword symbol dict module_statements              : {module, ctx('$1'), ['$2'], unwrap('$3'), '$4'}.
-module -> module_keyword qualified_symbol dict module_statements    : {module, ctx('$1'), unwrap('$2'), unwrap('$3'), '$4'}.
+module -> module_keyword symbol module_statements              : {module, ctx('$1'), ['$2'], '$3'}.
+module -> module_keyword qualified_symbol module_statements    : {module, ctx('$1'), unwrap('$2'), '$3'}.
 
-module_statements -> space_open statements close     : '$2'.
+module_statements -> space_open close                       : [].
+module_statements -> space_open statements close            : '$2'.
+module_statements -> space_open statements newlines close   : '$2'.
+
+export -> export_keyword dict                           : {exports, ctx('$1'), unwrap('$2')}.
 
 import -> import_keyword symbol                         : {import, ctx('$1'), ['$2']}.
 import -> import_keyword qualified_symbol               : {import, ctx('$1'), unwrap('$2')}.
@@ -146,8 +148,8 @@ recur_block_elem -> let         : '$1'.
 recur_block_elem -> seq         : '$1'.
 recur_block_elem -> expression  : '$1'.
 
-let -> val pattern assign expression clause_separator recur_block_elem      : {'let', ctx('$1'), '$2', '$4', '$6'}.
-seq -> recur_block_elem clause_separator recur_block_elem                   : {seq, ctx('$1'), '$1', '$3'}.
+let -> val pattern assign expression line_separator recur_block_elem      : {'let', ctx('$1'), '$2', '$4', '$6'}.
+seq -> recur_block_elem line_separator recur_block_elem                   : {seq, ctx('$1'), '$1', '$3'}.
 
 
 
@@ -224,16 +226,17 @@ pair_key -> literal                     : '$1'.
 % Clauses and Functions
 % -------
 
-fun -> clauses                              : {'fun', ctx('$1'), '$1'}.
+fun -> clauses                            : {'fun', ctx('$1'), '$1'}.
 
-clauses -> clause                           : ['$1'].
-clauses -> clause clause_separator          : ['$1'].
-clauses -> clause clause_separator clauses  : ['$1' | '$3'].
+clauses -> clause                         : ['$1'].
+clauses -> clause line_separator          : ['$1'].
+clauses -> clause line_separator clauses  : ['$1' | '$3'].
 
-clause -> patterns implies expression       : {clause, ctx('$1'), '$1', '$3'}.
+clause -> patterns implies expression     : {clause, ctx('$1'), '$1', '$3'}.
 
-clause_separator -> semicolon               : '$1'.
-clause_separator -> newlines                : '$1'.
+line_separator -> semicolon newlines      : '$1'.
+line_separator -> semicolon               : '$1'.
+line_separator -> newlines                : '$1'.
 
 
 
