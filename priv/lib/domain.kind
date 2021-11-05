@@ -7,4 +7,5 @@ module kind/domain (
   }
 
   def domain -> (Any | None)
+
 )

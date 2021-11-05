@@ -6,8 +6,8 @@
 local_type_test_() ->
     Module = 
     "def xor\n"
-    "    True False -> True\n"
-    "    False True -> True\n"
+    "    True False -> True,\n"
+    "    False True -> True,\n"
     "    _ _ -> False",
     ?test({ok, _}, parser:parse([{text, Module}])).
 
@@ -28,8 +28,8 @@ local_type_alias_test_() ->
     Module = 
     "import kind/prelude/boolean/{True: T, False: F}\n"
     "def xor\n"
-    "    T F -> T\n"
-    "    F T -> T\n"
+    "    T F -> T,\n"
+    "    F T -> T,\n"
     "    _ _ -> F",
     ?test({ok, _}, parser:parse([{text, Module}])).
 
@@ -38,8 +38,8 @@ local_type_no_import_test_() ->
     "def boolean -> True | False\n"
     "import boolean/False\n"
     "def notxor\n"
-    "    True False -> False\n"
-    "    False True -> False\n"
+    "    True False -> False,\n"
+    "    False True -> False,\n"
     "    _ _ -> False",
     ?testError({undefined_symbol, 'True'}, parser:parse([{text, Module}], #{import_prelude => false})).
 
@@ -48,8 +48,8 @@ local_type_wildcard_test_() ->
     "def boolean -> True | False\n"
     "import boolean/_\n"
     "def xor\n"
-    "    True False -> True\n"
-    "    False True -> True\n"
+    "    True False -> True,\n"
+    "    False True -> True,\n"
     "    _ _ -> False",
     ?test({ok, _}, parser:parse([{text, Module}], #{import_prelude => false})).
 
@@ -58,8 +58,8 @@ external_type_test_() ->
     "module blup (export {boolean}; def boolean -> True | False)",
     Module2 = "import blup/boolean/_
                def xor
-                   True False -> True
-                   False True -> True
+                   True False -> True,
+                   False True -> True,
                    _ _ -> False",
     ?test({ok, _}, parser:parse([{text, Module1}, {text, Module2}], #{import_prelude => false})).
 

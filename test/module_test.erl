@@ -246,7 +246,8 @@ local_module_keyword_test_() ->
                          def t -> A
                          import t/A
                          def s -> A
-                         def r -> s/A)",
+                         def r -> s/A)
+           ",
     fun({ok, Modules}) ->
             [?test(#{[test] := 
                      {module, _, _, _, _,

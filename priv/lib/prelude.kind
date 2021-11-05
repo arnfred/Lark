@@ -25,8 +25,8 @@ module kind/prelude (
   import compare/_
   
   def compare a b -> (a > b).match(
-      'true'  -> GT
+      'true'  -> GT,
       'false' -> (a < b).match(
-          'false' -> EQ
+          'false' -> EQ,
           'true'  -> LT))
 )

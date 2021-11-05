@@ -29,10 +29,10 @@ Rules.
 [\s\n]*\|[\s\n]*            : {token, {pipe,                #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \/                          : {token, {slash,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \:                          : {token, {colon,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
-[\s\n]*\;[\s\n]*            : {token, {semicolon,           #{line => TokenLine}, list_to_atom(TokenChars)}}.
+\;                          : {token, {semicolon,           #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \.                          : {token, {apply,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
 [\s]+\.                     : {token, {op_type(TokenChars), #{line => TokenLine}, list_to_atom(TokenChars)}}.
-[\s\n]*,[\s\n]*             : {token, {comma,   	        #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\s\n]*,                    : {token, {comma,   	        #{line => TokenLine}, list_to_atom(TokenChars)}}.
 [\s\n]*=[\s\n]*             : {token, {assign,              #{line => TokenLine}, list_to_atom(TokenChars)}}.
 [\s\n]*{RightArrow}[\s\n]*  : {token, {right_arrow,         #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {LeftArrow}                 : {token, {left_arrow,          #{line => TokenLine}, list_to_atom(TokenChars)}}.
@@ -48,7 +48,7 @@ export                      : {token, {export_keyword,      #{line => TokenLine}
 {RightBiasOperator}         : {token, {rightbias_operator,  #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {Symbol}                    : {token, {var_symbol,          #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {Keyword_Symbol}            : {token, {keyword_symbol,      #{line => TokenLine}, list_to_atom(TokenChars)}}.
-[\n]+                       : {token, {newlines,            #{line => TokenLine}, list_to_atom(TokenChars)}}.
+[\n]+([\s]*\n)*             : {token, {newlines,            #{line => TokenLine}, list_to_atom(TokenChars)}}.
 {String}                    : {token, {value,               #{line => TokenLine}, string, build_string(TokenChars, TokenLen)}}.
 {Atom}                      : {token, {value,               #{line => TokenLine}, atom, build_atom(TokenChars, TokenLen)}}.
 [\s]+                       : skip_token.

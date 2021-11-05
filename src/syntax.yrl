@@ -11,11 +11,10 @@ Terminals
     pipe right_arrow slash colon semicolon.
 
 Nonterminals
-    literal
     root statements statement module_statements
     module import export implies
     pattern patterns pattern_application pattern_verb braced_pattern
-    clauses clause fun definition
+    clauses clause fun definition def_keyword
     application arguments arglist arg
     infix rightbias_infix leftbias_infix
     noun verb expression block block_elem recur_block_elem let seq
@@ -24,7 +23,7 @@ Nonterminals
     symbol operator
     pair pair_key
     qualified_symbol
-    arg_separator separator line_separator.
+    arg_separator separator line_separator clause_separator.
 
 Rootsymbol root.
 
@@ -44,24 +43,21 @@ Left 745 leftbias_infix.
 %Right 701 rightbias_infix.
 
 Left 50 pipe.
-%Right 50 line_separator.
+Left 50 line_separator.
+Unary 200 pattern.
+Unary 250 braced_pattern.
+Unary 300 pattern_verb.
 
-Nonassoc 200 pattern.
-Nonassoc 200 braced_pattern.
-Nonassoc 300 pattern_verb.
-
-root -> statements          : '$1'.
-root -> newlines statements : '$2'.
-
-literal -> value : '$1'.
+root -> statements                   : '$1'.
+root -> newlines statements          : '$2'.
 
 
 
 % Statements
 % ----------
 
-statements -> statement            : ['$1'].
-statements -> statement statements : ['$1' | '$2'].
+statements -> statement                           : ['$1'].
+statements -> statement line_separator statements : ['$1' | '$3'].
 
 statement -> definition                 : '$1'.
 statement -> module                     : '$1'.
@@ -71,13 +67,15 @@ statement -> statement line_separator   : '$1'.
 
 implies -> right_arrow          : '$1'.
 
-definition -> def symbol fun                            : {def, ctx('$1'), unwrap('$2'), '$3'}.
-definition -> def symbol newlines fun                   : {def, ctx('$1'), unwrap('$2'), '$4'}.
-definition -> def symbol implies expression             : {def, ctx('$1'), unwrap('$2'), '$4'}.
-definition -> macro symbol fun                          : {macro, ctx('$1'), unwrap('$2'), '$3'}.
-definition -> macro symbol newlines fun                 : {macro, ctx('$1'), unwrap('$2'), '$4'}.
-definition -> macro symbol implies expression           : {macro, ctx('$1'), unwrap('$2'), '$4'}.
+definition -> def_keyword symbol fun                : {name('$1'), ctx('$1'), unwrap('$2'), '$3'}.
+definition -> def_keyword symbol newlines fun       : {name('$1'), ctx('$1'), unwrap('$2'), '$4'}.
+definition -> def_keyword symbol implies expression : {name('$1'), ctx('$1'), unwrap('$2'), '$4'}.
 
+def_keyword -> def : '$1'.
+def_keyword -> macro : '$1'.
+
+line_separator -> semicolon : '$1'.
+line_separator -> newlines  : '$1'.
 
 
 % Symbols
@@ -109,9 +107,8 @@ qualified_symbol -> symbol slash qualified_symbol  : {qualified_symbol, ctx('$1'
 module -> module_keyword symbol module_statements              : {module, ctx('$1'), ['$2'], '$3'}.
 module -> module_keyword qualified_symbol module_statements    : {module, ctx('$1'), unwrap('$2'), '$3'}.
 
-module_statements -> space_open close                       : [].
-module_statements -> space_open statements close            : '$2'.
-module_statements -> space_open statements newlines close   : '$2'.
+module_statements -> space_open close                           : [].
+module_statements -> space_open statements close                : '$2'.
 
 export -> export_keyword dict                           : {exports, ctx('$1'), unwrap('$2')}.
 
@@ -128,7 +125,7 @@ expression -> application                               : '$1'.  % f(a)
 expression -> collection                                : '$1'.  % {a, b: T}
 expression -> symbol                                    : '$1'.  % a
 expression -> qualified_symbol                          : '$1'.  % a/b/T
-expression -> literal                                   : '$1'.  % 1 or "string" or 'atom'
+expression -> value                                     : '$1'.  % 1 or "string" or 'atom'
 expression -> expression pipe expression                : {'or', ctx('$1'), '$1', '$3'}.  % A | B
 %expression -> expression and expression                 : {'and', ctx('$1'), '$1', '$3'}.  % A & B
 
@@ -167,13 +164,13 @@ noun -> collection                  : '$1'.
 noun -> block                       : '$1'.
 noun -> symbol                      : '$1'.
 noun -> qualified_symbol            : '$1'.
-noun -> literal                     : '$1'.
+noun -> value                       : '$1'.
 
 % Things that can be called after the dot in an application
 verb -> block                   : '$1'.
 verb -> symbol                  : '$1'.
 verb -> qualified_symbol        : '$1'.
-verb -> literal                 : '$1'.
+verb -> value                   : '$1'.
 
 application -> noun arguments                       : {application, ctx('$1'), '$1', '$2'}.
 application -> noun apply verb                      : {application, ctx('$1'), '$3', ['$1']}.
@@ -220,44 +217,43 @@ pair -> pair_key colon expression : {pair, ctx('$1'), '$1', '$3'}.
 pair_key -> collection                  : '$1'.
 pair_key -> symbol                      : '$1'.
 pair_key -> qualified_symbol            : '$1'.
-pair_key -> literal                     : '$1'.
+pair_key -> value                       : '$1'.
 
 
 % Clauses and Functions
 % -------
 
-fun -> clauses                            : {'fun', ctx('$1'), '$1'}.
+fun -> clauses                              : {'fun', ctx('$1'), '$1'}.
 
-clauses -> clause                         : ['$1'].
-clauses -> clause line_separator          : ['$1'].
-clauses -> clause line_separator clauses  : ['$1' | '$3'].
+clauses -> clause                           : ['$1'].
+clauses -> clause clause_separator clauses  : ['$1' | '$3'].
 
-clause -> patterns implies expression     : {clause, ctx('$1'), '$1', '$3'}.
+clause -> patterns implies expression       : {clause, ctx('$1'), '$1', '$3'}.
 
-line_separator -> semicolon newlines      : '$1'.
-line_separator -> semicolon               : '$1'.
-line_separator -> newlines                : '$1'.
-
+clause_separator -> comma : '$1'.
+clause_separator -> comma newlines : '$1'.
 
 
 % Patterns
 % --------
 
-patterns -> pattern                         : ['$1'].
-patterns -> pattern patterns                : ['$1' | '$2'].
+patterns -> pattern                             : ['$1'].
+patterns -> pattern patterns                    : ['$1' | '$2'].
 
-pattern -> symbol                           : '$1'.   % a
-pattern -> pattern_application              : '$1'.   % T.A(S)
-pattern -> space_open braced_pattern close  : '$2'.   % (...)
-pattern -> collection                       : '$1'.   % {a, b: T}
-pattern -> qualified_symbol                 : '$1'.   % a/b/T
-pattern -> literal                          : '$1'.   % 2
+pattern -> symbol                               : '$1'.   % a
+pattern -> pattern_application                  : '$1'.   % T.A(S)
+% For braced patterns, spaced_open is used to distinguise `a(1)` (application)
+% from `a (1)` (two separate patterns)
+pattern -> space_open braced_pattern close      : '$2'.   % (...)
+pattern -> collection                           : '$1'.   % {a, b: T}
+pattern -> qualified_symbol                     : '$1'.   % a/b/T
+pattern -> value                                : '$1'.   % 2
 
-braced_pattern -> pair                      : '$1'.
-braced_pattern -> application               : '$1'.
-braced_pattern -> pattern                   : '$1'.
-braced_pattern -> open braced_pattern close : '$2'.   % (...)
-braced_pattern -> pattern pipe pattern      : {'or', ctx('$1'), '$1', '$3'}. % A | B
+braced_pattern -> pair                          : '$1'.
+braced_pattern -> application                   : '$1'.
+braced_pattern -> pattern                       : '$1'.
+braced_pattern -> open braced_pattern close     : '$2'.   % (...)
+braced_pattern -> pattern pipe braced_pattern   : {'or', ctx('$1'), '$1', '$3'}. % A | B
 
 pattern_application -> pattern_verb arguments             : {application, ctx('$1'), '$1', '$2'}.
 pattern_application -> noun apply pattern_verb            : {application, ctx('$1'), '$3', ['$1']}.
@@ -298,6 +294,7 @@ dict_elements -> dict_element separator                : ['$1'].
 dict_elements -> dict_element separator dict_elements  : ['$1' | '$3'].
 
 separator -> comma          : '$1'.
+separator -> comma newlines : '$1'.
 separator -> newlines       : '$1'.
 
 
@@ -317,3 +314,5 @@ ctx({_, Ctx, _})        -> Ctx;
 ctx({_, Ctx, _, _})     -> Ctx;
 ctx({_, Ctx, _, _, _})  -> Ctx;
 ctx([Head|_]) 		    -> ctx(Head).
+
+name(Tuple) when is_tuple(Tuple)    -> element(1, Tuple).
