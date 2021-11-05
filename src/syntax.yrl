@@ -43,7 +43,7 @@ Left 745 leftbias_infix.
 %Right 701 rightbias_infix.
 
 Left 50 pipe.
-Left 50 line_separator.
+Right 50 line_separator.
 Unary 200 pattern.
 Unary 250 braced_pattern.
 Unary 300 pattern_verb.
