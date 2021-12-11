@@ -3,15 +3,17 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
-linearize(Code, Name) -> linearize(Code, Name, [source, test_code]).
-linearize(Code, Name, ModulePath) ->
+linearize(Code, Name) -> linearize(Code, Name, [source, test_code], #{}).
+linearize(Code, Name, Env) when is_map(Env) -> linearize(Code, Name, [source, test_code], Env);
+linearize(Code, Name, ModulePath) when is_list(ModulePath) -> linearize(Code, Name, ModulePath, #{}).
+linearize(Code, Name, ModulePath, Env) ->
     case parser:parse([{text, test_code, Code}], #{include_kind_libraries => false}) of
         {error, Errs} -> {error, Errs};
         {ok, Modules} ->
             ModuleMap = maps:from_list([{module:path(M), M} || M <- Modules]),
             {module, _, _, _, _, Defs} = maps:get(ModulePath, ModuleMap),
             Term = maps:get(Name, Defs),
-            linearize:term(Term, ModuleMap)
+            linearize:term(Term, ModuleMap, Env)
     end.
 
 tree(Def, Args) -> error:flatmap(Def, fun({_, {'fun', _, F}}) ->
@@ -81,7 +83,7 @@ static_function_test_() ->
     ?test({ok, #{key := {sum, [a, b]}}}, domain(Res, [{sum, [a, b]}]))].
 
 sum_clause_test_() ->
-    Code = "def f (a: 1 | 2) (b: 3 | 4) -> a | b
+    Code = "def f (a: 1 | 2) (b: 3 | 4) -> a | b,
                   _ _ -> 0",
     Res = linearize(Code, f),
     [?test({ok, {'fun', _, [{clause, _, [{value, _, _, 1}, {value, _, _, 3}],
@@ -101,10 +103,10 @@ sum_clause_test_() ->
            tree(Res, [2, 3]))].
 
 clause_subset_test_() ->
-    Code = "def f 1 2             -> 3
-                  1 4             -> 5
-                  3 2             -> 6
-                  (1 | 3) (2 | 4) -> 7",
+    Code = "def f 1 2                   -> 3,
+                  (1 | 3) (2 | 4 | 5)   -> 7,
+                  1 4                   -> 5,
+                  3 2                   -> 6",
     Res = linearize(Code, f),
     [?test({ok, {'fun', _, [{clause, _, [{value, _, _, 1}, {value, _, _, 2}],
                              {value, _, _, 3}}]}},
@@ -114,9 +116,9 @@ clause_subset_test_() ->
 pattern_sum_arg_test_() ->
     Code = "def a -> (T: Q)
             import a/T
-            def t (T: v) -> v
-                  {a: 5} -> 5
-                  [6, 7] -> 8
+            def t (T: v) -> v,
+                  {a: 5} -> 5,
+                  [6, 7] -> 8,
                   _      -> 99",
     Res = linearize(Code, t),
     Tag = [source, test_code, a, 'T'],
@@ -197,9 +199,10 @@ beam_application_test_() ->
     ?test({ok, [1, 2]}, domain(Res, [[1], [2], [3]]))].
 
 qualified_pattern_symbol_test_() ->
-    Code = "module test {boolean} (def boolean -> True | False)
-            module test2 {} (import test
-                             def t test/boolean -> test/boolean/True)",
+    Code = "module test (export {boolean}
+                         def boolean -> True | False)
+            module test2 (import test
+                          def t test/boolean -> test/boolean/True)",
     Res = linearize(Code, t, [test2]),
     [?test({ok, 'test/boolean/True'}, domain(Res, ['test/boolean/False']))].
 
@@ -215,7 +218,7 @@ beam_symbol_in_pattern_test_() ->
 ambigious_fun_test_() ->
     Code = "import beam/rand/uniform
             def match a f -> f(a)
-            def t -> (val f = uniform(2).match(1 -> (fn _ -> One)
+            def t -> (val f = uniform(2).match(1 -> (fn _ -> One),
                                                _ -> (fn _ -> Two))
                       f('_'))",
     Res = linearize(Code, t),
@@ -240,7 +243,7 @@ wrong_arity_test_() ->
     [?testError({wrong_function_arity, 1, 2}, tree(Res, []))].
 
 variable_arity_test_() ->
-    Code = "def t 1 2 -> 2
+    Code = "def t 1 2 -> 2,
                   1   -> 1",
     Res = linearize(Code, t),
     [?testError({variable_arity, [2, 1]}, tree(Res, [1, 2]))].
@@ -270,3 +273,15 @@ function_domain_expected_test_() ->
     Code = "def t -> 1(2)",
     Res = linearize(Code, t),
     [?testError({function_domain_expected, 1}, tree(Res, []))].
+
+env_test_() ->
+    Code = "module a (export {b}; def b -> 'something else')
+            def f -> a/b(4)",
+    Env = #{{[a, b], [4]} => {value, #{domain => world}, atom, hello}},
+    Res = linearize(Code, f, Env),
+    [?test({ok, world}, domain(Res, [])),
+     ?test({ok, {'fun', _, [{clause, _, [], {qualified_application, _, [a], b, [{value, _, integer, 4}]}}]}}, tree(Res, [])),
+     ?test({ok, Env}, env(Res, []))].
+
+
+

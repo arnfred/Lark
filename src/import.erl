@@ -49,7 +49,7 @@ scope(ModulePath, ModuleMap) ->
     % the current module, so that if the local module defines `def t -> (A |
     % B)`, then `t/A` and `t/B` are in the import scope.
     {module, _, _, _, _, LocalDefs} = maps:get(ModulePath, ModuleMap),
-    LocalScope = [{(P -- ModulePath) ++ [D], P ++ [D]} || {P, {module, _, Path, _, _, Defs}} <- maps:to_list(ModuleMap),
+    LocalScope = [{(P -- ModulePath) ++ [D], P ++ [D]} || {P, {module, _, _, _, _, Defs}} <- maps:to_list(ModuleMap),
                                                            D <- maps:keys(Defs),
                                                            maps:is_key(module:kind_name([lists:last(P), D]),  LocalDefs)],
 
@@ -130,8 +130,8 @@ kind(AliasPath, Path, ModuleMap, Term) ->
 beam(_, [ModulePath], Term) -> 
     case beam('_', '_', [ModulePath], Term) of
         {error, Errs}   -> {error, Errs};
-        {ok, Aliases}   -> QualifiedAliases = [{alias, Ctx, [ModulePath, Alias], Term} ||
-                                               {alias, Ctx, [Alias], Term} <- Aliases],
+        {ok, Aliases}   -> QualifiedAliases = [{alias, Ctx, [ModulePath, Alias], ATerm} ||
+                                               {alias, Ctx, [Alias], ATerm} <- Aliases],
                            {ok, QualifiedAliases}
     end;
 beam(Alias, Path, Term) ->
@@ -183,7 +183,8 @@ beam_subtypes(ImportPath, Alias, Term) ->
 
 whitelisted(Aliases, ModuleMap, Options) ->
     Extract = fun({alias, _, _, {beam_symbol, _, ModulePath, Name}}) -> {ModulePath, Name};
-                 ({alias, _, _, {qualified_symbol, _, ModulePath, Name}}) -> {ModulePath, Name} end,
+                 ({alias, _, _, {qualified_symbol, _, ModulePath, Name}}) -> {ModulePath, Name};
+                 ({alias, _, _, {keyword, _, ModulePath, Name}}) -> {ModulePath, Name} end,
     Check = fun({alias, _, _, Symbol} = Alias) ->
                 {ModulePath, Name} = Extract(Alias),
                 case maps:is_key(ModulePath, ModuleMap) orelse is_whitelisted(module:beam_name(ModulePath), Name) of
@@ -245,7 +246,9 @@ is_whitelisted(Module, Name) ->
                                purge_module, put, self, cancel_timer, delete_module,
                                hibernate, nif_error, spawn, spawn_link, spawn_monitor,
                                spawn_opt, spawn_request, suspend_process, system_flag,
-                               system_info, system_monitor, system_profile, throw],
+                               system_info, system_monitor, system_profile,
+                               register, resume_process, send, send_after,
+                               send_nosuspend],
                   'persistent_term' => [],
                   'zlib' => []},
     maps:is_key(Module, Whitelist) andalso not(lists:member(Name, maps:get(Module, Whitelist))).

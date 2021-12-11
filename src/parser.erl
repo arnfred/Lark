@@ -20,7 +20,7 @@ parse(Inputs, Options) ->
                      false  -> GivenPaths
                  end,
 
-    Tag = fun() -> atom_to_list(symbol:id(no_file)) end,
+    Tag = fun() -> atom_to_list(symbol:id(inline)) end,
     UnnamedInlineTexts = [{Tag(), Text} || {text, Text} <- Inputs],
     NamedInlineTexts = [{T, Text} || {text, T, Text} <- Inputs],
     InlineTexts = UnnamedInlineTexts ++ NamedInlineTexts,
@@ -35,7 +35,7 @@ parse(Inputs, Options) ->
                     case module:parse(Sources) of
                         {error, Errs}   -> {error, Errs};
                         {ok, ModuleMap} ->
-                            F = fun(Module) -> import_and_tag(Module, ModuleMap, Options) end,
+                            F = fun(Module) -> link_and_tag(Module, ModuleMap, Options) end,
                             case error:collect([F(M) || M <- maps:values(ModuleMap)]) of
                                 {error, Errs}   -> {error, Errs};
                                 {ok, Formatted} ->
@@ -102,7 +102,7 @@ to_ast(FileName, Text) ->
             end
     end.
 
-import_and_tag({module, ModuleCtx, ModulePath, ModuleImports, Exports, DefMap}, ModuleMap, Options) ->
+link_and_tag({module, ModuleCtx, ModulePath, ModuleImports, Exports, DefMap}, ModuleMap, Options) ->
 
     % Make sure to import prelude only if we're both importing prelude and all
     % kind libraries in general
@@ -134,9 +134,10 @@ import_and_tag({module, ModuleCtx, ModulePath, ModuleImports, Exports, DefMap}, 
             end
     end.
 
-% A qualified symbol is due to be either the expression part of an application,
-% or itself an application with zero arguments. This function straightens out
-% that ambiguity
+% To make it easier to linearize we clearly distinguish between the following types of application:
+% - `application`: Application of anonymous function or internal to the module
+% - `qualified_application`: Application of function exported from different kind module
+% - `beam_application`: Application of function exported from non-kind module
 normalize_applications(Module) ->
     Pre = fun(_, _, {application, Ctx, {qualified_symbol, _, ModulePath, Name}, Args}) ->
                   {ok, {qualified_application, Ctx, ModulePath, Name, Args}};

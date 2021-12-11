@@ -9,24 +9,6 @@ gen_expr(expr, _, {def, _, Name, Expr}) ->
                    {ok, Name, {FName, cerl:c_fun([], Expr)}}
     end;
 
-gen_expr(expr, _, {type_def, _, Name, Expr}) ->
-    case cerl:is_c_fun(Expr) of
-        true    -> FName = cerl:c_fname(Name, cerl:fun_arity(Expr)),
-                   {ok, Name, {FName, Expr}};
-        false   -> FName = cerl:c_fname(Name, 0),
-                   {ok, Name, {FName, cerl:c_fun([], Expr)}}
-    end;
-
-% type expr of form: T: ...
-gen_expr(expr, _, {tagged, Ctx, _, Val} = Term) ->
-    Tag = symbol:tag(Term),
-    CoreForm = cerl:c_tuple([cerl:c_atom(tagged), cerl:c_atom(Tag), Val]),
-    TypeForm = case maps:get(args, Ctx) of
-                   []       -> CoreForm;
-                   Args     -> cerl:c_fun([cerl:c_var(A) || {var, A} <- Args], CoreForm)
-               end,
-    {ok, Tag, TypeForm, CoreForm};
-
 % expr of form: A | B | C
 gen_expr(expr, _, {sum, _, Elements}) ->
     SumElements = cerl:make_list(Elements),
@@ -83,7 +65,7 @@ gen_expr(expr, _, {beam_application, _, ModulePath, Name, Args}) ->
     {ok, cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(Name), Args)};
 
 % expr of form: T
-gen_expr(expr, Scope, {type, _, _, Path} = Term) ->
+gen_expr(expr, Scope, {type, _, _, _} = Term) ->
     Tag = symbol:tag(Term),
     case maps:get(Tag, Scope, undefined) of
         undefined               -> {ok, cerl:c_atom(Tag)};
@@ -151,9 +133,3 @@ domain(Tag) -> cerl:c_apply(cerl:c_fname(domain, 1), [cerl:c_atom(Tag)]).
 
 call_type_tag(Tag, ArgForms) ->
     call_type_domain(domain(Tag), ArgForms).
-
-traverse_term(Scope, Term, Tag) -> 
-    case ast:traverse_term(expr, fun code_gen:pre_gen/3, fun code_gen:gen/3, Scope, Term) of
-        {error, Errs}       -> {error, Errs};
-        {ok, {_Env, Form}}  -> {ok, Tag, Form}
-    end.

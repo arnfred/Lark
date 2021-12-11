@@ -5,21 +5,16 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-term(Term, ModuleMap) ->
-    term(expr, Term, ModuleMap).
-term(expr, Term, ModuleMap) ->
-    GlobalScope = scope(ModuleMap),
+term(Term, Libs) ->
+    term(Term, Libs, #{}).
+term(Term, Libs, Env) ->
+    GlobalScope = scope(Libs, Env),
     History = [],
-    expr({GlobalScope, #{}}, History, Term);
-term(pattern, Term, ModuleMap) ->
-    GlobalScope = scope(ModuleMap),
-    History = [],
-    PatternDomain = any,
-    pattern({GlobalScope, #{}}, History, PatternDomain, Term).
+    expr({GlobalScope, #{}}, History, Term).
 
 
 
-scope(ModuleMap) ->
+scope(Libs, Env) ->
 
     % There's a gotcha when a scope is computed that in order to compute the
     % scope, the scope itself is needed.  to circumvent this catch-22, we relax
@@ -28,22 +23,26 @@ scope(ModuleMap) ->
     % indices. Thus we can neatly compute the index of index functions, and
     % then with the index in hand, build the scope by evaluating each index
     % function.
-    I = fun(Def) ->
-                fun(Index) ->
-                        fun(ArgDomains, History) ->
-                                Global = global_scope(Index),
-                                case expr({Global, #{}}, [], Def) of
-                                   {error, Errs}  -> {error, Errs};
-                                   {ok, {_, {'fun', _, F}}}   -> F(ArgDomains, History)
-                                end end end end,
+    IdxF = fun(Def, Path) ->
+                   fun(Index) ->
+                           fun(ArgDomains, History) ->
+                                   case maps:is_key({Path, ArgDomains}, Env) of
+                                       true    -> {ok, {#{}, maps:get({Path, ArgDomains}, Env)}};
+                                       false    ->
+                                           Global = global_scope(Index),
+                                           case expr({Global, #{}}, [], Def) of
+                                               {error, Errs}  -> {error, Errs};
+                                               {ok, {_, {'fun', _, F}}}   -> F(ArgDomains, History)
+                                           end end end end end,
 
     % The index contains a mapping of def paths to index functions. An index
-    % function will return a scope function when given an index as an argument.
-    % A scope function will return the evaluated tree of the def that the def
+    % function will return a scope function given an index as an argument. A
+    % scope function will return the evaluated tree of the def that the def
     % path is pointing to, when given arg domains and the current evaluation
     % history
-    Index = maps:from_list([{P ++ [N], I(Term)} || {module, _, P, _, _, Defs} <- maps:values(ModuleMap),
-                                                   {N, Term} <- maps:to_list(Defs)]),
+    Index = maps:from_list([{Path, IdxF(Term, Path)} || {module, _, P, _, _, Defs} <- maps:values(Libs),
+                                                        {N, Term} <- maps:to_list(Defs),
+                                                        Path <- [P ++ [N]]]),
 
 
     global_scope(Index).
@@ -134,8 +133,14 @@ clauses(Scopes, History, ArgDomains, [Clause | Cs], Res) ->
             % which all the pattern domains are subsets of the argument
             % domains. There's no point in keeping on scanning patterns if we
             % can infer from the argument domains that they will not be reached
+            %
+            % We do however want to keep on scanning patterns if any of the
+            % ArgDomains is `whatever`.  For this reason we swap out any
+            % `whatever`s with `any`s before checking for subsets.
+            ArgAnyDomains = lists:map(fun(whatever)    -> any;
+                                         (D)           -> D end, ArgDomains),
             ClauseRes = lists:reverse([{ok, {Env, C}} || C <- Clauses]),
-            IsClauseSubset = fun({clause, _, PsTs, _}) -> domain:subset(ArgDomains, [domain(T) || T <- PsTs]) end,
+            IsClauseSubset = fun({clause, _, PsTs, _}) -> domain:subset(ArgAnyDomains, [domain(T) || T <- PsTs]) end,
             case lists:any(IsClauseSubset, Clauses) of
                 true    -> clauses(Scopes, History, ArgDomains, [], ClauseRes ++ Res);
                 false   -> clauses(Scopes, History, ArgDomains, Cs, ClauseRes ++ Res)
@@ -417,7 +422,7 @@ post(expr, _, History, {application, Ctx, Expr, Args} = Term) ->
 
 % Expr/Patterns of type `T: S`
 post(_, _, _, {tagged, _, Path, Expr} = Term) ->
-    {ok, {#{}, set_domain(Term, {tagged, Path, domain(Expr)})}};
+    {ok, {#{}, set_domain(Expr, {tagged, Path, domain(Expr)})}};
 
 
 
@@ -531,7 +536,7 @@ linearize_local_defs([{Tag, DomainArgsList} | Defs], History, Tree, Env, Errors)
     % first called on the inner clause and then on the outer clause.
     %
     % The following definitions of `linearize_local_defs` recursively process
-    % these tag:[argdomain] pairs in the following way:
+    % these {tag, [[argdomain, argdomain, ..], ..]} pairs in the following way:
     %  1. For each argument to a tag, compute the union of argument domains
     %  2. Traverse the current tree and if the Tree contains the function
     %     declaration for the tagged function, compute the actual function
@@ -670,7 +675,9 @@ allowed_beam_function(Module, Name) ->
     Blacklist = #{'calendar' => [],
                   'rand' => [],
                   'random' => [],
-                  'erlang' => [date, localtime, now, time, time_offset, timestamp, unique_integer, universaltime]},
+                  'erlang' => [date, localtime, now, time, time_offset,
+                               timestamp, unique_integer, universaltime,
+                               throw, raise]},
     Blacklisted = (maps:is_key(Module, Blacklist) andalso
                    ((maps:get(Module, Blacklist) == []) orelse
                     (lists:member(Name, maps:get(Module, Blacklist))))),

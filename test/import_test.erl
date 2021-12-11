@@ -209,6 +209,18 @@ sandbox_test_() ->
                 test_import([beam, filelib, is_dir], #{}, Options)),
 	 ?test({ok, _}, test_import([beam, lists, reverse], #{}, Options))].
 
+sandbox_keyword_test_() ->
+    Options = #{sandboxed => true},
+    Code = "module test/module1 (export {t/A}
+                                 def t -> (A | B))
+            module test/module2 (import test/module1/_)",
+    ModuleMap = module_map("test_file", Code),
+    #{[test, module2] := Mod} = ModuleMap,
+    Actual = import:import(Mod, ModuleMap, Options),
+    ?test({ok, {#{'A' := {keyword, _, [test, module1, t], 'A'}},
+               [{dependency, _, [test, module2], [test, module1, t]}]}}, Actual).
+
+
 import_qualified_module_name_test_() ->
     Code = "module kind/prelude (export {option}
                                  def option -> Option)",

@@ -230,7 +230,7 @@ kind_name(Path) ->
     list_to_atom(lists:flatten([PathString])).
 
 filename_to_module_path(FileName) ->
-    FilePath = lists:map(fun list_to_atom/1, filename:split(FileName)),
+    FilePath = lists:map(fun erlang:list_to_atom/1, filename:split(FileName)),
     FileTail = case length(FilePath) > 2 of
                    true     -> lists:nthtail(length(FilePath) - 2, lists:droplast(FilePath));
                    false    -> lists:droplast(FilePath)

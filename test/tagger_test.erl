@@ -223,6 +223,23 @@ val_test_() ->
                          {application, _, {variable, _, f, F},
                           [{variable, _, a, A1}]}}}]}}}, tag(Code)).
 
+val_seq_test_() ->
+    Code = "def test a -> (val f = (fn b -> a)
+                           f(a)
+                           f(a))",
+    ?test(#{test := {def, _, test,
+                     {'fun', _,
+                      [{clause, _,
+                        [{variable, _, a, A1}],
+                        {'let', _, {variable, _, f, F},
+                         {'fun', _,
+                          [{clause, _,
+                            [{variable, _, b, _B}],
+                            {variable, _, a, A1}}]},
+                         {seq, _,
+                          {application, _, {variable, _, f, F}, [{variable, _, a, A1}]},
+                          {application, _, {variable, _, f, F}, [{variable, _, a, A1}]}}}}]}}},
+          tag(Code)).
 parens_variable_test_() ->
     Code = "def f (((a))) -> (((a)))",
     Defs = tag(Code),
