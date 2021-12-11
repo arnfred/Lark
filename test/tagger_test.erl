@@ -285,6 +285,17 @@ tagged_type_test_() ->
                                     [{tagged, _, [source, test_code, 'tagged-type', 'T'], {value, _, integer, 4}}],
                                     {value, _, integer, 4}}]}}}, Defs)].
 
+module_keyword_test_() ->
+    Code = "module m (export {boolean}
+                      def boolean -> (True | False))
+            import m/boolean/_
+            def f False -> True",
+    Defs = tag(Code),
+    [?test(#{'f' := {def, _, 'f', {'fun', _,
+                                   [{clause, _,
+                                    [{keyword, _, [m, boolean], 'False'}],
+                                    {keyword, _, [m, boolean], 'True'}}]}}}, Defs)].
+
 def_tag_test_() ->
     Code = "def d a -> {a: a}
             def f (b: d(T)) -> b",

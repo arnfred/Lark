@@ -31,7 +31,7 @@ load(Source, Paths, Options) ->
         {error, Errs}   -> {error, Errs};
         {ok, Parsed}    ->
             Libs = maps:from_list([{ModPath, Mod} || {module, _, ModPath, _, _, _} = Mod <- Parsed]),
-            Mod = maps:get([source, root], Libs), 
+            Mod = maps:get([source, root], Libs),
             case monomorphize:module(Mod, Libs, Options) of
                 {error, Errs}   -> {error, Errs};
                 {ok, Module}    -> compile_and_load(Module)

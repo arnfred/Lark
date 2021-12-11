@@ -204,3 +204,14 @@ module_order_test_() ->
     {ok, Modules} = parser:parse([{text, test_code, Module}], #{include_kind_libraries => false}),
     ModuleNames = [module:kind_name(M) || M <- Modules],
     ?test(['test', 'test/t'], ModuleNames).
+
+prelude_keyword_import_test_() ->
+    Source = "def f False -> True",
+    {ok, Modules} = parser:parse([{text, test_code, Source}], #{include_kind_libraries => true}),
+    ModuleMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
+    ?test(#{'source/test_code' := {module, _, _, _, _,
+                                   #{f := {def, _, 'f',
+                                           {'fun', _, [{clause, _,
+                                                        [{keyword, _, [kind, prelude, boolean], 'False'}],
+                                                        {keyword, _, [kind, prelude, boolean], 'True'}}]}}}}},
+          ModuleMap).

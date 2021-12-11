@@ -68,12 +68,17 @@ tag_symbols(pattern, Scope, {symbol, Ctx, variable, S} = Term) ->
 
 
 tag_symbols(_, _, {symbol, Ctx, keyword, '_'}) -> {ok, {keyword, Ctx, '_'}};
-tag_symbols(Type, Scope, {symbol, Ctx, keyword, S} = Term) ->
+tag_symbols(Type, Scope, {symbol, Ctx, keyword, Tag} = Term) ->
     Parent = maps:get(parent, Ctx),
-    Tag = symbol:tag([Parent, S]),
+    LocalTag = symbol:tag([Parent, Tag]),
+    % First check if the Tag is in scope
     case maps:is_key(Tag, Scope) of
-        false   -> error:format({undefined_symbol, S}, {tagger, Type, Term});
-        true    -> {ok, replace(Scope, Tag, Term)}
+        true    -> {ok, replace(Scope, Tag, Term)};
+        % If not in scope, check if refers to keyword defined within same def
+        false   -> case maps:is_key(LocalTag, Scope) of
+                       false    -> error:format({undefined_symbol, Tag}, {tagger, Type, Term});
+                       true    -> {ok, replace(Scope, LocalTag, Term)}
+                   end
     end;
 
 tag_symbols(Type, Scope, {symbol, _, _, S} = Term) ->
