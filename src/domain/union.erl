@@ -13,6 +13,8 @@ union(any, _) -> any;
 union(_, any) -> any;
 union(none, D) -> D;
 union(D, none) -> D;
+union(whatever, D) -> D;
+union(D, whatever) -> D;
 union(D, {error, _}) -> D;
 union({sum, D1}, {sum, D2}) -> {sum, ordsets:union(D1, D2)};
 union({sum, D1}, D) -> {sum, ordsets:add_element(D, D1)};

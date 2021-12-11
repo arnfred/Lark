@@ -1,6 +1,10 @@
 -module(diff).
 -export([diff/3]).
 
+% `whatever` is a special value in that it is completely indifferent
+diff(_, whatever, _) -> none;
+diff(_, _, whatever) -> none;
+
 diff(_, {recur, D}, {recur, D}) -> none;
 diff(Path, {recur, OldF}, {recur, NewF}) -> 
     OldTag = utils:gen_tag(OldF),
@@ -80,6 +84,16 @@ diff(Path, L1, L2) when is_list(L1), is_list(L2) ->
               only_in_new => L2Tail,
               diff => diff(Path, L1Init, L2Init)}
     end;
+
+% If we diff a value with a sum and the diff is none for every part of the sum,
+% then the result of the diff is also none
+diff(Path, Old, {sum, New}) ->
+    Diffs = [diff(Path, Old, E) || E <- New],
+    case lists:all(fun(E) -> E =:= none end, Diffs) of
+        true    -> none;
+        false   -> Diffs
+    end;
+
 
 diff(_, Old, New) -> #{old => Old,
                        new => New}.

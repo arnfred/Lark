@@ -3,6 +3,7 @@
 -include_lib("test/macros.hrl").
 
 set(Elems) when is_list(Elems) -> ordsets:from_list(Elems).
+sum(Elems) when is_list(Elems) -> {sum, set(Elems)}.
 
 normalize_sum_sum_test_() ->
     Actual = domain:normalize({sum, set([a,{sum, set([b,c])}])}),
@@ -53,7 +54,19 @@ sum_list_normalize_test_() ->
     Expected = {sum, set([a, [1, 2]])},
     ?testEqual(Expected, domain:normalize(L)).
 
-sum_list_sum_normalize_test_() ->
-    L = {sum, set([[{sum, set([a, 1])}, {sum, set([b, 2])}], [1, 2]])},
-    Expected = {sum, set([[a, b], [a, 2], [1, b], [1, 2]])},
+simple_sum_list_sum_test_() ->
+    L = sum([[sum([a, 1]), b]]),
+    Expected = sum([[a, b], [1, b]]),
     ?testEqual(Expected, domain:normalize(L)).
+
+sum_list_sum_normalize_test_() ->
+    L = sum([[sum([a, 1]), sum([b, 2])],
+             [1, 2]]),
+    Expected = sum([[a, b], [a, 2], [1, b], [1, 2]]),
+    ?testEqual(Expected, domain:normalize(L)).
+
+list_sum_test_() ->
+    L = [sum([a, b])],
+    Expected = sum([[a], [b]]),
+    ?testEqual(Expected, domain:normalize(L)).
+    

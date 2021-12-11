@@ -12,10 +12,10 @@ intersection(D, {recur, S}) -> intersection({recur, S}, D);
 
 intersection(any, D) -> D;
 intersection(D, any) -> D;
-intersection('Domain/Any', D) -> D;
-intersection(D, 'Domain/Any') -> D;
 intersection(none, _) -> none;
 intersection(_, none) -> none;
+intersection(whatever, D) -> D;
+intersection(D, whatever) -> D;
 
 % TODO: A function can be considered a value like `5` or 'atom'. While a
 % function can also be seen as a constructor which given some inputs returns a

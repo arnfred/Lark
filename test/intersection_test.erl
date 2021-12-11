@@ -171,3 +171,7 @@ list_prefix_test_() ->
     L2 = [1, 2, 3],
     ?testEqual(L1, domain:intersection(L1, L2)).
 
+whatever_test_() ->
+    [?testEqual(whatever,   domain:intersection(whatever, any)),
+     ?testEqual(1,          domain:intersection(whatever, 1)),
+     ?testEqual(none,       domain:intersection(whatever, none))].

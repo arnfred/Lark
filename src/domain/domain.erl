@@ -17,7 +17,8 @@ intersection(Ds) when is_list(Ds) ->
     normalize(unroll(Intersected)).
 intersection(D1, D2) -> normalize(unroll(intersection:intersection(D1, D2))).
 
-subset(D1, D2) -> diff(normalize(D1), intersection(D1, D2)) =:= none.
+subset(D1, D2) -> 
+    diff(normalize(D1), intersection(D1, D2)) =:= none.
 
 diff(Old, New) -> diff:diff([], Old, New).
 
@@ -51,6 +52,7 @@ function(N) -> utils:function(N, fun(_) -> any end).
 
 is_literal(any)                          -> false;
 is_literal(none)                         -> false;
+is_literal(whatever)                     -> false;
 is_literal(D) when is_atom(D)            -> true;
 is_literal(N) when is_number(N)          -> true;
 is_literal(S) when is_binary(S)          -> true;

@@ -116,3 +116,10 @@ diff_list_test_() ->
                 domain:diff({list, [1, 2, 3]}, {list, [1, b, 3]})),
      ?testEqual({list, #{only_in_old => [], only_in_new => [c], diff => [none, #{old => 2, new => b}]}},
                 domain:diff({list, [1, 2]}, {list, [1, b, c]}))].
+
+whatever_test_() ->
+    [?testEqual(none, domain:diff(whatever, 1)),
+     ?testEqual(none, domain:diff(1, whatever))].
+
+diff_sum_non_sum_test_() ->
+    [?testEqual(none, domain:diff(1, {sum, ordsets:from_list([1, 1])}))].
