@@ -3,7 +3,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("test/macros.hrl").
 
--define(setup(Code, Tests), {setup, fun() -> kind:load(Code, #{include_kind_libraries => false}) end, fun clean/1, Tests}).
+-define(setup(Code, Tests), {setup, fun() -> lark:load(Code, #{include_lark_libraries => false}) end, fun clean/1, Tests}).
 
 clean({error, _}) -> noop;
 clean({ok, Modules}) -> clean(Modules);

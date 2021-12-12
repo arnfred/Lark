@@ -421,7 +421,7 @@ post(expr, _, History, {application, Ctx, Expr, Args} = Term) ->
 
 
 % Expr/Patterns of type `T: S`
-post(_, _, _, {tagged, _, Path, Expr} = Term) ->
+post(_, _, _, {tagged, _, Path, Expr}) ->
     {ok, {#{}, set_domain(Expr, {tagged, Path, domain(Expr)})}};
 
 
@@ -623,7 +623,7 @@ combinations([])                -> [[]].
 
 
 
-% Patterns in kind can include sum types, e.g.  multiple domain values. However
+% Patterns in lark can include sum types, e.g.  multiple domain values. However
 % in erlang core, each pattern can only be for a single value. For this reason
 % we'll have to expand each pattern of domains to possibly multiple literal
 % patterns.

@@ -3,7 +3,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
--define(setup(Code, Tests), {setup, fun() -> kind:load(Code, #{sandboxed => false}) end, fun clean/1, Tests}).
+-define(setup(Code, Tests), {setup, fun() -> lark:load(Code, #{sandboxed => false}) end, fun clean/1, Tests}).
 
 clean({error, _}) -> noop;
 clean({ok, Modules}) ->
@@ -13,75 +13,75 @@ clean({ok, Modules}) ->
     [F(M) || M <- Modules].
 
 function_call_test_() ->
-        ?setup("module kind/test { callId }\n"
+        ?setup("module lark/test { callId }\n"
                "def id a -> a\n"
                "def callId b -> b.id",
-               fun({ok, _}) -> ?test(2, kind_test:callId(2)) end).
+               fun({ok, _}) -> ?test(2, lark_test:callId(2)) end).
 
 function_def_newline_test_() ->
-        ?setup("module kind/test { id }\n"
+        ?setup("module lark/test { id }\n"
                "def id b ->\n"
                "    b",
-               fun({ok, _}) -> ?test(2, kind_test:id(2)) end).
+               fun({ok, _}) -> ?test(2, lark_test:id(2)) end).
 
 function_call_multiple_args_test_() ->
-    ?setup("module kind/test { callId }\n"
+    ?setup("module lark/test { callId }\n"
            "def firstId a b c -> a\n"
            "def callId a b -> b.firstId(b, a)",
-           fun({ok, _}) -> ?test(3, kind_test:callId(2, 3)) end).
+           fun({ok, _}) -> ?test(3, lark_test:callId(2, 3)) end).
 
 pattern_match_expr_syntax1_test_() ->
-    ?setup("module kind/test { test3 }\n"
+    ?setup("module lark/test { test3 }\n"
            "def test3 a -> a.match( | False -> True\n"
            "                        | True -> False)",
            fun({ok, _}) ->
-                   ?test('Boolean/True', kind_test:test3('Boolean/False'))
+                   ?test('Boolean/True', lark_test:test3('Boolean/False'))
            end).
 
 pattern_match_expr_syntax2_test_() ->
-    ?setup("module kind/test { test4 }\n"
+    ?setup("module lark/test { test4 }\n"
            "def test4 a -> a.match(\n"
            "  | False -> True\n"
            "  | True -> False)",
            fun({ok, _}) ->
-                   ?test('Boolean/True', kind_test:test4('Boolean/False'))
+                   ?test('Boolean/True', lark_test:test4('Boolean/False'))
            end).
 
 anonymous_function1_test_() ->
-    ?setup("module kind/test { blap }\n"
+    ?setup("module lark/test { blap }\n"
            "def blip a f -> f(a)\n"
            "def blap a -> a.blip( | False -> True\n"
            "                      | True -> False)",
-           fun({ok, _}) -> ?test('Boolean/False', kind_test:blap('Boolean/True')) end).
+           fun({ok, _}) -> ?test('Boolean/False', lark_test:blap('Boolean/True')) end).
 
 anonymous_function2_test_() ->
-    ?setup("module kind/test { blap }\n"
+    ?setup("module lark/test { blap }\n"
            "def blip a f -> f(a)\n"
            "def blap a -> a.blip(( | arg -> arg))",
-           fun({ok, _}) -> ?test(whatevs, kind_test:blap(whatevs)) end).
+           fun({ok, _}) -> ?test(whatevs, lark_test:blap(whatevs)) end).
 
 anonymous_function3_test_() ->
-    ?setup("module kind/test { blap }\n"
+    ?setup("module lark/test { blap }\n"
            "def blip a f -> f(a, a)\n"
            "def blap a -> a.blip(| arg1 False -> False\n"
            "                     | arg1 True  -> arg1)",
-           fun({ok, _}) -> ?test('Boolean/True', kind_test:blap('Boolean/True')) end).
+           fun({ok, _}) -> ?test('Boolean/True', lark_test:blap('Boolean/True')) end).
 
 multiple_anonymous_functions1_test_() ->
-    ?setup("module kind/test { blap }\n"
+    ?setup("module lark/test { blap }\n"
            "def blip a f g -> f(g(a))\n"
            "def blap a -> a.blip((| _ -> False),\n"
            "                     (| False -> True\n"
            "                      | True -> False))",
-           fun({ok, _}) -> ?test('Boolean/False', kind_test:blap('Boolean/True')) end).
+           fun({ok, _}) -> ?test('Boolean/False', lark_test:blap('Boolean/True')) end).
 
 multiple_anonymous_functions2_test_() ->
-    ?setup("module kind/test { blap }\n"
+    ?setup("module lark/test { blap }\n"
            "def blip a f g -> f(g(a))\n"
            "def blap a -> a.blip((| True -> False\n"
            "                      | False -> True),\n"
            "                     (| _ -> False))",
-           fun({ok, _}) -> ?test('Boolean/True', kind_test:blap('whatevs')) end).
+           fun({ok, _}) -> ?test('Boolean/True', lark_test:blap('whatevs')) end).
 
 infix_2_test_() ->
     ?setup("module test { main }
@@ -180,7 +180,7 @@ operator_precedence_7_test_() ->
 
 operator_associativity_test_() ->
     ?setup("module test { right^, right*, right, left+, left-, left<, left>, left=, left$ }
-            import kind/domain/Domain
+            import lark/domain/Domain
 
             type Op -> (+Left+: { next: Op, value: Domain/Any } |
                         -Left-: { next: Op, value: Domain/Any } |

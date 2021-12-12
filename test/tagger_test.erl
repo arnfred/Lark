@@ -4,7 +4,7 @@
 -include("test/macros.hrl").
 
 tag(Code) ->
-    case parser:parse([{text, test_code, Code}], #{include_kind_libraries => false}) of
+    case parser:parse([{text, test_code, Code}], #{include_lark_libraries => false}) of
         {error, Errs} -> {error, Errs};
         {ok, Modules} ->
             ModuleMap = maps:from_list([{module:path(M), M} || M <- Modules]),
@@ -251,8 +251,8 @@ parens_variable_test_() ->
 
 tag_sub_module_test_() ->
     Code = "def list a -> Nil | (Cons: { head: a, tail: list(a) })",
-    {ok, Parsed} = parser:parse([{text, test_code, Code}], #{include_kind_libraries => false}),
-    ModMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Parsed]),
+    {ok, Parsed} = parser:parse([{text, test_code, Code}], #{include_lark_libraries => false}),
+    ModMap = maps:from_list([{module:lark_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Parsed]),
     % Should result in `source_test_code` module and `source_test_code_List` module.
     % We're interested in the latter.
     #{'source/test_code' := {module, _, _, _, _, #{'list/Cons' := Cons}}} = ModMap,
@@ -329,7 +329,7 @@ nested_module_import_conflict_test_() ->
                          def boolean -> True | False)
             module test2 (import test
                           def t test/boolean -> test/boolean/True)",
-    {ok, Modules} = parser:parse([{text, test_code, Code}], #{include_kind_libraries => false}),
+    {ok, Modules} = parser:parse([{text, test_code, Code}], #{include_lark_libraries => false}),
     ModuleMap = maps:from_list([{module:path(M), M} || M <- Modules]),
     {module, _, _, _, _, Defs} = maps:get([test2], ModuleMap),
     [?test(#{'t' := {def, _, 't', {'fun', _,

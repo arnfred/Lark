@@ -54,7 +54,7 @@ gen_expr(expr, _, {recursive_type_application, _, Tag, Args}) ->
     BranchFun = cerl:c_fun([], call_type_tag(Tag, Args)),
     {ok, cerl:c_tuple([cerl:c_atom(recur), BranchFun])};
 
-% expr of Form: kind/prelude/match(a)
+% expr of Form: lark/prelude/match(a)
 gen_expr(expr, _, {qualified_application, _, ModulePath, Name, Args}) -> 
     ModuleName = module:beam_name(ModulePath),
     {ok, cerl:c_call(cerl:c_atom(ModuleName), cerl:c_atom(Name), Args)};
@@ -72,7 +72,7 @@ gen_expr(expr, Scope, {type, _, _, _} = Term) ->
         T                       -> {ok, T}
     end;
 
-% expr of form: kind/prelude/Boolean or kind/prelude/match
+% expr of form: lark/prelude/Boolean or lark/prelude/match
 gen_expr(expr, _, {qualified_symbol, _, ModulePath, Name}) ->
     % If the module function doesn't exist with zero arguments, try calling the domain function
     ModuleName = module:beam_name(ModulePath),

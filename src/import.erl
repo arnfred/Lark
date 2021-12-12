@@ -51,7 +51,7 @@ scope(ModulePath, ModuleMap) ->
     {module, _, _, _, _, LocalDefs} = maps:get(ModulePath, ModuleMap),
     LocalScope = [{(P -- ModulePath) ++ [D], P ++ [D]} || {P, {module, _, _, _, _, Defs}} <- maps:to_list(ModuleMap),
                                                            D <- maps:keys(Defs),
-                                                           maps:is_key(module:kind_name([lists:last(P), D]),  LocalDefs)],
+                                                           maps:is_key(module:lark_name([lists:last(P), D]),  LocalDefs)],
 
     utils:unique(PrefixScope ++ ExportScope ++ LocalScope).
 
@@ -70,7 +70,7 @@ aliases([{Alias, IPath, Term} | Paths], Scope, ModuleMap, Errors, Res) ->
     % - We collect all matching module paths in scope, subtract the prefix and add them to scope
     % - We create aliases qualified by the remainding module path
     TrimmedPath = trim_wildcard(IPath),
-    Aliases = [kind(Alias, K, IPath, P, ModuleMap, Term) || {K, P} <- Scope,
+    Aliases = [lark(Alias, K, IPath, P, ModuleMap, Term) || {K, P} <- Scope,
                                                             lists:prefix(TrimmedPath, K),
                                                             length(IPath) =< length(K)],
     ScopeF = fun({alias, _, AP, {qualified_symbol, _, MP, Name}}) -> {AP, MP ++ [Name]};
@@ -79,9 +79,9 @@ aliases([{Alias, IPath, Term} | Paths], Scope, ModuleMap, Errors, Res) ->
     NewScope = [ScopeF(A) || A <- Aliases],
     case NewScope of
         []  -> Err = case lists:last(IPath) of
-                         '_'    -> error:format({nonexistent_module, module:kind_name(TrimmedPath)},
+                         '_'    -> error:format({nonexistent_module, module:lark_name(TrimmedPath)},
                                                 {import, Term});
-                         _      -> error:format({nonexistent_export, source, module:kind_name(IPath)},
+                         _      -> error:format({nonexistent_export, source, module:lark_name(IPath)},
                                                 {import, Term})
                      end,
                aliases(Paths, Scope, ModuleMap, [Err | Errors], Res);
@@ -104,13 +104,13 @@ trim_wildcard(Path) ->
     end.
 
 % ImportPath: a/b/c/_, K: `a/b/c/D`, Alias: _ -> AliasPath: D
-kind('_', K, ImportPath, Path, ModuleMap, Term) ->
-    kind(K -- ImportPath, Path, ModuleMap, Term);
+lark('_', K, ImportPath, Path, ModuleMap, Term) ->
+    lark(K -- ImportPath, Path, ModuleMap, Term);
 % ImportPath: a/b/c, K: `a/b/c/D`, Alias: f -> AliasPath: f/D
-kind(Alias, K, ImportPath, Path, ModuleMap, Term) -> 
+lark(Alias, K, ImportPath, Path, ModuleMap, Term) -> 
     AliasPath = [Alias | K -- ImportPath],
-    kind(AliasPath, Path, ModuleMap, Term).
-kind(AliasPath, Path, ModuleMap, Term) ->
+    lark(AliasPath, Path, ModuleMap, Term).
+lark(AliasPath, Path, ModuleMap, Term) ->
     {ModulePath, [DefName]} = lists:split(length(Path) -1, Path),
     {module, _, _, _, _, Defs} = maps:get(ModulePath, ModuleMap),
     case maps:get(DefName, Defs) of
@@ -139,7 +139,7 @@ beam(Alias, Path, Term) ->
     beam(Alias, Name, ModulePath, Term).
 beam(Alias, Name, ModulePath, Term) ->
     Module = module:beam_name(ModulePath),
-    ModuleName = module:kind_name(ModulePath),
+    ModuleName = module:lark_name(ModulePath),
     case code:is_loaded(Module) of
         {file, _}   -> error:collect(loaded_module_function(ModulePath, Name, Alias, Term));
         false       -> case code:which(Module) of
@@ -165,7 +165,7 @@ loaded_module_function(ModulePath, Name, Alias, Term) ->
     ErrorCtx = element(2, Term),
     Module = module:beam_name(ModulePath),
     ImportPath = ModulePath ++ [Name],
-    ImportName = module:kind_name(ImportPath),
+    ImportName = module:lark_name(ImportPath),
     Exports = erlang:get_module_info(Module, exports),
     SubAliases = beam_subtypes(ImportPath ++ [Name], Alias, Term),
     case lists:filter(fun({Export, _}) -> Export =:= Name end, Exports) of
@@ -256,7 +256,7 @@ is_whitelisted(Module, Name) ->
 check_duplicates(Aliases, ModulePath) ->
     ErrFun = fun({alias, ErrorCtx1, Alias, T1},
                  {alias, ErrorCtx2, _, T2}) ->
-                     error:format({duplicate_import, symbol:tag(Alias), module:kind_name(ModulePath),
+                     error:format({duplicate_import, symbol:tag(Alias), module:lark_name(ModulePath),
                                    symbol:tag(T1), symbol:tag(T2)},
                                   {import, ErrorCtx1, ErrorCtx2}) end,
 

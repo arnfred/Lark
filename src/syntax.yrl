@@ -3,8 +3,7 @@ Terminals
     keyword_symbol var_symbol
     rightbias_operator plus_operator mult_operator comp_operator eq_operator
     minus_operator div_operator caret_operator other_operator
-    value
-    open close square_open square_close curly_open curly_close
+    value open close square_open square_close curly_open curly_close
     space_open space_square_open space_curly_open
     apply comma newlines assign
     module_keyword export_keyword import_keyword

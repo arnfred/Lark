@@ -1,6 +1,6 @@
 def args -> A | B | C
 
 def rotate
-   args/A -> args/B
-   args/B -> args/C
+   args/A -> args/B,
+   args/B -> args/C,
    args/C -> args/A

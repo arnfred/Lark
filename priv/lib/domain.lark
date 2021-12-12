@@ -1,4 +1,4 @@
-module kind/domain (
+module lark/domain (
 
   export {
       domain

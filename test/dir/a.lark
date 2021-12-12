@@ -1,0 +1,4 @@
+def xor
+   True False -> True,
+   False True -> True,
+   _ _        -> False

@@ -1,6 +1,6 @@
 import beam/erlang/{<, >}
 
-module kind/prelude (
+module lark/prelude (
 
   export {
     boolean

@@ -1,4 +1,4 @@
--module(kind).
+-module(lark).
 -export([load/2, run/3, run/4, compile_and_load/1]).
 -import(lists, [zip/2, zip3/3, unzip/1]).
 
@@ -11,10 +11,10 @@ run(Source, Paths, Args, Options) ->
         {error, Errs}       -> {error, Errs};
         {ok, Mod}    ->
             case erlang:function_exported(Mod, main, length(Args)) of
-                false   -> error:format({no_main_function_for_arity, length(Args)}, {kind});
+                false   -> error:format({no_main_function_for_arity, length(Args)}, {lark});
                 true    ->
                     Out = case catch erlang:apply(Mod, main, Args) of
-                              {'EXIT', Err}     -> error:format({main_throw, Err}, {kind});
+                              {'EXIT', Err}     -> error:format({main_throw, Err}, {lark});
                               {error, Errs}     -> {error, Errs};
                               Res               -> {ok, Res}
                           end,
@@ -60,14 +60,14 @@ compile_form(Form, Options) ->
     ModuleName = cerl:atom_val(cerl:module_name(Form)),
     case compile:forms(Form, Options) of
         {ok, ModuleName, Bin}   -> {ok, {ModuleName, Bin}};
-        Error                   -> error:format({compile_error, Error, ModuleName, Form}, {kind})
+        Error                   -> error:format({compile_error, Error, ModuleName, Form}, {lark})
     end.
 
 load_binary(ModuleName, Bin) ->
     BeamName = lists:flatten(io_lib:format("~w.beam", [ModuleName])),
     case code:load_binary(ModuleName, BeamName, Bin) of
         {module, ModuleName}    -> {ok, ModuleName};
-        {error, Err}            -> error:format({loading_error, Err}, {kind, ModuleName})
+        {error, Err}            -> error:format({loading_error, Err}, {lark, ModuleName})
     end.
 
 unload_modules(Modules) ->
@@ -78,14 +78,14 @@ unload_modules(Modules) ->
 
 -ifdef(TEST).
 
--define(setup(Code, Args, Tests), {setup, fun() -> kind:run(Code, [], Args) end, fun(_) -> none end, Tests}).
+-define(setup(Code, Args, Tests), {setup, fun() -> lark:run(Code, [], Args) end, fun(_) -> none end, Tests}).
 
 happy_path_test_() ->
     {"run code and see that it executed correctly",
      ?setup("def main -> boolean/False",
             [],
             fun(Res) -> 
-                    [?test({ok, 'kind/prelude/boolean/False'}, Res)]
+                    [?test({ok, 'lark/prelude/boolean/False'}, Res)]
             end)}.
 
 happy_path_arg_test_() ->

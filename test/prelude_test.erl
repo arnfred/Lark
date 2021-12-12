@@ -4,8 +4,8 @@
 -include("test/macros.hrl").
 
 -define(setup(Code, Tests), {setup,
-                             fun() -> kind:load(Code, #{sandboxed => false,
-                                                        include_kind_libraries => true}) end,
+                             fun() -> lark:load(Code, #{sandboxed => false,
+                                                        include_lark_libraries => true}) end,
                              fun clean/1,
                              Tests}).
 
@@ -53,7 +53,7 @@ tagged_test_() ->
 binary_search_test_() ->
     {"Simple binary tree implementation",
      ?setup("module test { main }
-             import kind/prelude/Compare/_
+             import lark/prelude/Compare/_
              import Tree/_
              type Tree a -> (Leaf | Node: {left: Tree(a), value: a, right: Tree(a)})
              def insert

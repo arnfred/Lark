@@ -1,17 +1,13 @@
-# Kind
+# Lark
 
-> Hello babies. Welcome to Earth. It's hot in the summer and cold in the winter. It's round and wet and crowded. On the outside, babies, you've got a hundred years here. There's only one rule that I know of, babies-"God damn it, you've got to be kind."
-
-_Kurt Vonnegut_.
-
-Kind is a programming language built on top of the [Erlang Virtual Machine (BEAM)](https://stackoverflow.com/questions/16779162/what-kind-of-virtual-machine-is-beam-the-erlang-vm). It's designed to be _simple to use_, _easy to read_ and provide _powerful static guarantees_. My goal with the langauge is to bring the goodness of both functional programming and strong type inference to the BEAM. It's inspired by a host of different language features that I've had the pleasure to use over the last two decades:
+Lark is a programming language built on top of the [Erlang Virtual Machine (BEAM)](https://stackoverflow.com/questions/16779162/what-kind-of-virtual-machine-is-beam-the-erlang-vm). It's designed to be _simple to use_, _easy to read_ and provide _powerful static guarantees_. My goal with the langauge is to bring the goodness of both functional programming and strong type inference to the BEAM. It's inspired by a host of different language features that I've had the pleasure to use over the last two decades:
 
 * The no-nonsense succint syntax of Haskell
 * The ease of passing around and modifying data structures using Clojure
 * The power of pattern matching in Erlang
 * The expressability of Scala
 
-The language relies on domain inference to learn the values that a function or variable can take. These values can be numbers, strings, relations, ranges or functions. Knowing the domain allows Kind to provide static guarantees similar to languages with dependent types, but without having the programmer jump through hoops of formal logic and complex type errors.
+The language relies on domain inference to learn the values that a function or variable can take. These values can be numbers, strings, relations, ranges or functions. Knowing the domain allows Lark to provide static guarantees similar to languages with dependent types, but without having the programmer jump through hoops of formal logic and complex type errors.
 
 # Development
 
@@ -145,16 +141,16 @@ For more information, see this [very helpful stackoverflow answer](https://stack
 
 ## Running from CLI
 
-Ideally I'd like to run the Kind compiler via the cli as in `kind compile
-my-program.kind` and run the output of the compiler using `kind run
+Ideally I'd like to run the Lark compiler via the cli as in `lark compile
+my-program.lark` and run the output of the compiler using `lark run
 my-program`. However this turns out not to be so super simple. Erlang programs
 are compiled to beam files that run on the Erlang Beam VM.
 
-Using Rebar3 we can produce a release that includes a script for running Kind:
+Using Rebar3 we can produce a release that includes a script for running Lark:
 
 ```
 rebar3 release
-_build/test/rel/kind/bin/kind-0.0.1 console
+_build/test/rel/lark/bin/lark-0.0.1 console
 ```
 
 However, this script is made for deploying Erlang code as a long running
@@ -165,10 +161,10 @@ One way I've found of parsing in arguments is to use the `escript` option
 instead which can either be used alone or through the binary:
 
 ```
- escript _build/default/lib/kind/ebin/cli.beam "test"
+ escript _build/default/lib/lark/ebin/cli.beam "test"
  > Args: ["test"]
 
-./_build/default/rel/kind/bin/kind escript lib/kind-0.1.0/ebin/cli.beam test
+./_build/default/rel/lark/bin/lark escript lib/lark-0.1.0/ebin/cli.beam test
 > Args: ["test"]
 ```
 
@@ -178,7 +174,7 @@ type without having access to the function body at compile time. This allows
 for an API to accept user types, as long as the user types have the neccessary
 functions defined.
 
-In kind, I propose implementing type classes by duck typing. If a library calls
+In lark, I propose implementing type classes by duck typing. If a library calls
 a function `f` on a type `T`, the call is valid if `f` is defined for `T` in
 one of the modules in the call stack. 
 
@@ -198,7 +194,7 @@ call the appropriate function.
 
 One of the features of type classes is that we can verify at compile time
 whether there exists an `f` defined for `T`. This isn't usually a feature of
-duck typing, but Kind is a strongly duck-typed system so we scan a main function
+duck typing, but Lark is a strongly duck-typed system so we scan a main function
 we can check that the call stack admits an `f` defined for `T`.
 
 When exporting a library function, we also export the domain function. This
@@ -240,7 +236,7 @@ making them work, instead of trying to decide on an order of development untied
 to actual code I'd like to see working.
 
 ### Long pause
-For a while I mostly put these kind of lists in the commit message
+For a while I mostly put these lark of lists in the commit message
 
 ### 2020-04-15
 

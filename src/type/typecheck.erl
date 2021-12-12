@@ -249,7 +249,7 @@ pattern(Mode, Env, Stack, Domain, {application, Ctx, _, _} = Term) ->
         end
     end;
 
-% Pattern: `kind/prelude/Boolean`
+% Pattern: `lark/prelude/Boolean`
 pattern(Mode, Env, Stack, Domain, {qualified_symbol, Ctx, _, _} = Term) ->
     case expr(Mode, Env, Stack, Term) of
         {error, Errs}       -> {error, Errs};
@@ -260,7 +260,7 @@ pattern(Mode, Env, Stack, Domain, {qualified_symbol, Ctx, _, _} = Term) ->
             end
     end;
 
-% Pattern: `kind/prelude/Option(T)`
+% Pattern: `lark/prelude/Option(T)`
 pattern(Mode, Env, Stack, Domain, {qualified_application, Ctx, _, _, _} = Term) ->
     case expr(Mode, Env, Stack, Term) of
         {error, Errs}       -> {error, Errs};
@@ -280,7 +280,7 @@ pattern(Mode, _, Stack, Domain, {value, Ctx, _, Val}) ->
     end;
 
 % Pattern: `T`
-pattern(Mode, Env, Stack, Domain, {keyword, Ctx, _, _} = T) ->
+pattern(Mode, _Env, Stack, Domain, {keyword, Ctx, _, _} = T) ->
     EnvDomain = symbol:tag(T),
     case check(Mode, Stack, EnvDomain, Domain, Ctx) of
         {error, Errs}    -> {error, Errs};
@@ -314,19 +314,19 @@ expr(Mode, Env, Stack, {qualified_application, Ctx, ModulePath, Name, Args}) ->
     end;
 
 % Expr: `m/T(a)` or `m/f(b)`
-expr(Mode, Env, Stack, {beam_application, Ctx, ModulePath, Name, Args}) ->
+expr(Mode, Env, Stack, {beam_application, _Ctx, ModulePath, Name, Args}) ->
     case map_expr(Mode, Env, Stack, Args) of
         {error, Errs}         -> {error, Errs};
         {ok, {_, ArgDomains}} -> beam_apply(Env, ModulePath, Name, ArgDomains)
     end;
 
-% Expr: `kind/prelude/Boolean`
+% Expr: `lark/prelude/Boolean`
 expr(Mode, Env, Stack, {qualified_symbol, Ctx, ModulePath, Name}) ->
     ModuleName = module:beam_name(ModulePath),
     Arity = utils:get_min_arity(ModuleName, Name),
     case Arity =:= 0 of
         true    -> qualified_apply(Mode, Env, Stack, Ctx, ModulePath, Name, []);
-        false   -> error:format({wrong_arity, module:kind_name(ModulePath), Name, 0, Arity},
+        false   -> error:format({wrong_arity, module:lark_name(ModulePath), Name, 0, Arity},
                                 {Stack, Ctx, typecheck})
     end;
 
@@ -575,20 +575,19 @@ apply_domain(Mode, Stack, Ctx, Module, Tag, Params) ->
 % Qualified apply is tricky because the appropriate domain function can take
 % a few different shapes:
 %
-% - In the normal case a domain function for a kind function or type will live
+% - In the normal case a domain function for a lark function or type will live
 %   in the corresponding domain module
 % - For a sub-type defined in a type module, the domain function is the same as
 %   the type function
 % - When all arguments are literal domains and the function called is an erlang
 %   function, we can call the erlang function, but only if it doesn't have
 %   side-effects
-qualified_apply(Mode, Env, Stack, Ctx, ModulePath, Name, ArgDomains) ->
-    ModuleName = module:beam_name(ModulePath),
+qualified_apply(Mode, _Env, Stack, Ctx, ModulePath, Name, ArgDomains) ->
     NewStack = [{module:beam_name(ModulePath ++ [Name]), Ctx, ArgDomains} | Stack],
     DomainModuleName = module:beam_name(ModulePath ++ [domain]),
     % Check if domain function exists
     case erlang:function_exported(DomainModuleName, Name, length(ArgDomains)) of
-        false   -> error:format({undefined_qualified_symbol, module:kind_name(ModulePath ++ [domain]),
+        false   -> error:format({undefined_qualified_symbol, module:lark_name(ModulePath ++ [domain]),
                                  {Name, length(ArgDomains)}},
                                 {typecheck, Ctx, Stack});
         true    -> case erlang:apply(DomainModuleName, Name, [NewStack, Mode] ++ ArgDomains) of

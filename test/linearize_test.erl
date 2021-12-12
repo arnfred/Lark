@@ -7,7 +7,7 @@ linearize(Code, Name) -> linearize(Code, Name, [source, test_code], #{}).
 linearize(Code, Name, Env) when is_map(Env) -> linearize(Code, Name, [source, test_code], Env);
 linearize(Code, Name, ModulePath) when is_list(ModulePath) -> linearize(Code, Name, ModulePath, #{}).
 linearize(Code, Name, ModulePath, Env) ->
-    case parser:parse([{text, test_code, Code}], #{include_kind_libraries => false}) of
+    case parser:parse([{text, test_code, Code}], #{include_lark_libraries => false}) of
         {error, Errs} -> {error, Errs};
         {ok, Modules} ->
             ModuleMap = maps:from_list([{module:path(M), M} || M <- Modules]),

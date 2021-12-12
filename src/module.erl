@@ -1,8 +1,9 @@
 -module(module).
--export([parse/1, path/1, beam_name/1, kind_name/1, is_submodule/1, empty/1]).
+-export([parse/1, path/1, beam_name/1, lark_name/1, is_submodule/1, empty/1]).
 
 -include("test/macros.hrl").
 -include_lib("eunit/include/eunit.hrl").
+-define(FILEEXT, ".lark").
 
 parse(Sources) ->
     case error:collect([prepare(FileName, AST) || {FileName, AST} <- Sources]) of
@@ -12,7 +13,7 @@ parse(Sources) ->
                                                {module, _, Path, _, _, _} = Module <- Ms],
             KeyF = fun({Path, _, _}) -> module:beam_name(Path) end,
             ErrF = fun({{Path, Mod1, File1}, {Path, Mod2, File2}}) ->
-                           error:format({duplicate_module, module:kind_name(Path), File1, File2},
+                           error:format({duplicate_module, module:lark_name(Path), File1, File2},
                                         {module, Mod1, Mod2}) end,
             case utils:duplicates(Modules, KeyF) of
                 []      -> ModuleMap = maps:from_list([{path(M), M} || {_, M, _} <- Modules]),
@@ -36,7 +37,7 @@ root_module(FileName, Statements) ->
     ModuleImports = [{import, Ctx, Path} || {module, Ctx, Path, ModStatements} <- Statements,
                                             {exports, _, Exports} <- ModStatements,
                                             length(Exports) > 0],
-    RootName = kind_name([P || {symbol, _, _, P} <- RootPath]),
+    RootName =lark_name([P || {symbol, _, _, P} <- RootPath]),
     Ctx = #{filename => FileName, line => 0, module => RootName},
     {module, Ctx, RootPath, Statements ++ ModuleImports}.
 
@@ -84,13 +85,13 @@ parse_export({qualified_symbol, Ctx, Symbols} = Elem, Types, DefMap) when (lengt
     case maps:is_key(P, DefMap) andalso 
          maps:is_key(P, Types) andalso
          lists:member(T, [C || {C, _} <- maps:get(P, Types)]) of
-        false -> error:format({export_missing, module:kind_name([P, T])}, {module, Elem});
+        false -> error:format({export_missing, module:lark_name([P, T])}, {module, Elem});
         true  -> {ok, {T, {export, Ctx, [P, T], none}}}
     end;
 
 % Unsupported qualified symbol
 parse_export({qualified_symbol, _, Symbols} = Elem, _Types, _DefMap) ->
-    error:format({export_missing, kind_name([S || {_, _, _, S} <- Symbols])},
+    error:format({export_missing, lark_name([S || {_, _, _, S} <- Symbols])},
                  {module, Elem});
 
 % any other symbol (say `blah`)
@@ -224,8 +225,8 @@ beam_name(Path) ->
     PathString = [atom_to_list(A) || A <- lists:join('_', Path)],
     list_to_atom(lists:flatten([PathString])).
 
-kind_name({module, _, _, _, _, _} = Mod) -> kind_name(path(Mod));
-kind_name(Path) ->
+lark_name({module, _, _, _, _, _} = Mod) -> lark_name(path(Mod));
+lark_name(Path) ->
     PathString = [atom_to_list(A) || A <- lists:join('/', Path)],
     list_to_atom(lists:flatten([PathString])).
 
@@ -235,7 +236,7 @@ filename_to_module_path(FileName) ->
                    true     -> lists:nthtail(length(FilePath) - 2, lists:droplast(FilePath));
                    false    -> lists:droplast(FilePath)
                end,
-    BaseName = list_to_atom(filename:basename(FileName, ".kind")),
+    BaseName = list_to_atom(filename:basename(FileName, ?FILEEXT)),
     [{symbol, #{}, variable, P} || P <- [source] ++ FileTail ++ [BaseName]].
 
 import({import, Ctx, Path}) -> {import, Ctx, import(Path, [])}.

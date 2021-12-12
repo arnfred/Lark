@@ -17,7 +17,7 @@ nested_local_type_test_() ->
      import blup/_
      def flup -> Flip | Blap
      def main -> flup/Blap",
-    {ok, Modules} = parser:parse([{text, test_code, Module}], #{include_kind_libraries => false}),
+    {ok, Modules} = parser:parse([{text, test_code, Module}], #{include_lark_libraries => false}),
     ModuleMap = maps:from_list([{Path, Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
     ?test(#{[source, test_code] := {module, _, [source, test_code], _, _,
                                    #{main := {def, _, 'main',
@@ -26,7 +26,7 @@ nested_local_type_test_() ->
 
 local_type_alias_test_() ->
     Module = 
-    "import kind/prelude/boolean/{True: T, False: F}\n"
+    "import lark/prelude/boolean/{True: T, False: F}\n"
     "def xor\n"
     "    T F -> T,\n"
     "    F T -> T,\n"
@@ -157,7 +157,7 @@ multiple_beam_import_test_() ->
      import beam/lists/_
      def blap a -> a.reverse.from_list",
     ?testError({duplicate_import, merge, 'source/test_code', 'lists/merge','maps/merge' },
-               parser:parse([{text, test_code, Module}], #{include_kind_libraries => false})).
+               parser:parse([{text, test_code, Module}], #{include_lark_libraries => false})).
 
 qualified_beam_import_test_() ->
     Module =
@@ -170,7 +170,7 @@ qualified_beam_import_test_() ->
                    blop := {def, _, _, {'fun', _, [{clause, _, [{variable, _, a, A}],
                                                     {beam_application, _, [lists], reverse,
                                                      [{variable, _, a, A}]}}]}}}}]},
-          parser:parse([{text, Module}], #{include_kind_libraries => false})).
+          parser:parse([{text, Module}], #{include_lark_libraries => false})).
 
 qualified_source_import_test_() ->
     Module1 = 
@@ -180,8 +180,8 @@ qualified_source_import_test_() ->
     "import blip/t\n"
     "def blap -> t/A",
     {ok, Modules} = parser:parse([{text, test_code_1, Module1}, {text, test_code_2, Module2}],
-                                 #{include_kind_libraries => false}),
-    ModuleMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
+                                 #{include_lark_libraries => false}),
+    ModuleMap = maps:from_list([{module:lark_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
     ?test(#{'source/test_code_2' := {module, _, [source, test_code_2], _, _,
                  #{blap := {def, _, 'blap',
                             {keyword, _, [blip, t], 'A'}}}}}, ModuleMap).
@@ -192,26 +192,19 @@ qualified_local_import_test_() ->
     "import t/A\n"
     "def blap -> A",
     {ok, Modules} = parser:parse([{text, test_code, Module}],
-                                 #{include_kind_libraries => false}),
-    ModuleMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
+                                 #{include_lark_libraries => false}),
+    ModuleMap = maps:from_list([{module:lark_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
     ?test(#{'source/test_code' := {module, _, [source, test_code], _, _,
                                    #{blap := {def, _, 'blap',
                                               {keyword, _, [source, test_code, 't'], 'A'}}}}}, ModuleMap).
 
-module_order_test_() ->
-    Module = "module test (export {t}
-                           def t -> (A | B))",
-    {ok, Modules} = parser:parse([{text, test_code, Module}], #{include_kind_libraries => false}),
-    ModuleNames = [module:kind_name(M) || M <- Modules],
-    ?test(['test', 'test/t'], ModuleNames).
-
 prelude_keyword_import_test_() ->
     Source = "def f False -> True",
-    {ok, Modules} = parser:parse([{text, test_code, Source}], #{include_kind_libraries => true}),
-    ModuleMap = maps:from_list([{module:kind_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
+    {ok, Modules} = parser:parse([{text, test_code, Source}], #{include_lark_libraries => true}),
+    ModuleMap = maps:from_list([{module:lark_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Modules]),
     ?test(#{'source/test_code' := {module, _, _, _, _,
                                    #{f := {def, _, 'f',
                                            {'fun', _, [{clause, _,
-                                                        [{keyword, _, [kind, prelude, boolean], 'False'}],
-                                                        {keyword, _, [kind, prelude, boolean], 'True'}}]}}}}},
+                                                        [{keyword, _, [lark, prelude, boolean], 'False'}],
+                                                        {keyword, _, [lark, prelude, boolean], 'True'}}]}}}}},
           ModuleMap).

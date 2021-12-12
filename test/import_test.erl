@@ -222,14 +222,14 @@ sandbox_keyword_test_() ->
 
 
 import_qualified_module_name_test_() ->
-    Code = "module kind/prelude (export {option}
+    Code = "module lark/prelude (export {option}
                                  def option -> Option)",
     ModuleMap = module_map("test_file", Code),
-    Actual = test_import([kind, prelude], ModuleMap),
-    [?test({ok, {#{'prelude/option' := {qualified_symbol, _, [kind, prelude], 'option'},
-                   'prelude/option/Option' := {keyword, _, [kind, prelude, option], 'Option'}},
-                 [{dependency, _, [test_module], [kind, prelude]},
-                  {dependency, _, [test_module], [kind, prelude, option]}]}}, Actual)].
+    Actual = test_import([lark, prelude], ModuleMap),
+    [?test({ok, {#{'prelude/option' := {qualified_symbol, _, [lark, prelude], 'option'},
+                   'prelude/option/Option' := {keyword, _, [lark, prelude, option], 'Option'}},
+                 [{dependency, _, [test_module], [lark, prelude]},
+                  {dependency, _, [test_module], [lark, prelude, option]}]}}, Actual)].
 
 nested_link_test_() ->
     Code = "module t (export {blonk}
@@ -238,7 +238,7 @@ nested_link_test_() ->
                       def flup -> (Flip | Blap)
                       import flup/{Flip, Blap: Blop}
                       def blonk -> (Blank | Blop))",
-    ModuleMap = module_map("test/file.kind", Code),
+    ModuleMap = module_map("test/file.lark", Code),
     Actual = test_import([t, 'blonk'], ModuleMap),
     [?test({ok, {#{'blonk' := {qualified_symbol, _, [t], 'blonk'},
                   'blonk/Blank' := {keyword, _, [t, blonk], 'Blank'},
@@ -254,7 +254,7 @@ local_constant_test_() ->
                          import t/A
                          def s -> A
                          def r -> s/A)",
-    ModuleMap = module_map("test/file.kind", Code),
+    ModuleMap = module_map("test/file.lark", Code),
     Actual = test_import([test, 's', 'A'], ModuleMap),
     [?test({ok, {#{'A' := {keyword, _, [test, t], 'A'}},
                 [{dependency, _, [test_module], [test, t]}]}}, Actual)].
@@ -262,7 +262,7 @@ local_constant_test_() ->
 local_import_conflict_test_() ->
     Code = "def t -> (A | B)
             import t/_",
-    ModuleMap = module_map("test/file.kind", Code),
+    ModuleMap = module_map("test/file.lark", Code),
     #{[source, test, file] := Mod} = ModuleMap,
     Actual = import:import(Mod, ModuleMap),
     [?test({ok, {#{'A' := {keyword, _, [source, test, file, t], 'A'}}, _}}, Actual),
@@ -270,7 +270,7 @@ local_import_conflict_test_() ->
 
 empty_module_import_test_() ->
     Code = "module test (def boolean -> True | False)",
-    ModuleMap = module_map("test/file.kind", Code),
+    ModuleMap = module_map("test/file.lark", Code),
     #{[source, test, file] := Mod} = ModuleMap,
     Actual = import:import(Mod, ModuleMap),
     [?test({ok, {#{}, []}}, Actual)].
@@ -278,7 +278,7 @@ empty_module_import_test_() ->
 root_import_in_module_test_() ->
     Code = "import beam/erlang/<
             module test (def lt a b -> a < b)",
-    ModuleMap = module_map("test/file.kind", Code),
+    ModuleMap = module_map("test/file.lark", Code),
     #{[test] := Mod} = ModuleMap,
     Actual = import:import(Mod, ModuleMap),
     [?test({ok, {#{'<' := {beam_symbol, _, [erlang], '<'}}, []}}, Actual)].

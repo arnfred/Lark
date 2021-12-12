@@ -24,8 +24,8 @@ merge_scopes(ModulePath, LocalScope, ImportScope) ->
                     true	->
                         {_, Ctx, Module, Name} = Term,
                         Import = maps:get(import, Ctx),
-                        ImportName = module:kind_name(Module ++ [Name]),
-                        error:format({import_conflicts_with_local_def, Alias, module:kind_name(ModulePath), ImportName},
+                        ImportName = module:lark_name(Module ++ [Name]),
+                        error:format({import_conflicts_with_local_def, Alias, module:lark_name(ModulePath), ImportName},
                                      {tagger, Import})
                 end
         end,

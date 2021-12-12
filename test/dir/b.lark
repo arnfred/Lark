@@ -1,5 +1,5 @@
 def list a -> Nil | (Cons: { head: a, tail: list(a) })
 
 def headOption
-   list/Nil                 -> Nil
+   list/Nil                 -> Nil,
    (list/Cons: { head })    -> head

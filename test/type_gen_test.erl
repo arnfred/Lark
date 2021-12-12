@@ -3,12 +3,12 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
--define(setup(Code, Tests), {setup, loadFun(Code, #{include_kind_libraries => false}), fun unload/1, Tests}).
+-define(setup(Code, Tests), {setup, loadFun(Code, #{include_lark_libraries => false}), fun unload/1, Tests}).
 -define(setup(Code, Options, Tests), {setup, loadFun(Code, Options), fun unload/1, Tests}).
 
 loadFun(Code, Options) -> 
     TestOptions = maps:merge(#{purge_scanner_module => false}, Options),
-    fun() -> case kind:load(Code, TestOptions) of 
+    fun() -> case lark:load(Code, TestOptions) of 
                  {error, Errs}  -> {error, Errs};
                  {ok, Modules}  ->
                      % Only return scanner modules (e.g. modules starting with `types`)
@@ -119,7 +119,7 @@ buried_var_test_() ->
             end)}.
 
 var_order_test_() ->
-    {"The parameter order in a subtype constructor is ambigious. In kind it's
+    {"The parameter order in a subtype constructor is ambigious. In lark it's
       defined as the order the type variables appear in in a left-biased depth
       first traversel (e.g. the order that you would read them in)",
      ?setup("type Order a b c -> T: [c, b, a]\n"
@@ -496,7 +496,7 @@ qualified_symbol_pattern_atom_test_() ->
             "type T\n"
             " | Boolean/False -> Falsy\n"
             " | Boolean/True -> Truthy",
-            #{include_kind_libraries => true},
+            #{include_lark_libraries => true},
             fun({ok, _}) ->
                     [?test('T/Falsy', test:'T'('Boolean/False'))]
             end)}.
@@ -508,7 +508,7 @@ qualified_symbol_pattern_sum_test_() ->
              type T
                | Boolean -> Falsy
                | _ -> Truthy",
-            #{include_kind_libraries => true},
+            #{include_lark_libraries => true},
             fun({ok, _}) ->
                     [?test('T/Falsy', test:'T'('Boolean/False')),
                      ?test('T/Falsy', test:'T'('Boolean/True')),
@@ -521,19 +521,19 @@ qualified_symbol_undefined_arity_pattern_test_() ->
              type T
               | Option -> Falsy
               | Truthy -> Truthy",
-            #{include_kind_libraries => true},
+            #{include_lark_libraries => true},
             fun({ok, _}) ->
-                    [?testError({wrong_arity, 'kind/prelude', 'Option', 0, 1}, test_domain:'T'('T/Falsy'))]
+                    [?testError({wrong_arity, 'lark/prelude', 'Option', 0, 1}, test_domain:'T'('T/Falsy'))]
             end)}.
 
 call_qualified_symbol_with_args_test_() ->
     {"A qualified type can be evaluated alone and as part of a type
      application. When evaluated as part of a type application, the underlying
      domain function of the types should be called with the arguments",
-     ?setup("import kind/prelude\n"
+     ?setup("import lark/prelude\n"
             "module test { Test }\n"
-            "type Test -> kind/prelude/Option(Boolean/True)",
-            #{include_kind_libraries => true},
+            "type Test -> lark/prelude/Option(Boolean/True)",
+            #{include_lark_libraries => true},
             fun({ok, _}) ->
                     Actual = test:'Test'(),
                     [?test(none, domain:diff({sum, ordsets:from_list(['Boolean/True', 'Option/Nil'])}, Actual))]
@@ -545,7 +545,7 @@ var_application_in_type_def_test_() ->
             "module test { Test }\n"
             "type Test a -> a.match(| True -> False\n"
             "                       | False -> True)",
-            #{include_kind_libraries => true},
+            #{include_lark_libraries => true},
             fun({ok, _}) ->
                     [?test('Boolean/False', test:'Test'('Boolean/True'))]
             end)}.
@@ -556,7 +556,7 @@ pattern_type_application_test_() ->
             "type Test\n"
             "  | Option(Boolean) -> True\n"
             "  | _               -> False",
-            #{include_kind_libraries => true},
+            #{include_lark_libraries => true},
             fun({ok, _}) ->
                     [?test('Boolean/True', test:'Test'('Option/Nil')),
                      ?test('Boolean/True', test:'Test'('Boolean/True')),
@@ -570,7 +570,7 @@ pattern_local_application_test_() ->
              type F a -> a
              type Test
                | True.F -> True",
-            #{include_kind_libraries => true},
+            #{include_lark_libraries => true},
             fun({ok, _}) ->
                     [?test('Boolean/True', test_domain:'Test'('Boolean/True'))]
             end)}.
@@ -581,7 +581,7 @@ pattern_variable_application_test_() ->
              type Test a b -> a.match(
                | Option(b)  -> True
                | False      -> False)",
-            #{include_kind_libraries => true},
+            #{include_lark_libraries => true},
             fun({ok, _}) ->
                     [?test('Boolean/True', test_domain:'Test'({sum, ['Boolean/True', 'Option/Nil']}, 'Boolean/True')),
                      ?test('Boolean/True', test_domain:'Test'({sum, ['Boolean/False', 'Option/Nil']}, 'Boolean/False')),

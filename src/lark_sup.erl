@@ -1,9 +1,9 @@
 %%%-------------------------------------------------------------------
-%% @doc kind top level supervisor.
+%% @doc lark top level supervisor.
 %% @end
 %%%-------------------------------------------------------------------
 
--module(kind_sup).
+-module(lark_sup).
 
 -behaviour(supervisor).
 

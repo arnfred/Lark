@@ -6,7 +6,7 @@
 
 start(StartType, StartArgs) ->
     io:format("StartType: ~p, StartArgs: ~p", [StartType, StartArgs]),
-    kind_sup:start_link().
+    lark_sup:start_link().
 
 stop(_State) ->
     ok.

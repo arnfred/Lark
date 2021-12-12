@@ -3,7 +3,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
--define(setup(Code, Tests), {setup, fun() -> kind:load(Code, #{sandboxed => false}) end, fun clean/1, Tests}).
+-define(setup(Code, Tests), {setup, fun() -> lark:load(Code, #{sandboxed => false}) end, fun clean/1, Tests}).
 
 clean({error, _}) -> noop;
 clean({ok, Modules}) ->
@@ -15,103 +15,103 @@ clean({ok, Modules}) ->
 
 identity_run_test_() ->
     {"define and call the identity function",
-     ?setup("module kind/test { id }\n"
+     ?setup("module lark/test { id }\n"
             "def id a -> a",
             fun({ok, _}) ->
-                    [?test(2, kind_test:id(2)),
-                     ?test(1.3, kind_test:id(1.3)),
-                     ?test("string", kind_test:id("string")),
-                     ?test(atom, kind_test:id(atom))]
+                    [?test(2, lark_test:id(2)),
+                     ?test(1.3, lark_test:id(1.3)),
+                     ?test("string", lark_test:id("string")),
+                     ?test(atom, lark_test:id(atom))]
             end)}.
 
 always_true_test_() ->
-    ?setup("module kind/test { alwaysTrue }\n"
+    ?setup("module lark/test { alwaysTrue }\n"
            "def alwaysTrue a -> True",
-           fun({ok, _}) -> ?test('Boolean/True', kind_test:alwaysTrue(2)) end).
+           fun({ok, _}) -> ?test('Boolean/True', lark_test:alwaysTrue(2)) end).
 
 pattern_match_test_() ->
-    ?setup("module kind/test { rexor }\n"
+    ?setup("module lark/test { rexor }\n"
            "def rexor\n"
            " | True -> False\n"
            " | False -> True",
            fun({ok, _}) ->
-                   [?test('Boolean/True', kind_test:rexor('Boolean/False')),
-                   ?test('Boolean/False', kind_test:rexor('Boolean/True'))]
+                   [?test('Boolean/True', lark_test:rexor('Boolean/False')),
+                   ?test('Boolean/False', lark_test:rexor('Boolean/True'))]
            end).
 
 pattern_match_multivariate_test_() ->
-    ?setup("module kind/test { rexor }\n"
+    ?setup("module lark/test { rexor }\n"
            "def rexor\n"
            " | True False -> True\n"
            " | False True -> True\n"
            " | _ _ -> False",
            fun({ok, _}) ->
-                   [?test('Boolean/True', kind_test:rexor('Boolean/True', 'Boolean/False')),
-                    ?test('Boolean/False', kind_test:rexor('Boolean/True', 'Boolean/True'))]
+                   [?test('Boolean/True', lark_test:rexor('Boolean/True', 'Boolean/False')),
+                    ?test('Boolean/False', lark_test:rexor('Boolean/True', 'Boolean/True'))]
            end).
 
 pattern_match3_test_() ->
-    ?setup("module kind/test { blah }\n"
+    ?setup("module lark/test { blah }\n"
            "def blah\n"
            " | b -> b",
            fun({ok, _}) ->
-                   ?test('Boolean/True', kind_test:blah('Boolean/True'))
+                   ?test('Boolean/True', lark_test:blah('Boolean/True'))
            end).
 
 pattern_match_type_test_() ->
-    ?setup("module kind/test{ blah }\n"
+    ?setup("module lark/test{ blah }\n"
            "type T -> {key1: Boolean, key2: Option(Boolean)}\n"
            "def blah\n"
            " | {key1: True, key2: k2} -> k2\n"
            " | {key1: False, key2: Nil} -> Nil\n",
            fun({ok, _}) ->
-                   [?test('Boolean/False', kind_test:blah(#{key1 => 'Boolean/True', key2 => 'Boolean/False'})),
-                    ?test('Option/Nil', kind_test:blah(#{key1 => 'Boolean/False', key2 => 'Option/Nil'}))]
+                   [?test('Boolean/False', lark_test:blah(#{key1 => 'Boolean/True', key2 => 'Boolean/False'})),
+                    ?test('Option/Nil', lark_test:blah(#{key1 => 'Boolean/False', key2 => 'Option/Nil'}))]
            end).
 
 underscore_arg_test_() ->
-    ?setup("module kind/test { blip }\n"
+    ?setup("module lark/test { blip }\n"
            "def blip _ _ c -> c",
-           fun({ok, _}) -> ?test(blop, kind_test:blip(blip, blab, blop)) end).
+           fun({ok, _}) -> ?test(blop, lark_test:blip(blip, blab, blop)) end).
 
 first_order_function_test_() ->
     TestFunction = fun('Boolean/True') -> 'Boolean/False' end,
-    ?setup("module kind/test { blip }\n"
+    ?setup("module lark/test { blip }\n"
            "def blip f -> f(True)",
-           fun({ok, _}) -> ?test('Boolean/False', kind_test:blip(TestFunction)) end).
+           fun({ok, _}) -> ?test('Boolean/False', lark_test:blip(TestFunction)) end).
 
 erlang_module_call_test_() ->
-    ?setup("module kind/test { get_last }\n"
+    ?setup("module lark/test { get_last }\n"
            "import lists/last\n"
            "def get_last l -> l.last",
-           fun({ok, _}) -> ?test('last_item', kind_test:get_last(['first_item', 'last_item'])) end).
+           fun({ok, _}) -> ?test('last_item', lark_test:get_last(['first_item', 'last_item'])) end).
 
 erlang_module_call_erlang_test_() ->
-    ?setup("module kind/test { test }\n"
+    ?setup("module lark/test { test }\n"
            "import erlang/atom_to_list\n"
            "def test a -> a.atom_to_list",
-           fun({ok, _}) -> ?test("an_atom", kind_test:test('an_atom')) end).
+           fun({ok, _}) -> ?test("an_atom", lark_test:test('an_atom')) end).
 
 erlang_module_call_no_dot_notation_test_() ->
-    ?setup("module kind/test { test }\n"
+    ?setup("module lark/test { test }\n"
            "import erlang\n"
            "def test a -> erlang/atom_to_list(a)",
-           fun({ok, _}) -> ?test("another_atom", kind_test:test('another_atom')) end).
+           fun({ok, _}) -> ?test("another_atom", lark_test:test('another_atom')) end).
 
 top_level_type_import_test_() ->
     {"Test if we can use Boolean as defined in the prelude",
-     ?setup("module kind/test { Test }\n"
+     ?setup("module lark/test { Test }\n"
             "type Test -> (Boolean | Maybe)",
             fun({ok, _}) -> 
-                    ?testEqual({sum, ordsets:from_list(['Test/Maybe', 'Boolean/True', 'Boolean/False'])}, kind_test:'Test'())
+                    ?testEqual({sum, ordsets:from_list(['Test/Maybe', 'Boolean/True', 'Boolean/False'])}, lark_test:'Test'())
             end)}.
 
 sup_level_type_import_test_() ->
     {"Test if we can use Boolean as defined in the prelude",
-     ?setup("module kind/test { Test }\n"
+     ?setup("module lark/test { Test }\n"
             "type Test -> (True | Maybe)",
             fun({ok, _}) -> 
-                    ?testEqual({sum, ordsets:from_list(['Test/Maybe', 'Boolean/True'])}, kind_test:'Test'())
+                    ?testEqual({sum, ordsets:from_list(['Test/Maybe', 'Boolean/True'])}, lark_test:'Test'())
             end)}.
 
 unicode_string_test_() ->

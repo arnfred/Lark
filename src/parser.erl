@@ -4,19 +4,20 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
-% Kind library files are added to priv according to Erlang tradition [2]
+% Lark library files are added to priv according to Erlang tradition [2]
 % The use of code:priv_dir came from the answer of the following stackoverflow question: [1]
 % [1]: https://stackoverflow.com/questions/63722670/rebar3-how-do-i-refer-to-source-artifacts-of-a-library-from-erlang
 % [2]: https://stackoverflow.com/questions/36231976/how-can-i-include-a-mustache-file-in-erlang-release
--define(KIND_SRC_LIB, code:priv_dir(kind) ++ "/lib").
+-define(LARK_SRC_LIB, code:priv_dir(lark) ++ "/lib").
+-define(FILEEXT, ".lark").
 
 parse(Inputs) -> parse(Inputs, #{}).
 parse(Inputs, Options) ->
 
-    % Add in the kind libraries as input paths unless options says no
+    % Add in the lark libraries as input paths unless options says no
     GivenPaths = [Path || {path, Path} <- Inputs],
-    InputPaths = case maps:get(include_kind_libraries, Options, true) of
-                     true   -> [?KIND_SRC_LIB | GivenPaths];
+    InputPaths = case maps:get(include_lark_libraries, Options, true) of
+                     true   -> [?LARK_SRC_LIB | GivenPaths];
                      false  -> GivenPaths
                  end,
 
@@ -77,7 +78,7 @@ traverse(dir, FileName) ->
 
 traverse(file, FileName) ->
     case filename:extension(FileName) of
-        ".kind" ++ _    -> {ok, {source, FileName}};
+        ?FILEEXT ++ _    -> {ok, {source, FileName}};
         _               -> []
     end.
 
@@ -105,17 +106,17 @@ to_ast(FileName, Text) ->
 link_and_tag({module, ModuleCtx, ModulePath, ModuleImports, Exports, DefMap}, ModuleMap, Options) ->
 
     % Make sure to import prelude only if we're both importing prelude and all
-    % kind libraries in general
-    ImportPrelude = maps:get(import_prelude, Options, true) andalso maps:get(include_kind_libraries, Options, true),
+    % lark libraries in general
+    ImportPrelude = maps:get(import_prelude, Options, true) andalso maps:get(include_lark_libraries, Options, true),
 
     % Make sure not to import prelude if this is the prelude
     PreludeImport = case {ImportPrelude, ModulePath} of
                          {false, _}                     -> [];
                          {_, [source, lib, prelude]}    -> []; % source file module
                          {_, [source, lib, prelude, _]} -> []; % source file sub modules
-                         {_, [kind, prelude]}           -> []; % declared module
-                         {_, [kind, prelude, _]}        -> []; % declared sub modules
-                         {_, _}                         -> [{import, ModuleCtx, [kind, prelude, '_']}]
+                         {_, [lark, prelude]}           -> []; % declared module
+                         {_, [lark, prelude, _]}        -> []; % declared sub modules
+                         {_, _}                         -> [{import, ModuleCtx, [lark, prelude, '_']}]
                      end,
     WithPreludeMod = {module, ModuleCtx, ModulePath, PreludeImport ++ ModuleImports, Exports, DefMap},
 
@@ -136,8 +137,8 @@ link_and_tag({module, ModuleCtx, ModulePath, ModuleImports, Exports, DefMap}, Mo
 
 % To make it easier to linearize we clearly distinguish between the following types of application:
 % - `application`: Application of anonymous function or internal to the module
-% - `qualified_application`: Application of function exported from different kind module
-% - `beam_application`: Application of function exported from non-kind module
+% - `qualified_application`: Application of function exported from different lark module
+% - `beam_application`: Application of function exported from non-lark module
 normalize_applications(Module) ->
     Pre = fun(_, _, {application, Ctx, {qualified_symbol, _, ModulePath, Name}, Args}) ->
                   {ok, {qualified_application, Ctx, ModulePath, Name, Args}};

@@ -6,7 +6,7 @@
 gen_pattern(pattern, _, {variable, _, _, _} = Term) -> {ok, [cerl:c_var(symbol:tag(Term))]};
 
 % Pattern of shape: T
-gen_pattern(pattern, Scope, {keyword, Ctx, Path, Val} = Term) ->
+gen_pattern(pattern, _Scope, {keyword, _Ctx, _Path, _Val} = Term) ->
     Tag = symbol:tag(Term),
     {ok, [cerl:c_atom(Tag)]};
 

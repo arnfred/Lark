@@ -11,12 +11,12 @@ load(FileName, Code) ->
 
 
 root_def_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "def blah -> noop",
            fun({ok, Modules}) ->
                    ?test(#{['source', 'test', 'file'] :=
                            {module,
-                            #{filename := "test/file.kind", line := 0},
+                            #{filename := "test/file.lark", line := 0},
                             [source, test, file],
                             [],
                             #{},
@@ -24,11 +24,11 @@ root_def_test_() ->
            end).
 
 root_import_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "import noop",
            fun({ok, Modules}) ->
                    ?test(#{['source', 'test', 'file'] := {module,
-                                                #{filename := "test/file.kind"},
+                                                #{filename := "test/file.lark"},
                                                 [source, test, file],
                                                 [{import, #{}, [noop]}],
                                                 #{},
@@ -36,7 +36,7 @@ root_import_test_() ->
            end).
 
 empty_module_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "module test/module1 ()",
            fun({ok, Modules}) ->
                    ?test(#{['source', 'test', 'file'] := {module, #{}, _, [], _, _},
@@ -49,7 +49,7 @@ empty_module_test_() ->
            end).
 
 module_def_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "module test/module1 (
                 def blah -> noop
             )",
@@ -64,7 +64,7 @@ module_def_test_() ->
            end).
 
 module_import_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "module test/module1 (
                 import blah/_
             )",
@@ -79,7 +79,7 @@ module_import_test_() ->
            end).
 
 module_export_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "module test/module1 (
                 export {t: A, t/A} 
                 def t -> A
@@ -98,7 +98,7 @@ module_export_test_() ->
 
 
 module_multiple_export_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "module test/module1 (
                 export {t: A} 
                 def t -> A
@@ -117,7 +117,7 @@ module_multiple_export_test_() ->
            end).
 
 root_export_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "module test/module1 (export {t: A, t/A})
             def t -> A",
            fun(Error) ->
@@ -125,21 +125,21 @@ root_export_test_() ->
            end).
 
 export_missing_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "module test/module1 (export {t, t/A})",
            fun(Error) ->
                     [?testError({export_missing, 't'}, Error)]
            end).
 
 export_qualified_symbol_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "module test/module1 (export {t/t/A})",
            fun(Error) ->
                     [?testError({export_missing, 't/t/A'}, Error)]
            end).
 
 subtype_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "def t -> A",
            fun({ok, Modules}) ->
                    [?test(#{[source, test, file] :=
@@ -156,7 +156,7 @@ subtype_test_() ->
            end).
 
 subtype_tagged_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "def t -> (R: A)",
            fun({ok, Modules}) ->
                    [?test(#{[source, test, file] :=
@@ -182,15 +182,15 @@ subtype_tagged_test_() ->
            end).
 
 duplicate_module_error_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "module test/module1 ()
             module test/module1 ()",
            fun(Error) ->
-                    [?testError({duplicate_module, 'test/module1', "test/file.kind", "test/file.kind"}, Error)]
+                    [?testError({duplicate_module, 'test/module1', "test/file.lark", "test/file.lark"}, Error)]
            end).
 
 nested_link_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
             "module t (def blup -> (Blip | Blap)
                        import blup/_
                        def flup -> (Flip | Blap)
@@ -222,7 +222,7 @@ nested_link_test_() ->
            end).
 
 local_keyword_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "def t -> A
             import t/A
             def s -> A
@@ -241,7 +241,7 @@ local_keyword_test_() ->
     end).
 
 local_module_keyword_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "module test (export {s}
                          def t -> A
                          import t/A
@@ -263,7 +263,7 @@ local_module_keyword_test_() ->
 
 
 empty_module_import_test_() ->
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "module non-empty (export {boolean}
                               def boolean -> True | False)
             module empty ()",
@@ -275,7 +275,7 @@ no_fictionous_root_modules_test_() ->
     % When a module implements a submodule (because it contains keywords or
     % tagged values) we don't want the root module to also create this
     % submodule
-    ?setup("test/file.kind",
+    ?setup("test/file.lark",
            "module non-empty (export {boolean}
                               def boolean -> True | False)",
     fun({ok, Modules}) -> [?testEqual(maps:is_key([source, test, file, boolean], Modules), false)] end).

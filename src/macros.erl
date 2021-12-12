@@ -30,7 +30,7 @@ expand_macros_post(_, _, _) -> ok.
 -ifdef(TEST).
 
 
--define(setup(Code, Tests), {setup, fun() -> kind:load(Code, #{import_kind_libraries => false}) end, fun (_) -> noop end, Tests}).
+-define(setup(Code, Tests), {setup, fun() -> lark:load(Code, #{import_lark_libraries => false}) end, fun (_) -> noop end, Tests}).
 
 
 happy_macro_test_() ->
