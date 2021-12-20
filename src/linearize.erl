@@ -1,20 +1,30 @@
 -module(linearize).
 -import(lists, [zip/2, zip3/3, unzip/1, unzip3/1, seq/2, nth/2]).
 -import(domain, [subset/2, intersection/1, intersection/2, intersect_envs/2, union/1, union/2]).
--export([term/2, term/3]).
+-export([term/2, term/3, raw_term/3]).
 
 -include_lib("eunit/include/eunit.hrl").
 
 term(Term, Libs) ->
     term(Term, Libs, #{}).
-term(Term, Libs, Env) ->
-    GlobalScope = scope(Libs, Env),
+raw_term(Term, Libs, PreEnv) ->
+    GlobalScope = scope(Libs, PreEnv),
     History = [],
-    expr({GlobalScope, #{}}, History, Term).
+    expr({PreEnv, GlobalScope, #{}}, History, Term).
+term(Term, Libs, PreEnv) ->
+    case raw_term(Term, Libs, PreEnv) of
+        {error, Errs} -> {error, Errs};
+        {ok, {_, {def, Ctx, Name, {'fun', FCtx, F}}}} when is_function(F) ->
+            case F(args(Term), []) of
+                {error, Errs}           -> {error, Errs};
+                {ok, {NewEnv, FTree}}   -> {ok, {NewEnv, {def, Ctx, Name, FTree}}}
+            end;
+        {ok, {Env, Tree}} -> {ok, {Env, Tree}}
+    end.
 
 
 
-scope(Libs, Env) ->
+scope(Libs, PreEnv) ->
 
     % There's a gotcha when a scope is computed that in order to compute the
     % scope, the scope itself is needed.  to circumvent this catch-22, we relax
@@ -23,25 +33,17 @@ scope(Libs, Env) ->
     % indices. Thus we can neatly compute the index of index functions, and
     % then with the index in hand, build the scope by evaluating each index
     % function.
-    IdxF = fun(Def, Path) ->
-                   fun(Index) ->
-                           fun(ArgDomains, History) ->
-                                   case maps:is_key({Path, ArgDomains}, Env) of
-                                       true    -> {ok, {#{}, maps:get({Path, ArgDomains}, Env)}};
-                                       false    ->
-                                           Global = global_scope(Index),
-                                           case expr({Global, #{}}, [], Def) of
-                                               {error, Errs}  -> {error, Errs};
-                                               {ok, {_, {'fun', _, F}}}   -> F(ArgDomains, History)
-                                           end end end end end,
+    IdxF = fun({def, _, _Name, Expr})
+               -> fun(Index) -> fun() -> expr({PreEnv, global_scope(Index), #{}}, [], Expr) end end end,
+
 
     % The index contains a mapping of def paths to index functions. An index
     % function will return a scope function given an index as an argument. A
     % scope function will return the evaluated tree of the def that the def
     % path is pointing to, when given arg domains and the current evaluation
     % history
-    Index = maps:from_list([{Path, IdxF(Term, Path)} || {module, _, P, _, _, Defs} <- maps:values(Libs),
-                                                        {N, Term} <- maps:to_list(Defs),
+    Index = maps:from_list([{Path, IdxF(Term)} || {module, _, P, _, _, Defs} <- maps:values(Libs),
+                                                        {N, {def, _, _, _} = Term} <- maps:to_list(Defs),
                                                         Path <- [P ++ [N]]]),
 
 
@@ -64,16 +66,16 @@ global_scope(Index) -> maps:from_list([{Path, I(Index)} || {Path, I} <- maps:to_
 %   Output: The linearized AST
 %           Map of linearized definitions
 %   Errors: Strict domain not subset errors
-expr({GlobalScope, LocalScope}, History, Term) ->
-    Pre = fun(_, LclScp, T) -> expr_pre({GlobalScope, LclScp}, History, T) end,
-    Post = fun(Type, LclScp, T) -> expr_post(Type, {GlobalScope, LclScp}, History, T) end,
+expr({PreEnv, GlobalScope, LocalScope}, History, Term) ->
+    Pre = fun(_, LclScp, T) -> expr_pre({PreEnv, GlobalScope, LclScp}, History, T) end,
+    Post = fun(Type, LclScp, T) -> expr_post(Type, {PreEnv, GlobalScope, LclScp}, History, T) end,
     case ast:traverse_term(expr, Pre, Post, LocalScope, Term) of
         {error, Errs}       -> {error, Errs};
         {ok, {Env, Tree}}   ->
             {Local, _} = lists:partition(fun({{KeyPath, _}, _V}) -> length(KeyPath) =:= 1 end, maps:to_list(Env)),
             case linearize_local_defs(Local, History, Tree) of
                 {error, Errs}               -> {error, Errs};
-                {ok, {DefsEnv, DefsTree}}   -> {ok, {maps:merge(Env, DefsEnv), DefsTree}}
+                {ok, {DefsEnv, DefsTree}}   -> {ok, {utils:merge([PreEnv, Env, DefsEnv]), DefsTree}}
             end
     end.
 
@@ -88,9 +90,9 @@ expr({GlobalScope, LocalScope}, History, Term) ->
 %           The pattern domain literal (containing vars)
 %   Errors: Only if there's no intersection between domains in for example
 %           pattern applications
-pattern({GlobalScope, LocalScope}, History, Domain, Term) ->
+pattern({PreEnv, GlobalScope, LocalScope}, History, Domain, Term) ->
     Pre = fun(_, _, T) -> pattern_pre(History, domain(T), T) end,
-    Post = fun(Type, LclScp, T) -> pattern_post(Type, {GlobalScope, LclScp}, History, T) end,
+    Post = fun(Type, LclScp, T) -> pattern_post(Type, {PreEnv, GlobalScope, LclScp}, History, T) end,
     case ast:traverse_term(pattern, Pre, Post, LocalScope, set_domain(Term, Domain)) of
         {error, Errs}       -> {error, Errs};
         {ok, {_, Trees}}    -> {ok, Trees}
@@ -105,7 +107,7 @@ clauses(Scopes, History, ArgDomains, Clauses) ->
     ErrCtx = symbol:ctx(hd(Clauses)),
     Arities = [length(Patterns) || {clause, _, Patterns, _} <- Clauses],
     case lists:min(Arities) =:= lists:max(Arities) of
-        false   -> error:format({variable_arity, Arities}, {linearize, ErrCtx, History});
+        false   -> error:format({variable_clause_arity, Arities}, {linearize, ErrCtx, History});
         true    ->
             case error:collect(clauses(Scopes, History, ArgDomains, Clauses, [])) of
                 {error, Errs}       -> {error, Errs};
@@ -164,13 +166,13 @@ clause(Scopes, History, ArgDomains, {clause, Ctx, Patterns, Expr}) ->
 
 
 
-expand_clause({GlobalScope, LocalScope}, History, Patterns, Expr, Ctx) ->
+expand_clause({PreEnv, GlobalScope, LocalScope}, History, Patterns, Expr, Ctx) ->
     ClauseEnv = utils:merge([env(P) || P <- Patterns]),
     ClauseScope = maps:merge(LocalScope, ClauseEnv),
-    case expr({GlobalScope, ClauseScope}, History, Expr) of
-        {error, Errs}           -> {error, Errs};
-        {ok, {Env, ExprTree}}   -> ClauseCtx = maps:put(domain, domain(ExprTree), Ctx),
-                                   {ok, {Env, {clause, ClauseCtx, Patterns, ExprTree}}}
+    case expr({PreEnv, GlobalScope, ClauseScope}, History, Expr) of
+        {error, Errs}       -> {error, Errs};
+        {ok, {E, ExprTree}} -> ClauseCtx = maps:put(domain, domain(ExprTree), Ctx),
+                               {ok, {E, {clause, ClauseCtx, Patterns, ExprTree}}}
     end.
 
 
@@ -239,14 +241,11 @@ pattern_pre(_, Domain, {pair, Ctx, Key, Val}) ->
 
 expr_pre(_, _, {'fun', _, _}) -> leave_intact;
 expr_pre(_, _, {'let', _, _, _, _}) -> leave_intact;
-expr_pre(_, _, {def, _, _, _}) -> leave_intact;
 expr_pre(_, _, _) -> ok.
 
 
-post(expr, Scopes, History, {def, _, _, {'fun', _, _} = Fun}) ->
-    post(expr, Scopes, History, Fun);
-post(expr, Scopes, History, {def, Ctx, _, ExprTerm}) ->
-    post(expr, Scopes, History, {'fun', Ctx, [{clause, Ctx, [], ExprTerm}]});
+post(expr, _, _, {def, _, _, Expr} = Term) ->
+    {ok, {#{}, set_domain(Term, domain(Expr))}};
 
 % Expr of type `a b -> a + b` (e.g. a function)
 % When we linearize a def, we can compile several versions of the def in the
@@ -276,13 +275,13 @@ post(expr, Scopes, _, {'fun', Ctx, Clauses} = LinearizeFunTerm) ->
 
 
 % Expr of type `val p = e` where `p` is a pattern and `e` is an expression
-post(expr, {GlobalScope, LocalScope} = Scopes, History, {'let', Ctx, Pattern, Expr, NextExpr}) ->
+post(expr, {PreEnv, GlobalScope, LocalScope} = Scopes, History, {'let', Ctx, Pattern, Expr, NextExpr}) ->
     case expr(Scopes, History, Expr) of
         {error, Errs}       -> {error, Errs};
         {ok, {EEnv, ETree}}    ->
             case pattern(Scopes, History, domain(ETree), Pattern) of
                 {error, Errs}   -> {error, Errs};
-                {ok, [PTree]}   -> case expr({GlobalScope, maps:merge(LocalScope, env(PTree))}, History, NextExpr) of
+                {ok, [PTree]}   -> case expr({PreEnv, GlobalScope, maps:merge(LocalScope, env(PTree))}, History, NextExpr) of
                                        {error, Errs}        -> {error, Errs};
                                        {ok, {NEnv, NTree}}  -> Domain = domain(NTree),
                                                                Term = {'let', Ctx, PTree, ETree, NTree},
@@ -300,14 +299,22 @@ post(expr, _, _, {seq, _, _, Then} = Term) -> {ok, {#{}, set_domain(Term, domain
 
 
 % Patterns of type `module/t(a, b, c)` where `module/t` is a function defined in global scope
-post(pattern, {GlobalScope, _}, History, {qualified_application, Ctx, Path, Name, Args} = Term) ->
-    F = maps:get(Path ++ [Name], GlobalScope),
-    pattern_apply(F, Args, Path ++ [Name], History, Ctx, domain(Term));
+post(pattern, {PreEnv, GlobalScope, _}, History, {qualified_application, Ctx, Path, Name, Args} = Term) ->
+    case (maps:get(Path ++ [Name], GlobalScope))() of
+        {ok, {_, {'fun', _, F}}}                -> pattern_apply(PreEnv, F, Args, Path ++ [Name], History, Ctx, domain(Term));
+        {ok, {_, _}} when length(Args) > 0      -> error:format({wrong_function_arity, 0, length(Args)},
+                                                                {linearize, Ctx, History});
+        Otherwise                               -> Otherwise
+    end;
 
 % Expr of type `module/t(a, b, c)` where `module/t` is a function defined in global scope
-post(expr, {GlobalScope, _}, History, {qualified_application, Ctx, Path, Name, Args} = Term) ->
-    F = maps:get(Path ++ [Name], GlobalScope),
-    expr_apply(F, Args, Path ++ [Name], History, Ctx, Term);
+post(expr, {PreEnv, GlobalScope, _}, History, {qualified_application, Ctx, Path, Name, Args} = Term) ->
+    case (maps:get(Path ++ [Name], GlobalScope))() of
+        {ok, {_, {'fun', _, F}}}                -> expr_apply(PreEnv, F, Args, Path ++ [Name], History, Ctx, Term);
+        {ok, {_, _}} when length(Args) > 0      -> error:format({wrong_function_arity, 0, length(Args)},
+                                                                {linearize, Ctx, History});
+        Otherwise                               -> Otherwise
+    end;
 
 
 
@@ -316,9 +323,12 @@ post(pattern, Scopes, History, {qualified_symbol, Ctx, Path, Name}) ->
     post(pattern, Scopes, History, {qualified_application, Ctx, Path, Name, []});
 
 % Patterns of type `module/t` with no arguments passed
-post(expr, {GlobalScope, _}, _, {qualified_symbol, _, Path, Name} = Term) ->
-    F = maps:get(Path ++ [Name], GlobalScope),
-    {ok, {#{}, set_domain(Term, F)}};
+% This can either be an application of a function with no arguments, or a
+% function. If the qualified_symbol points to a function with no arguments,
+% then we always apply it.
+post(expr, {_, GlobalScope, _}, _, {qualified_symbol, _, Path, Name}) ->
+    (maps:get(Path ++ [Name], GlobalScope))();
+
 
 
 % Patterns of type `beam/mod/t(a, b, c)` where `t` is a beam function in module `mod`
@@ -333,15 +343,25 @@ post(pattern, _, History, {beam_application, Ctx, Path, Name, Args}) ->
             case domain:is_literal(ArgDomains) andalso allowed_beam_function(ModuleName, Name) of
                 true    -> Domain = erlang:apply(ModuleName, Name, ArgDomains),
                            {ok, {#{}, domain:to_term(Domain, Ctx)}};
-                false   -> {ok, {#{}, set_domain({variable, Ctx, '_', symbol:id('_')}, any)}}
+                false   -> error:format({beam_pattern_application_with_non_literal_arg_domains, Path, Name, ArgDomains},
+                                        {linearize, Ctx, History})
             end
     end;
 
 % Expr of type `beam/mod/t(a, b, c)` where `t` is a beam function in module `mod`
-post(expr, Scopes, History, {beam_application, _Ctx, _Path, _Name, _Args} = Term) ->
-    case post(pattern, Scopes, History, Term) of
-        {error, Errs}   -> {error, Errs};
-        {ok, {_, Tree}} -> {ok, {#{}, set_domain(Term, domain(Tree))}}
+post(expr, _, History, {beam_application, Ctx, Path, Name, Args} = Term) ->
+    ModuleName = module:beam_name(Path),
+    ArgDomains = [domain(A) || A <- Args],
+    Arities = utils:get_arities(ModuleName, Name),
+    case lists:member(length(ArgDomains), Arities) of
+        false   -> error:format({wrong_function_arity, Arities, length(ArgDomains)},
+                                {linearize, Ctx, History});
+        true    ->
+            case domain:is_literal(ArgDomains) andalso allowed_beam_function(ModuleName, Name) of
+                true    -> Domain = erlang:apply(ModuleName, Name, ArgDomains),
+                           {ok, {#{}, set_domain(Term, Domain)}};
+                false   -> {ok, {#{}, set_domain(Term, any)}}
+            end
     end;
 
 
@@ -360,10 +380,10 @@ post(expr, Scopes, History, {beam_symbol, Ctx, Path, Name}) ->
 
 
 % Patterns of type `x.f(a, b, c)` where `f` refers to/is a function
-post(pattern, _, History, {application, Ctx, Expr, Args} = Term) ->
+post(pattern, {PreEnv, _, _}, History, {application, Ctx, Expr, Args} = Term) ->
     case domain(Expr) of
         F when is_function(F)   ->
-            pattern_apply(domain(Expr), Args, [utils:gen_tag(F)], History, Ctx, domain(Term));
+            pattern_apply(PreEnv, domain(Expr), Args, [utils:gen_tag(F)], History, Ctx, domain(Term));
         Other                   ->
             error:format({function_domain_expected, Other}, {linearize, Ctx, History})
     end;
@@ -405,8 +425,8 @@ post(pattern, _, History, {application, Ctx, Expr, Args} = Term) ->
 % omit the resulting linearized function AST. Then once the linearized AST has
 % been computed, we can traverse it and linearize all local function
 % definitions.
-post(expr, _, History, {application, Ctx, Expr, Args} = Term) ->
-    Apply = fun(F) -> expr_apply(F, Args, [utils:gen_tag(F)], History, Ctx, Term) end,
+post(expr, {PreEnv, _, _}, History, {application, Ctx, Expr, Args} = Term) ->
+    Apply = fun(F) -> expr_apply(PreEnv, F, Args, [utils:gen_tag(F)], History, Ctx, Term) end,
     case domain(Expr) of
         {sum, Ds}   ->
             case error:collect([Apply(F) || F <- Ds]) of
@@ -454,14 +474,15 @@ post(pattern, _, _, {pair, _, {keyword, _, _}, Val} = Term) ->
 % Patterns of type `k: v` or more complicated like `[a, b]: x.t(q)`
 post(pattern, Scopes, History, {pair, Ctx, Key, Val}) ->
     case pattern(Scopes, History, domain(Val), Key) of
-        {error, Errs}           -> {error, Errs};
-        {ok, KTrees} -> F = fun(Tree) -> Term = {pair, Ctx, Tree, Val},
-                                         Env = env(Tree),
-                                         case domain:is_literal(domain(Tree)) of
-                                             false   -> {ok, {Env, set_domain(Term, domain(Val))}};
-                                             true    -> {ok, {Env, domain:to_term(domain(Tree), symbol:ctx(Term))}}
-                                         end end,
-                        sum([F(Tree) || Tree <- KTrees])
+        {error, Errs}   -> {error, Errs};
+        {ok, KTrees}    ->
+            F = fun(Tree) -> Term = {pair, Ctx, Tree, Val},
+                             Env = env(Tree),
+                             case domain:is_literal(domain(Tree)) of
+                                 false   -> {ok, {Env, set_domain(Term, domain(Tree))}};
+                                 true    -> {ok, {Env, domain:to_term(domain(Tree), symbol:ctx(Term))}}
+                             end end,
+            sum([F(Tree) || Tree <- KTrees])
     end;
 
 % Expr of type `k: v`
@@ -471,7 +492,7 @@ post(expr, _, _, {pair, _, _, Val} = Term) ->
 
 
 % Pattern like `a`
-post(pattern, {_, LocalScope}, _, {variable, _, _, _} = Term) ->
+post(pattern, {_, _, LocalScope}, _, {variable, _, _, _} = Term) ->
     ScopeDomain = maps:get(symbol:tag(Term), LocalScope, any),
     Domain = intersection(ScopeDomain, domain(Term)),
     case domain:is_literal(Domain) of
@@ -480,7 +501,7 @@ post(pattern, {_, LocalScope}, _, {variable, _, _, _} = Term) ->
     end;
 
 % Expr of type `x`
-post(expr, {_, LocalScope}, _, {variable, _, _, _} = Term) ->
+post(expr, {_, _, LocalScope}, _, {variable, _, _, _} = Term) ->
     Domain = maps:get(symbol:tag(Term), LocalScope),
     case domain:is_literal(Domain) of
         false   -> {ok, {#{}, set_domain(Term, Domain)}};
@@ -573,22 +594,34 @@ fun_apply(F, ArgDomains, Tag, History, Ctx) when is_function(F) ->
                            {ok, set_domain({recursion, Ctx, Tag, ArgDomains}, Domain)};
         false           -> F(ArgDomains, [Step | History])
     end;
+
+% If an exported function expects a function, then we end up applying a
+% function with the 'whatever' domain In this case we can't know what the
+% function domain is. Instead we return an empty function and the 'any' domain
+fun_apply(whatever, _, _, _, Ctx) -> {ok, {#{}, set_domain({'fun', Ctx, []}, any)}};
+
 fun_apply(F, _, _, History, Ctx) -> error:format({function_domain_expected, F}, {linearize, Ctx, History}).
 
-pattern_apply(F, Args, Path, History, Ctx, AppDomain) ->
+pattern_apply(PreEnv, F, Args, Path, History, Ctx, AppDomain) ->
     ArgDomains = [domain(A) || A <- Args],
-    case fun_apply(F, ArgDomains, Path, History, Ctx) of
-        {error, Errs}               -> {error, Errs};
-        {ok, {_, Tree}}             -> Domain = intersection(domain(Tree), AppDomain),
-                                       {ok, {#{}, domain:to_term(Domain, Ctx)}}
+    case maps:get({Path, ArgDomains}, PreEnv, undefined) of
+        undefined   -> case fun_apply(F, ArgDomains, Path, History, Ctx) of
+                           {error, Errs}               -> {error, Errs};
+                           {ok, {_, Tree}}             -> Domain = intersection(domain(Tree), AppDomain),
+                                                          {ok, {#{}, domain:to_term(Domain, Ctx)}}
+                       end;
+        Tree        -> {ok, {#{}, Tree}}
     end.
 
-expr_apply(F, Args, Path, History, Ctx, Term) ->
+expr_apply(PreEnv, F, Args, Path, History, Ctx, Term) ->
     ArgDomains = [domain(A) || A <- Args],
-    case fun_apply(F, ArgDomains, Path, History, Ctx) of
-        {error, Errs}       -> {error, Errs};
-        {ok, {Env, Tree}}   -> NewEnv = maps:put({Path, ArgDomains}, Tree, Env),
-                               {ok, {NewEnv, set_domain(Term, domain(Tree))}}
+    case maps:get({Path, ArgDomains}, PreEnv, undefined) of
+        undefined    -> case fun_apply(F, ArgDomains, Path, History, Ctx) of
+                            {error, Errs}       -> {error, Errs};
+                            {ok, {Env, Tree}}   -> NewEnv = maps:put({Path, ArgDomains}, Tree, Env),
+                                                   {ok, {NewEnv, set_domain(Term, domain(Tree))}}
+                        end;
+        Tree         -> {ok, {#{}, Tree}}
     end.
 
 is_recursive({Path, _, Args}, History) ->
@@ -683,3 +716,8 @@ allowed_beam_function(Module, Name) ->
                     (lists:member(Name, maps:get(Module, Blacklist))))),
     Whitelisted = import:is_whitelisted(Module, Name),
     Whitelisted andalso not(Blacklisted).
+
+args({def, _, _, {'fun', _, [{clause, _, Ps, _} | _]}}) -> [whatever || _ <- Ps];
+args({def, _, _, {'fun', _, _Expr}}) -> [];
+args({def, _, _, _Expr}) -> [].
+

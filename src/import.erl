@@ -3,7 +3,7 @@
 
 -define(DEFAULT_SANDBOXED, false).
 
-import(Module, ModuleMap) -> import(Module, ModuleMap, #{sandboxed => ?DEFAULT_SANDBOXED}).
+import(Module, ModuleMap) -> import(Module, ModuleMap, #{}).
 import({module, _, ModulePath, Imports, _, _}, ModuleMap, Options) ->
     FlatImports = lists:flatten([flatten(I) || I <- Imports]),
     Scope = scope(ModulePath, ModuleMap),

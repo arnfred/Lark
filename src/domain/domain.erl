@@ -1,7 +1,6 @@
 -module(domain).
 -export([diff/2, union/1, union/2, intersection/1, intersection/2, function/1,
-         unroll/2, normalize/1, subset/2, lookup/2, expand/2, is_literal/1,
-         to_term/2]).
+         unroll/2, normalize/1, subset/2, lookup/2, expand/2, is_literal/1, to_term/2]).
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("test/macros.hrl").
 
@@ -60,7 +59,7 @@ is_literal(F) when is_function(F)        -> false;
 is_literal({sum, _})                     -> false;
 is_literal(L) when is_list(L)            -> lists:all(fun(E) -> is_literal(E) end, L);
 is_literal(M) when is_map(M)             -> lists:all(fun(E) -> is_literal(E) end, maps:values(M));
-is_literal( {sum, _, _})                 -> false;
+is_literal({sum, _, _})                  -> false;
 is_literal({tagged, _, Val})             -> is_literal(Val).
 
 to_term(Domain, Ctx) -> to_term_(Domain, maps:put(domain, Domain, Ctx)).
@@ -73,7 +72,6 @@ to_term_(Domain, Ctx) when is_atom(Domain) -> {value, Ctx, atom, Domain};
 to_term_(Domain, Ctx) when is_integer(Domain) -> {value, Ctx, integer, Domain};
 to_term_(Domain, Ctx) when is_float(Domain) -> {value, Ctx, float, Domain};
 to_term_(Domain, Ctx) when is_binary(Domain) -> {value, Ctx, string, Domain}.
-
 
 -ifdef(TEST).
 

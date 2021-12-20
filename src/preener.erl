@@ -153,6 +153,13 @@ pair_expr_test_() ->
                       [{pair, _, {keyword, _, a}, {symbol, _, _, a}},
                        {keyword, _, b}]}}}]}}]}, do_preen(Code)).
 
+def_no_args_test_() ->
+    Code = "def test -> (A: {a: 1, b})",
+    ?test({ok, [{def, _, _, {tagged, _, [test, 'A'],
+                             {dict, _,
+                              [{pair, _, {keyword, _, a}, {value, _, integer, 1}},
+                               {keyword, _, b}]}}}]}, do_preen(Code)).
+
 pair_expr_homonym_test_() ->
     Code = "def A a -> (A: {a: a, b})",
     ?test({ok, [{def, _, _,

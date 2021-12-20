@@ -102,7 +102,7 @@ gen_tag(F) when is_function(F) ->
            end,
     {name, Tag} = erlang:fun_info(F, name),
     symbol:tag([Tag, list_to_atom(integer_to_list(Hash))]);
-gen_tag(Term) -> erlang:phash2(Term).
+gen_tag(Term) -> list_to_atom(integer_to_list(erlang:phash2(Term))).
 
 print_core(Name) ->
     {ok, FileContents} = file:read_file(Name),

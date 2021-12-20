@@ -97,10 +97,16 @@ step(Meta, expr, Scope, {clause, Ctx, Patterns, Expr}) ->
             end
     end;
 
-step(Meta, expr, Scope, {'fun', Ctx, Clauses}) ->
+step(Meta, expr, Scope, {'fun', Ctx, Clauses}) when is_list(Clauses) ->
     case map(Meta, expr, Scope, Clauses) of
-        {error, Errs}               -> {error, Errs};
-        {ok, {Envs, TClauses}}   -> {ok, {merge(Envs), {'fun', Ctx, TClauses}}}
+        {error, Errs}           -> {error, Errs};
+        {ok, {Envs, TClauses}}  -> {ok, {merge(Envs), {'fun', Ctx, TClauses}}}
+    end;
+
+step(Meta, expr, Scope, {'fun', Ctx, Expr}) ->
+    case in(Meta, expr, Scope, Expr) of
+        {error, Errs}       -> {error, Errs};
+        {ok, {Env, TExpr}}  -> {ok, {Env, {'fun', Ctx, TExpr}}}
     end;
 
 step(Meta, expr, Scope, {val, Ctx, Pattern, Expr}) ->
