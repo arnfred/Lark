@@ -159,18 +159,15 @@ step(Meta, Type, Scope, {list, Ctx, Expressions}) when is_list(Expressions) ->
         {ok, {Envs, TExprs}}   -> {ok, {merge(Envs), {list, Ctx, TExprs}}}
     end;
 
-step(Meta, expr, Scope, {'let', Ctx, Pattern, Expr, Term}) ->
-    error:flatmap2(in(Meta, pattern, Scope, Pattern),
-                   in(Meta, expr, Scope, Expr),
-                   fun({PatternEnv, TPattern}, {ExprEnv, TExpr}) ->
-                           NewScope = merge(Scope, PatternEnv),
-                           case in(Meta, expr, NewScope, Term) of
-                               {error, Errs}            -> {error, Errs};
-                               {ok, {Env, TTerm}}    -> 
-                                   {ok, {merge([PatternEnv, ExprEnv, Env]), 
-                                         {'let', Ctx, TPattern, TExpr, TTerm}}}
-                           end
-                   end);
+step(Meta, expr, Scope, {'let', Ctx, Expr, Clauses}) when is_list(Clauses) ->
+    error:flatmap(in(Meta, expr, Scope, Expr),
+                  fun({ExprEnv, TExpr}) ->
+                          case map(Meta, expr, Scope, Clauses) of
+                              {error, Errs}             -> {error, Errs};
+                              {ok, {Envs, TClauses}}    -> Env = merge([ExprEnv | Envs]),
+                                                           {ok, {Env, {'let', Ctx, TExpr, TClauses}}}
+                          end
+                  end);
 
 step(Meta, expr, Scope, {seq, Ctx, First, Then}) ->
     case in(Meta, expr, Scope, First) of

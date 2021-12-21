@@ -9,7 +9,9 @@ module({module, Ctx, ModulePath, Imports, Exports, Defs}, Libs, _Options) ->
     case linearize_targets(Targets, Libs) of
         {error, Errs}            -> {error, Errs};
         {ok, Env, LocalTreeMap}  -> 
-            GlobalTreeMap = maps:from_list([{path_to_name(Path), Tree} || {{Path, _}, Tree} <- maps:to_list(Env)]),
+            GlobalTreeMap = maps:from_list([{Name, wrap_in_def(Name, Tree)} || {{Path, _}, Tree} <- maps:to_list(Env),
+                                                                               length(Path) > 1,
+                                                                               Name <- [symbol:tag(Path)]]),
             Trees = maps:merge(LocalTreeMap, GlobalTreeMap),
             NewExports = case maps:is_key(main, Defs) of
                              true   -> maps:put(main, {}, Exports);
@@ -22,14 +24,8 @@ module({module, Ctx, ModulePath, Imports, Exports, Defs}, Libs, _Options) ->
 linearize_targets(Targets, Libs) -> linearize_targets(Targets, #{}, Libs, []).
 linearize_targets([{Name, Def} | Rest], Env, Libs, Res) ->
     case linearize:term(Def, Libs, Env) of
-        {error, Errs}               -> linearize_targets(Rest, Env, Libs, [{error, Errs} | Res]);
-        {ok, {_, {'fun', _, F}}}    ->
-            case F(args(Def), []) of
-                {error, Errs}           -> linearize_targets(Rest, Env, Libs, [{error, Errs} | Res]);
-                {ok, {NewEnv, FunTree}} -> 
-                    DefTree = setelement(4, Def, FunTree),
-                    linearize_targets(Rest, NewEnv, Libs, [{ok, {Name, DefTree}} | Res])
-            end
+        {error, Errs}           -> linearize_targets(Rest, Env, Libs, [{error, Errs} | Res]);
+        {ok, {NewEnv, Tree}}    -> linearize_targets(Rest, NewEnv, Libs, [{ok, {Name, Tree}} | Res])
     end;
 linearize_targets([], Env, _, Res) -> 
     case error:collect(Res) of
@@ -41,10 +37,6 @@ linearize_targets([], Env, _, Res) ->
 is_target(main, _) -> true;
 is_target(Name, Exports) -> maps:is_key(Name, Exports).
 
-path_to_name(Path) -> symbol:tag(Path).
-
-args({def, _, _, {'fun', _, []}}) -> [];
-args({def, _, _, {'fun', _, [{clause, _, Ps, _} | _]}}) -> [whatever || _ <- Ps];
-args({def, _, _, _Expr}) -> [].
+wrap_in_def(Name, Tree) -> {def, symbol:ctx(Tree), Name, Tree}.
 
 

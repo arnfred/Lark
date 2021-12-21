@@ -14,7 +14,7 @@ raw_term(Term, Libs, PreEnv) ->
 term(Term, Libs, PreEnv) ->
     case raw_term(Term, Libs, PreEnv) of
         {error, Errs} -> {error, Errs};
-        {ok, {_, {def, Ctx, Name, {'fun', FCtx, F}}}} when is_function(F) ->
+        {ok, {_, {def, Ctx, Name, {'fun', _, F}}}} when is_function(F) ->
             case F(args(Term), []) of
                 {error, Errs}           -> {error, Errs};
                 {ok, {NewEnv, FTree}}   -> {ok, {NewEnv, {def, Ctx, Name, FTree}}}
@@ -90,10 +90,10 @@ expr({PreEnv, GlobalScope, LocalScope}, History, Term) ->
 %           The pattern domain literal (containing vars)
 %   Errors: Only if there's no intersection between domains in for example
 %           pattern applications
-pattern({PreEnv, GlobalScope, LocalScope}, History, Domain, Term) ->
+pattern({PreEnv, GlobalScope, LocalScope}, History, Term) ->
     Pre = fun(_, _, T) -> pattern_pre(History, domain(T), T) end,
     Post = fun(Type, LclScp, T) -> pattern_post(Type, {PreEnv, GlobalScope, LclScp}, History, T) end,
-    case ast:traverse_term(pattern, Pre, Post, LocalScope, set_domain(Term, Domain)) of
+    case ast:traverse_term(pattern, Pre, Post, LocalScope, Term) of
         {error, Errs}       -> {error, Errs};
         {ok, {_, Trees}}    -> {ok, Trees}
     end.
@@ -152,7 +152,7 @@ clauses(Scopes, History, ArgDomains, [Clause | Cs], Res) ->
 
 
 clause(Scopes, History, ArgDomains, {clause, Ctx, Patterns, Expr}) ->
-    case error:collect([pattern(Scopes, History, D, P) || {D, P} <- zip(ArgDomains, Patterns)]) of
+    case error:collect([pattern(Scopes, History, set_domain(P, D)) || {D, P} <- zip(ArgDomains, Patterns)]) of
         {error, Errs}   -> {error, Errs};
         {ok, PsTrees}   ->
             case error:collect([expand_clause(Scopes, History, PsTs, Expr, Ctx)
@@ -240,7 +240,7 @@ pattern_pre(_, Domain, {pair, Ctx, Key, Val}) ->
 
 
 expr_pre(_, _, {'fun', _, _}) -> leave_intact;
-expr_pre(_, _, {'let', _, _, _, _}) -> leave_intact;
+expr_pre(_, _, {'let', _, _, _}) -> leave_intact;
 expr_pre(_, _, _) -> ok.
 
 
@@ -275,20 +275,15 @@ post(expr, Scopes, _, {'fun', Ctx, Clauses} = LinearizeFunTerm) ->
 
 
 % Expr of type `val p = e` where `p` is a pattern and `e` is an expression
-post(expr, {PreEnv, GlobalScope, LocalScope} = Scopes, History, {'let', Ctx, Pattern, Expr, NextExpr}) ->
+post(expr, Scopes, History, {'let', Ctx, Expr, Clauses}) ->
     case expr(Scopes, History, Expr) of
         {error, Errs}       -> {error, Errs};
         {ok, {EEnv, ETree}}    ->
-            case pattern(Scopes, History, domain(ETree), Pattern) of
-                {error, Errs}   -> {error, Errs};
-                {ok, [PTree]}   -> case expr({PreEnv, GlobalScope, maps:merge(LocalScope, env(PTree))}, History, NextExpr) of
-                                       {error, Errs}        -> {error, Errs};
-                                       {ok, {NEnv, NTree}}  -> Domain = domain(NTree),
-                                                               Term = {'let', Ctx, PTree, ETree, NTree},
-                                                               {ok, {maps:merge(NEnv, EEnv), set_domain(Term, Domain)}}
-                                   end;
-                {ok, _}         -> error:format({sum_type_in_let_pattern, Pattern, domain(ETree)},
-                                                {linearize, Ctx, History})
+            case clauses(Scopes, History, [domain(ETree)], Clauses) of
+                {error, Errs}           -> {error, Errs};
+                {ok, {EnvCs, TreeCs}}   -> Env = maps:merge(EEnv, EnvCs),
+                                           Domain = union([domain(T) || T <- TreeCs]),
+                                           {ok, {Env, set_domain({'let', Ctx, ETree, TreeCs}, Domain)}}
             end
     end;
 
@@ -299,12 +294,15 @@ post(expr, _, _, {seq, _, _, Then} = Term) -> {ok, {#{}, set_domain(Term, domain
 
 
 % Patterns of type `module/t(a, b, c)` where `module/t` is a function defined in global scope
-post(pattern, {PreEnv, GlobalScope, _}, History, {qualified_application, Ctx, Path, Name, Args} = Term) ->
+post(pattern, {PreEnv, GlobalScope, _} = Scps, History, {qualified_application, Ctx, Path, Name, Args} = Term) ->
     case (maps:get(Path ++ [Name], GlobalScope))() of
-        {ok, {_, {'fun', _, F}}}                -> pattern_apply(PreEnv, F, Args, Path ++ [Name], History, Ctx, domain(Term));
-        {ok, {_, _}} when length(Args) > 0      -> error:format({wrong_function_arity, 0, length(Args)},
+        {ok, {_, {'fun', _, F}}}            -> pattern_apply(PreEnv, F, Args, Path ++ [Name], History, Ctx, domain(Term));
+        {ok, {_, _}} when length(Args) > 0  -> error:format({wrong_function_arity, 0, length(Args)},
                                                                 {linearize, Ctx, History});
-        Otherwise                               -> Otherwise
+        {ok, {Env, Tree}}                   -> case pattern(Scps, History, Tree) of
+                                                   {error, Errs}    -> {error, Errs};
+                                                   {ok, PTree}      -> {ok, {Env, {sum, Ctx, PTree}}}
+                                               end
     end;
 
 % Expr of type `module/t(a, b, c)` where `module/t` is a function defined in global scope
@@ -371,11 +369,13 @@ post(pattern, Scopes, History, {beam_symbol, Ctx, Path, Name}) ->
 
 post(expr, Scopes, History, {beam_symbol, Ctx, Path, Name}) ->
     ModuleName = module:beam_name(Path),
-    Arity = utils:get_max_arity(ModuleName, Name),
-    Args = [{variable, Ctx, ArgName, symbol:id(ArgName)} || N <- lists:seq(1, Arity),
-                                                            ArgName <- [list_to_atom("arg_" ++ integer_to_list(N))]],
-    Tree = {'fun', Ctx, [{clause, Ctx, Args, {beam_application, Ctx, Path, Name, Args}}]},
-    expr(Scopes, History, Tree);
+    case utils:get_max_arity(ModuleName, Name) of
+        0 -> post(expr, Scopes, History, {beam_application, Ctx, Path, Name, []});
+        N -> Args = [{variable, Ctx, Arg, symbol:id(Arg)} || I <- lists:seq(1, N),
+                                                             Arg <- [list_to_atom("arg_" ++ integer_to_list(I))]],
+             Tree = {'fun', Ctx, [{clause, Ctx, Args, {beam_application, Ctx, Path, Name, Args}}]},
+             expr(Scopes, History, Tree)
+    end;
 
 
 
@@ -473,7 +473,7 @@ post(pattern, _, _, {pair, _, {keyword, _, _}, Val} = Term) ->
 
 % Patterns of type `k: v` or more complicated like `[a, b]: x.t(q)`
 post(pattern, Scopes, History, {pair, Ctx, Key, Val}) ->
-    case pattern(Scopes, History, domain(Val), Key) of
+    case pattern(Scopes, History, set_domain(Key, intersection(domain(Val), domain(Key)))) of
         {error, Errs}   -> {error, Errs};
         {ok, KTrees}    ->
             F = fun(Tree) -> Term = {pair, Ctx, Tree, Val},
@@ -708,7 +708,7 @@ allowed_beam_function(Module, Name) ->
     Blacklist = #{'calendar' => [],
                   'rand' => [],
                   'random' => [],
-                  'erlang' => [date, localtime, now, time, time_offset,
+                  'erlang' => [alias, date, localtime, now, time, time_offset,
                                timestamp, unique_integer, universaltime,
                                throw, raise]},
     Blacklisted = (maps:is_key(Module, Blacklist) andalso

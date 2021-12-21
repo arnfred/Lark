@@ -94,3 +94,9 @@
         end).
 -define(_errorMatch(Err1, Err2, Err3, Expr), ?_test(?errorMatch(Err1, Err2, Err3, Expr))).
 
+-define(debugTerm(Term), begin
+                             Pre = fun(_, _, T) -> {ok, setelement(2, T, #{})} end,
+                             Post = fun(_, _, _) -> ok end,
+                             {ok, {_, NT}} = ast:traverse_term(expr, Pre, Post, #{}, Term),
+                             ?debugVal(NT, 100)
+                         end).

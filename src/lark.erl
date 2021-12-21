@@ -1,13 +1,12 @@
 -module(lark).
--export([load/2, run/3, run/4, compile_and_load/1]).
--import(lists, [zip/2, zip3/3, unzip/1]).
+-export([load/1, load/2, run/2, run/3, compile_and_load/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
 
-run(Source, Paths, Args) -> run(Source, Paths, Args, #{sandboxed => true}).
-run(Source, Paths, Args, Options) ->
-    case load(Source, Paths, Options) of
+run(Source, Args) -> run(Source, Args, #{sandboxed => true}).
+run(Source, Args, Options) ->
+    case load(Source, Options) of
         {error, Errs}       -> {error, Errs};
         {ok, Mod}    ->
             case erlang:function_exported(Mod, main, length(Args)) of
@@ -24,14 +23,19 @@ run(Source, Paths, Args, Options) ->
     end.
 
 
-load(Source, Paths) -> load(Source, Paths, #{}).
-load(Source, Paths, Options) ->
-    ParsePaths = [{path, P} || P <- Paths],
-    case parser:parse([{text, "root", Source}] ++ ParsePaths, Options) of
+load(Source) -> load(Source, #{}).
+load(Source, Options)  ->
+    LibPaths = maps:get(libpaths, Options, []),
+    RootName = "root_" ++ integer_to_list(erlang:phash2(Source)),
+    Target = maps:get(target, Options, symbol:tag([source, list_to_atom(RootName)])),
+    ParseLibPaths = [{path, P} || P <- LibPaths],
+    case parser:parse([{text, RootName, Source}] ++ ParseLibPaths, Options) of
         {error, Errs}   -> {error, Errs};
         {ok, Parsed}    ->
             Libs = maps:from_list([{ModPath, Mod} || {module, _, ModPath, _, _, _} = Mod <- Parsed]),
-            Mod = maps:get([source, root], Libs),
+            Mod = maps:get(symbol:path(Target), Libs),
+            {module, _Ctx, _Path, _Imports, _Exports, _Defs} = Mod,
+            %?debugVal(_Defs, 100),
             case monomorphize:module(Mod, Libs, Options) of
                 {error, Errs}   -> {error, Errs};
                 {ok, Module}    -> compile_and_load(Module)
@@ -40,9 +44,11 @@ load(Source, Paths, Options) ->
 
 compile_and_load(Module) ->
     {module, _Ctx, _Path, _Imports, _Exports, _Defs} = Module,
+    %?debugTerm(maps:get(main, _Defs)),
     case code_gen:gen(Module) of
         {error, Errs}               -> {error, Errs};
         {ok, ModuleForm}            ->
+            %?debugVal(ModuleForm, 100),
             case compile(ModuleForm) of
                 {error, Errs}       -> {error, Errs};
                 {ok, ModuleName}    -> {ok, ModuleName}
@@ -78,7 +84,7 @@ unload_modules(Modules) ->
 
 -ifdef(TEST).
 
--define(setup(Code, Args, Tests), {setup, fun() -> lark:run(Code, [], Args) end, fun(_) -> none end, Tests}).
+-define(setup(Code, Args, Tests), {setup, fun() -> lark:run(Code, Args) end, fun(_) -> none end, Tests}).
 
 happy_path_test_() ->
     {"run code and see that it executed correctly",

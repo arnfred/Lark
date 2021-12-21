@@ -125,7 +125,7 @@ get_arity(Path, Name, ModuleMap) ->
 get_arities(Module, Name) ->
     case erlang:module_loaded(Module) of
         false   -> [];
-        true    -> proplists:get_all_values(Name, erlang:get_module_info(Module, exports))
+        true    -> lists:sort(proplists:get_all_values(Name, erlang:get_module_info(Module, exports)))
     end.
 get_min_arity(Module, Name) ->
     lists:foldl(fun min/2, none, get_arities(Module, Name)).

@@ -11,8 +11,8 @@ gen({module, _, ModulePath, _, Exports, _} = Module) ->
             {ok, cerl:c_module(cerl:c_atom(ModuleName), ExportForms, [], DefForms)}
     end.
 
-post_gen(expr, Scope, Term) -> expr_gen:gen_expr(expr, Scope, Term);
-post_gen(pattern, Scope, Term) -> pattern_gen:gen_pattern(pattern, Scope, Term);
-post_gen(top_level, Scope, Term) -> expr_gen:gen_expr(expr, Scope, Term).
+post_gen(expr, Scope, Term) -> expr_gen:gen_expr(Scope, Term);
+post_gen(pattern, Scope, Term) -> pattern_gen:gen_pattern(Scope, Term);
+post_gen(top_level, Scope, Term) -> expr_gen:gen_expr(Scope, Term).
 
 pre_gen(_, _, _) -> ok.

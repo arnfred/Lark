@@ -144,7 +144,7 @@ recur_block_elem -> let         : '$1'.
 recur_block_elem -> seq         : '$1'.
 recur_block_elem -> expression  : '$1'.
 
-let -> val pattern assign expression line_separator recur_block_elem      : {'let', ctx('$1'), '$2', '$4', '$6'}.
+let -> val pattern assign expression line_separator recur_block_elem      : {'let', ctx('$1'), '$4', [{clause, ctx('$1'), ['$2'], '$6'}]}.
 seq -> recur_block_elem line_separator recur_block_elem                   : {seq, ctx('$1'), '$1', '$3'}.
 
 

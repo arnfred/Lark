@@ -215,13 +215,14 @@ val_test_() ->
                      {'fun', _,
                       [{clause, _,
                         [{variable, _, a, A1}],
-                        {'let', _, {variable, _, f, F},
+                        {'let', _,
                          {'fun', _,
                           [{clause, _,
                             [{variable, _, b, _B}],
                             {variable, _, a, A1}}]},
-                         {application, _, {variable, _, f, F},
-                          [{variable, _, a, A1}]}}}]}}}, tag(Code)).
+                         [{clause, _, [{variable, _, f, F}],
+                           {application, _, {variable, _, f, F},
+                            [{variable, _, a, A1}]}}]}}]}}}, tag(Code)).
 
 val_seq_test_() ->
     Code = "def test a -> (val f = (fn b -> a)
@@ -231,14 +232,15 @@ val_seq_test_() ->
                      {'fun', _,
                       [{clause, _,
                         [{variable, _, a, A1}],
-                        {'let', _, {variable, _, f, F},
+                        {'let', _,
                          {'fun', _,
                           [{clause, _,
                             [{variable, _, b, _B}],
                             {variable, _, a, A1}}]},
-                         {seq, _,
-                          {application, _, {variable, _, f, F}, [{variable, _, a, A1}]},
-                          {application, _, {variable, _, f, F}, [{variable, _, a, A1}]}}}}]}}},
+                         [{clause, _, [{variable, _, f, F}],
+                           {seq, _,
+                            {application, _, {variable, _, f, F}, [{variable, _, a, A1}]},
+                            {application, _, {variable, _, f, F}, [{variable, _, a, A1}]}}}]}}]}}},
           tag(Code)).
 parens_variable_test_() ->
     Code = "def f (((a))) -> (((a)))",
@@ -315,13 +317,15 @@ pattern_application_test_() ->
                       q(d/Y))",
     Defs = tag(Code),
     [?test(#{'t' := {def, _, 't',
-                     {'let', _, {variable, _, f, F},
-                                {qualified_symbol, _, [source, test_code], d},
-                                {'let', _, {variable, _, q, Q},
-                                           {'fun', _, [{clause, _, [{application, _, {variable, _, f, F}, []}],
-                                                                   {keyword, _, [source, test_code, d], 'X'}}]},
-                                           {application, _, {variable, _, q, Q},
-                                                            [{keyword, _, [source, test_code, d], 'Y'}]}}}}},
+                     {'let', _,
+                      {qualified_symbol, _, [source, test_code], d},
+                      [{clause, _, [{variable, _, f, F}],
+                        {'let', _,
+                         {'fun', _, [{clause, _, [{application, _, {variable, _, f, F}, []}],
+                                      {keyword, _, [source, test_code, d], 'X'}}]},
+                         [{clause, _, [{variable, _, q, Q}],
+                           {application, _, {variable, _, q, Q},
+                            [{keyword, _, [source, test_code, d], 'Y'}]}}]}}]}}},
            Defs)].
 
 nested_module_import_conflict_test_() ->

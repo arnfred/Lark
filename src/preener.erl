@@ -102,10 +102,12 @@ translate_vals_to_let_statements_test_() ->
     ?test({ok, [{def, _, _,
                  {'fun', _,
                   [{clause, _, _,
-                    {'let', _, {symbol, _, _, b}, {symbol, _, _, a},
-                     {seq, _, {symbol, _, _, b},
-                      {'let', _, {symbol, _, _, c}, {symbol, _, _, a},
-                       {symbol, _, _, c}}}}}]}}]}, do_preen(Code)).
+                    {'let', _, {symbol, _, _, a},
+                     [{clause, _, [{symbol, _, _, b}],
+                       {seq, _, {symbol, _, _, b},
+                        {'let', _, {symbol, _, _, a},
+                         [{clause, _, [{symbol, _, _, c}],
+                           {symbol, _, _, c}}]}}}]}}]}}]}, do_preen(Code)).
 
 dict_expr_test_() ->
     Code = "def test a -> {a: a, b: a}",
