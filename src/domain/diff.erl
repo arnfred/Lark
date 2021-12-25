@@ -85,6 +85,9 @@ diff(Path, L1, L2) when is_list(L1), is_list(L2) ->
               diff => diff(Path, L1Init, L2Init)}
     end;
 
+diff(Path, T1, T2) when is_tuple(T1), is_tuple(T2) ->
+    diff(Path, tuple_to_list(T1), tuple_to_list(T2));
+
 % If we diff a value with a sum and the diff is none for every part of the sum,
 % then the result of the diff is also none
 diff(Path, Old, {sum, New}) ->

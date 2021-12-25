@@ -70,3 +70,9 @@ list_sum_test_() ->
     Expected = sum([[a], [b]]),
     ?testEqual(Expected, domain:normalize(L)).
     
+sum_tuple_sum_test_() ->
+    T = sum([{sum([a, 1]), sum([b, 2])},
+             {1, 2}]),
+    Expected = sum([{a, b}, {a, 2}, {1, b}, {1, 2}]),
+    ?testEqual(Expected, domain:normalize(T)).
+

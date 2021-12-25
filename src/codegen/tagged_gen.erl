@@ -18,6 +18,10 @@ sub(Ctx, {list, ListCtx, Elems}) ->
     {Args, Patterns, Terms} = substitute_domains(Elems),
     {'fun', Ctx, [{clause, Ctx, patterns(Args, Patterns, Ctx), {list, ListCtx, Terms}}]};
 
+sub(Ctx, {tuple, ListCtx, Elems}) ->
+    {Args, Patterns, Terms} = substitute_domains(Elems),
+    {'fun', Ctx, [{clause, Ctx, patterns(Args, Patterns, Ctx), {tuple, ListCtx, Terms}}]};
+
 sub(Ctx, {dict, DictCtx, Elems}) ->
     {Args, Patterns, Terms} = substitute_domains(Elems),
     {'fun', Ctx, [{clause, Ctx, patterns(Args, Patterns, Ctx), {dict, DictCtx, Terms}}]};

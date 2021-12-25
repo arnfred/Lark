@@ -27,6 +27,7 @@ Rules.
 [\s]+\{[\s\n]*              : {token, {space_curly_open,    #{line => TokenLine}, list_to_atom(TokenChars)}}.
 [\s]+\[[\s\n]*              : {token, {space_square_open,   #{line => TokenLine}, list_to_atom(TokenChars)}}.
 [\s\n]*\|[\s\n]*            : {token, {pipe,                #{line => TokenLine}, list_to_atom(TokenChars)}}.
+#\([\s\n]*                  : {token, {tuple_open,          #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \/                          : {token, {slash,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \:                          : {token, {colon,               #{line => TokenLine}, list_to_atom(TokenChars)}}.
 \;                          : {token, {semicolon,           #{line => TokenLine}, list_to_atom(TokenChars)}}.

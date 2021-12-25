@@ -4,7 +4,7 @@ Terminals
     rightbias_operator plus_operator mult_operator comp_operator eq_operator
     minus_operator div_operator caret_operator other_operator
     value open close square_open square_close curly_open curly_close
-    space_open space_square_open space_curly_open
+    space_open space_square_open space_curly_open tuple_open
     apply comma newlines assign
     module_keyword export_keyword import_keyword
     pipe right_arrow slash colon semicolon.
@@ -17,7 +17,7 @@ Nonterminals
     application arguments arglist arg
     infix rightbias_infix leftbias_infix
     noun verb expression block block_elem recur_block_elem let seq
-    collection list dict list_elements
+    collection list dict tuple list_elements
     dict_elements dict_element
     symbol operator
     pair pair_key
@@ -270,16 +270,20 @@ pattern_verb -> symbol : '$1'.
 
 collection -> list : '$1'.
 collection -> dict : '$1'.
+collection -> tuple : '$1'.
 
-list -> square_open square_close                             : {list, ctx('$1'), []}.
-list -> square_open list_elements square_close                 : {list, ctx('$1'), '$2'}.
-dict -> curly_open curly_close                               : {dict, ctx('$1'), []}.
-dict -> curly_open dict_elements curly_close                 : {dict, ctx('$1'), '$2'}.
+list -> square_open square_close                            : {list, ctx('$1'), []}.
+list -> square_open list_elements square_close              : {list, ctx('$1'), '$2'}.
+dict -> curly_open curly_close                              : {dict, ctx('$1'), []}.
+dict -> curly_open dict_elements curly_close                : {dict, ctx('$1'), '$2'}.
 
-list -> space_square_open square_close                             : {list, ctx('$1'), []}.
-list -> space_square_open list_elements square_close                 : {list, ctx('$1'), '$2'}.
-dict -> space_curly_open curly_close                               : {dict, ctx('$1'), []}.
-dict -> space_curly_open dict_elements curly_close                 : {dict, ctx('$1'), '$2'}.
+list -> space_square_open square_close                      : {list, ctx('$1'), []}.
+list -> space_square_open list_elements square_close        : {list, ctx('$1'), '$2'}.
+dict -> space_curly_open curly_close                        : {dict, ctx('$1'), []}.
+dict -> space_curly_open dict_elements curly_close          : {dict, ctx('$1'), '$2'}.
+
+tuple -> tuple_open close                                   : {tuple, ctx('$1'), []}.
+tuple -> tuple_open list_elements close                     : {tuple, ctx('$1'), '$2'}.
 
 list_elements -> expression                                 : ['$1'].
 list_elements -> expression separator                       : ['$1'].

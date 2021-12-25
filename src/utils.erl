@@ -57,6 +57,8 @@ domain_to_term(Elems, Ctx) when is_map(Elems) ->
     {dict, Ctx, [{dict_pair, Ctx, K, domain_to_term(V, Ctx)} || {K, V} <- maps:to_list(Elems)]};
 domain_to_term(Elems, Ctx) when is_list(Elems) -> 
     {list, Ctx, [domain_to_term(V, Ctx) || {_, V} <- Elems]};
+domain_to_term(Elems, Ctx) when is_tuple(Elems) -> 
+    {tuple, Ctx, [domain_to_term(V, Ctx) || {_, V} <- tuple_to_list(Elems)]};
 domain_to_term({tagged, Tag, Domain}, Ctx) ->
     {tagged, Ctx, Tag, domain_to_term(Domain, Ctx)};
 domain_to_term({recur, _F}, Ctx) ->

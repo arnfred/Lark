@@ -159,6 +159,12 @@ step(Meta, Type, Scope, {list, Ctx, Expressions}) when is_list(Expressions) ->
         {ok, {Envs, TExprs}}   -> {ok, {merge(Envs), {list, Ctx, TExprs}}}
     end;
 
+step(Meta, Type, Scope, {tuple, Ctx, Expressions}) when is_list(Expressions) ->
+    case map(Meta, Type, Scope, Expressions) of
+        {error, Errs}          -> {error, Errs};
+        {ok, {Envs, TExprs}}   -> {ok, {merge(Envs), {tuple, Ctx, TExprs}}}
+    end;
+
 step(Meta, expr, Scope, {'let', Ctx, Expr, Clauses}) when is_list(Clauses) ->
     error:flatmap(in(Meta, expr, Scope, Expr),
                   fun({ExprEnv, TExpr}) ->

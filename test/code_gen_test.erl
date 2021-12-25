@@ -266,3 +266,11 @@ param_pattern_test_() ->
             fun({ok, _}) ->
                     [?test(3, lark_test:main(#{key1 => 1, key2 => 2}))]
             end)}.
+
+tuple_test_() ->
+    {"tuple support in lark",
+     ?setup("module lark/test (export { main }
+                 def main #(a, b) -> #(b, a))",
+            fun({ok, _}) ->
+                    [?test({2, 1}, lark_test:main({1, 2}))]
+            end)}.

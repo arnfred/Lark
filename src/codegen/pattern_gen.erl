@@ -34,6 +34,9 @@ gen_pattern(_, {tagged, _, _, Val} = Term) ->
 % Pattern of shape: '[1, 2]'
 gen_pattern(_, {list, _, Elems}) -> {ok, cerl:make_list(Elems)};
 
+% Pattern of shape: '#(1, 2)'
+gen_pattern(_, {tuple, _, Elems}) -> {ok, cerl:c_tuple(Elems)};
+
 % Pattern of shape: f(A)
 gen_pattern(_Scope, {application, Ctx, _, _}) ->
     error:format({local_pattern_application}, {pattern_gen, Ctx});

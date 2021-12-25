@@ -21,6 +21,10 @@ gen_expr(_, {sum, _, Elements}) ->
 gen_expr(_, {list, _, Elements}) ->
     {ok, cerl:make_list(Elements)};
 
+% expr of form: #{1, 2, 3}
+gen_expr(_, {tuple, _, Elements}) ->
+    {ok, cerl:c_tuple(Elements)};
+
 % the pair of `k: a` in the form {k: a, ...}
 gen_expr(_, {pair, _, {keyword, _, K}, V}) -> {ok, cerl:c_map_pair(cerl:c_atom(K), V)};
 
@@ -42,7 +46,7 @@ gen_expr(_, {keyword, _, _}) -> skip;
 gen_expr(_, {dict, _, Elements}) ->
     {ok, cerl:c_map(Elements)};
 
-% expr of form: `f(a)` or `T(a)`
+% expr of form: `f(a)` or `a.T`
 gen_expr(_, {application, _, Expr, Args}) ->
     case cerl:is_c_fun(Expr) of
         true    -> {ok, cerl:c_apply(Expr, Args)};

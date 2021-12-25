@@ -172,6 +172,11 @@ list_unqeual_length_test_() ->
     Expected = {sum, ordsets:from_list([L1, L2])},
     ?testEqual(Expected, domain:union(L1, L2)).
 
+tuple_test_() ->
+    L1 = {a, b},
+    L2 = {1, 2, 3},
+    ?testEqual({sum, ordsets:from_list([L1, L2])}, domain:union(L1, L2)).
+
 whatever_test_() ->
     [?testEqual(any,        domain:union(whatever, any)),
      ?testEqual(whatever,   domain:union(whatever, none)),

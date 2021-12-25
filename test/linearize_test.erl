@@ -286,8 +286,14 @@ let_pattern_sum_type_test_() ->
     Code = "def boolean -> True | False
             def t -> (val (b: boolean) = boolean()
                       b)",
+    T = 'source/test_code/boolean/True',
+    F = 'source/test_code/boolean/False',
     Res = linearize(Code, t),
-    [?testError({sum_type_in_let_pattern, {pair, _, _, _}, {sum, _}}, tree(Res, []))].
+    [?test({ok, {def, _, t,
+                 {'let', _, {sum, _, [{value, _, _, T}, {value, _, _, F}]},
+                  [{clause, _, [{value, _, _, T}], {value, _, _, T}},
+                   {clause, _, [{value, _, _, F}], {value, _, _, F}}]}}},
+           tree(Res, []))].
 
 pair_pattern_unpack_test_() ->
     Code = "def f -> [1, 2]
@@ -308,3 +314,13 @@ env_test_() ->
     [?test({ok, world}, domain(Res, [])),
      ?test({ok, {def, _, f, {value, _, atom, hello}}}, tree(Res, [])),
      ?test({ok, Env}, env(Res, []))].
+
+tuple_test_() ->
+     Code = "def t #(a, b) -> #(b, a)",
+     Res = linearize(Code, t),
+     [?test({ok, {b, a}}, domain(Res, [{a, b}])),
+      ?test({ok, {def, _, t, {'fun', _,
+                              [{clause, _,
+                                [{tuple, _, [{variable, _, a, A}, {variable, _, b, B}]}],
+                                {tuple, _, [{variable, _, b, B}, {variable, _, a, A}]}}]}}},
+            tree(Res, [whatever]))].

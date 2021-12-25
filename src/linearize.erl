@@ -203,6 +203,14 @@ pattern_pre(_, Domain, {list, Ctx, Elems} = Term) ->
         _                   -> {skip, [set_domain(Term, none)]}
     end;
 
+pattern_pre(_, Domain, {tuple, Ctx, Elems} = Term) ->
+    case domain:intersection(Domain, list_to_tuple([any || _ <- Elems])) of
+        {sum, ListDs}        -> Ds = [domain:union(L) || L <- pivot(ListDs)],
+                                {ok, {tuple, Ctx, [set_domain(E, D) || {E, D} <- zip(Elems, Ds)]}};
+        Ds when is_tuple(Ds) -> {ok, {tuple, Ctx, [set_domain(E, D) || {E, D} <- zip(Elems, tuple_to_list(Ds))]}};
+        _                    -> {skip, [set_domain(Term, none)]}
+    end;
+
 pattern_pre(_, Domain, {sum, Ctx, Elems}) -> {ok, {sum, Ctx, [set_domain(E, Domain) || E <- Elems]}};
 
 pattern_pre(_, Domain, {keyword, _, _, _} = Term) ->
@@ -452,6 +460,12 @@ post(_, _, _, {list, _, Elems} = Term) ->
 
 
 
+% Expr/Patterns of type `[a, b, c]`
+post(_, _, _, {tuple, _, Elems} = Term) ->
+    {ok, {#{}, set_domain(Term, list_to_tuple([domain(E) || E <- Elems]))}};
+
+
+
 % Expr/Patterns of type `A | B | C`
 post(_, _, _, {sum, _, Elems} = Term) ->
     {ok, {#{}, set_domain(Term, {sum, ordsets:from_list([domain(E) || E <- Elems])})}};
@@ -662,6 +676,7 @@ combinations([])                -> [[]].
 % patterns.
 expand({dict, Ctx, ElemList}) -> [{dict, Ctx, Elems} || Elems <- combinations(ElemList)];
 expand({list, Ctx, ElemList}) -> [{list, Ctx, Elems} || Elems <- combinations(ElemList)];
+expand({tuple, Ctx, ElemList}) -> [{tuple, Ctx, Elems} || Elems <- combinations(ElemList)];
 expand({sum, Ctx, ElemList}) -> [{sum, Ctx, Elems} || Elems <- combinations(ElemList)];
 expand({tagged, Ctx, Path, ExprList}) -> [{tagged, Ctx, Path, Expr} || Expr <- ExprList];
 expand({pair, Ctx, KeyList, ValList}) -> [{pair, Ctx, Key, Val} || [Key, Val] <- combinations([KeyList, ValList])];
@@ -682,6 +697,7 @@ sum(Elems) -> set_domain({sum, symbol:ctx(hd(Elems)), Elems}, domain:union([doma
 env(Term) -> maps:get(env, symbol:ctx(Term), #{}).
 child_env({dict, _, Elems}) -> utils:merge([env(E) || E <- Elems]);
 child_env({list, _, Elems}) -> utils:merge([env(E) || E <- Elems]);
+child_env({tuple, _, Elems}) -> utils:merge([env(E) || E <- Elems]);
 child_env({tagged, _, _, Expr}) -> env(Expr);
 child_env({pair, _, Key, Val}) -> maps:merge(env(Key), env(Val));
 child_env(_) -> #{}.

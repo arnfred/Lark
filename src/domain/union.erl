@@ -24,6 +24,8 @@ union(D1, D2) when is_map(D1), is_map(D2) ->
     {sum, ordsets:from_list([D1, D2])};
 union(L1, L2) when is_list(L1) andalso is_list(L2) andalso length(L1) =:= length(L2) -> 
     [union(E1, E2) || {E1, E2} <- lists:zip(L1, L2)];
+union(T1, T2) when is_tuple(T1) andalso is_tuple(T2) andalso size(T1) =:= size(T2) -> 
+    list_to_tuple([union(E1, E2) || {E1, E2} <- lists:zip(T1, T2)]);
 union(F1, F2) when is_function(F1), is_function(F2) -> 
     case utils:gen_tag(F1) =:= utils:gen_tag(F2) of
         true    -> F1;

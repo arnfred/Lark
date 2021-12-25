@@ -52,22 +52,24 @@ function(N) -> utils:function(N, fun(_) -> any end).
 is_literal(any)                          -> false;
 is_literal(none)                         -> false;
 is_literal(whatever)                     -> false;
+is_literal({sum, _})                     -> false;
+is_literal({sum, _, _})                  -> false;
+is_literal({tagged, _, Val})             -> is_literal(Val);
 is_literal(D) when is_atom(D)            -> true;
 is_literal(N) when is_number(N)          -> true;
 is_literal(S) when is_binary(S)          -> true;
 is_literal(F) when is_function(F)        -> false;
-is_literal({sum, _})                     -> false;
 is_literal(L) when is_list(L)            -> lists:all(fun(E) -> is_literal(E) end, L);
-is_literal(M) when is_map(M)             -> lists:all(fun(E) -> is_literal(E) end, maps:values(M));
-is_literal({sum, _, _})                  -> false;
-is_literal({tagged, _, Val})             -> is_literal(Val).
+is_literal(T) when is_tuple(T)           -> lists:all(fun(E) -> is_literal(E) end, tuple_to_list(T));
+is_literal(M) when is_map(M)             -> lists:all(fun(E) -> is_literal(E) end, maps:values(M)).
 
 to_term(Domain, Ctx) -> to_term_(Domain, maps:put(domain, Domain, Ctx)).
-to_term_(Domain, Ctx) when is_list(Domain) -> {list, Ctx, [to_term(D, Ctx) || D <- Domain]};
-to_term_(Domain, Ctx) when is_map(Domain) -> {dict, Ctx, [{pair, Ctx, {keyword, Ctx, K}, to_term(D, Ctx)}
-                                                          || {K, D} <- maps:to_list(Domain)]};
 to_term_({tagged, Path, Val}, Ctx) -> {tagged, Ctx, Path, to_term(Val, Ctx)};
 to_term_({sum, Elems}, Ctx) -> {sum, Ctx, [to_term(E, Ctx) || E <- Elems]};
+to_term_(Domain, Ctx) when is_list(Domain) -> {list, Ctx, [to_term(D, Ctx) || D <- Domain]};
+to_term_(Domain, Ctx) when is_tuple(Domain) -> {tuple, Ctx, [to_term(D, Ctx) || D <- tuple_to_list(Domain)]};
+to_term_(Domain, Ctx) when is_map(Domain) -> {dict, Ctx, [{pair, Ctx, {keyword, Ctx, K}, to_term(D, Ctx)}
+                                                          || {K, D} <- maps:to_list(Domain)]};
 to_term_(Domain, Ctx) when is_atom(Domain) -> {value, Ctx, atom, Domain};
 to_term_(Domain, Ctx) when is_integer(Domain) -> {value, Ctx, integer, Domain};
 to_term_(Domain, Ctx) when is_float(Domain) -> {value, Ctx, float, Domain};
@@ -110,6 +112,10 @@ subset_sum_product_test_() ->
     D2 = {sum, ordsets:from_list([#{a => 1, b => 2},
                                #{a => 2, b => 3}])},
     ?_assertEqual(true, subset(D1, D2)).
+
+subset_whatever_tuple_test_() ->
+    [?_assertEqual(true, subset(whatever, {a, b})),
+     ?_assertEqual(true, subset({a, b}, whatever))].
 
 lookup_product_test_() ->
     D = #{a => 'A', b => 'B'},

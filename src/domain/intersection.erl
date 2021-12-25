@@ -40,6 +40,11 @@ intersection({sum, D1}, D) ->
                                      not(Elem =:= none)])};
 intersection(D, {sum, D1}) -> intersection({sum, D1}, D);
 
+intersection({tagged, Tag, D1}, {tagged, Tag, D2}) ->
+    propagate_none({tagged, Tag, intersection(D1, D2)});
+intersection(D1, D2) when is_map(D1), is_map(D2) -> propagate_none(intersect_map(D1, D2));
+
+
 % For two lists where one is a prefix of the other, the intersection is the
 % shorter list. For example, the intersection of `[1, 2]` and `[1, 2, 3]` would
 % be `[1, 2]`
@@ -49,9 +54,12 @@ intersection(L1, L2) when is_list(L1) andalso is_list(L2) ->
     LL2 = lists:sublist(L2, Length),
     propagate_none([intersection(E1, E2) || {E1, E2} <- lists:zip(LL1, LL2)]);
 
-intersection({tagged, Tag, D1}, {tagged, Tag, D2}) ->
-    propagate_none({tagged, Tag, intersection(D1, D2)});
-intersection(D1, D2) when is_map(D1), is_map(D2) -> propagate_none(intersect_map(D1, D2));
+% Must be placed further down the file than the definitions for `sum` and `tagged`
+intersection(L1, L2) when is_tuple(L1) andalso is_tuple(L2) ->
+    case intersection(tuple_to_list(L1), tuple_to_list(L2)) of
+        L when is_list(L)   -> list_to_tuple(L);
+        none                -> none
+    end;
 
 intersection(_, _) -> none.
 
