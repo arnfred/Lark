@@ -1,5 +1,5 @@
 -module(lark).
--export([load/1, load/2, run/2, run/3, compile_and_load/1]).
+-export([load/1, load/2, run/2, run/3, compile_and_load/3]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test/macros.hrl").
@@ -33,25 +33,28 @@ load(Source, Options)  ->
         {error, Errs}   -> {error, Errs};
         {ok, Parsed}    ->
             Libs = maps:from_list([{ModPath, Mod} || {module, _, ModPath, _, _, _} = Mod <- Parsed]),
-            Mod = maps:get(symbol:path(Target), Libs),
-            {module, _Ctx, _Path, _Imports, _Exports, _Defs} = Mod,
-            %?debugVal(_Defs, 100),
-            case monomorphize:module(Mod, Libs, Options) of
-                {error, Errs}   -> {error, Errs};
-                {ok, Module}    -> compile_and_load(Module)
+            case maps:get(symbol:path(Target), Libs, undefined) of
+                undefined   -> error:format({undefined_target, Target, maps:keys(Libs)}, {lark});
+                Mod         -> {module, _Ctx, _Path, _Imports, _Exports, _Defs} = Mod,
+                               %?debugVal(_Defs, 100),
+                               compile_and_load(Mod, Libs, Options)
             end
     end.
 
-compile_and_load(Module) ->
-    {module, _Ctx, _Path, _Imports, _Exports, _Defs} = Module,
-    %?debugTerm(maps:get(main, _Defs)),
-    case code_gen:gen(Module) of
-        {error, Errs}               -> {error, Errs};
-        {ok, ModuleForm}            ->
-            %?debugVal(ModuleForm, 100),
-            case compile(ModuleForm) of
-                {error, Errs}       -> {error, Errs};
-                {ok, ModuleName}    -> {ok, ModuleName}
+compile_and_load(Module, Libs, Options) ->
+    case monomorphize:module(Module, Libs, Options) of
+        {error, Errs}       -> {error, Errs};
+        {ok, Monomorphized} ->
+            {module, _Ctx, _Path, _Imports, _Exports, _Defs} = Monomorphized,
+            %?debugTerm(maps:get(main, _Defs)),
+            case code_gen:gen(Monomorphized) of
+                {error, Errs}               -> {error, Errs};
+                {ok, ErlangCore}            ->
+                    %?debugVal(ModuleForm, 100),
+                    case compile(ErlangCore) of
+                        {error, Errs}       -> {error, Errs};
+                        {ok, ModuleName}    -> {ok, ModuleName}
+                    end
             end
     end.
 

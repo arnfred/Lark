@@ -136,11 +136,6 @@ step(Meta, _Type, Scope, {beam_application, Ctx, ModulePath, Name, Args}) ->
               fun({ArgsEnvs, TArgs}) -> 
                       {merge(ArgsEnvs), {beam_application, Ctx, ModulePath, Name, TArgs}} end);
 
-step(Meta, _Type, Scope, {macro_application, Ctx, Name, Args}) ->
-    error:map(map(Meta, expr, Scope, Args),
-              fun({ArgsEnvs, TArgs}) -> 
-                      {merge(ArgsEnvs), {macro_application, Ctx, Name, TArgs}} end);
-
 step(Meta, Type, Scope, {tuple, Ctx, Expressions}) when is_list(Expressions) ->
     case map(Meta, Type, Scope, Expressions) of
         {error, Errs}          -> {error, Errs};

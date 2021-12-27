@@ -4,15 +4,10 @@
 -include_lib("eunit/include/eunit.hrl").
 
 tag({module, _, Path, ImportScope, _Exports, Defs} = Module) ->
-    MacroScope = maps:from_list([{Name, true} || {macro, _, Name, _} <- maps:values(Defs)]),
-    case ast:traverse(fun(_, _, _) -> ok end, fun tag_macros/3, MacroScope, Module) of
+    LocalScope = maps:from_list([{Name, tag_def(Name, Def, Path)} || {Name, Def} <- maps:to_list(Defs)]),
+    case merge_scopes(Path, LocalScope, ImportScope) of
         {error, Errs}   -> {error, Errs};
-        {ok, {_, MacroedModule}}  ->
-            LocalScope = maps:from_list([{Name, tag_def(Name, Def, Path)} || {Name, Def} <- maps:to_list(Defs)]),
-            case merge_scopes(Path, LocalScope, ImportScope) of
-                {error, Errs}   -> {error, Errs};
-                {ok, Scope}     -> ast:traverse(fun(_, _, _) -> ok end, fun tag_symbols/3, Scope, MacroedModule)
-            end
+        {ok, Scope}     -> ast:traverse(fun(_, _, _) -> ok end, fun tag_symbols/3, Scope, Module)
     end.
 
 % maps:merge is simpler, but we want to error when an import conflicts with a
@@ -35,19 +30,11 @@ merge_scopes(ModulePath, LocalScope, ImportScope) ->
         {ok, Imports}   -> {ok, maps:merge(LocalScope, maps:from_list(Imports))}
     end.
 
-% Step 1: Tag all macros
-tag_macros(_, Scope, {application, _, {symbol, Ctx, _, S}, Args} = Term) ->
-    case maps:is_key(S, Scope) of
-        false   -> {ok, Term};
-        true    -> {ok, {macro_application, Ctx, S, Args}}
-    end;
-tag_macros(_, _, _) -> ok.
-
 % Step 2: Build local scope of all top-level module definitions
 tag_def(Tag, {def, _, _, _}, Path) ->
     {qualified_symbol, #{}, Path, Tag};
 tag_def(Tag, {macro, _, _, _}, Path) ->
-    {macro_symbol, #{}, Path, Tag};
+    {qualified_symbol, #{}, Path, Tag};
 tag_def(_, {keyword, _, _, _} = Keyword, _) -> Keyword;
 tag_def(_, {link, _, Path, Symbol}, _) -> {qualified_symbol, #{}, Path, Symbol}.
 

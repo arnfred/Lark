@@ -34,9 +34,9 @@ prepare(FileName, Code) ->
 
 root_module(FileName, Statements) ->
     RootPath = filename_to_module_path(FileName),
-    ModuleImports = [{import, Ctx, Path} || {module, Ctx, Path, ModStatements} <- Statements,
-                                            {exports, _, Exports} <- ModStatements,
-                                            length(Exports) > 0],
+    ModuleImports = utils:unique([{import, Ctx, Path} || {module, Ctx, Path, ModStatements} <- Statements,
+                                                         {exports, _, Exports} <- ModStatements,
+                                                         length(Exports) > 0]),
     RootName =lark_name([P || {symbol, _, _, P} <- RootPath]),
     Ctx = #{filename => FileName, line => 0, module => RootName},
     {module, Ctx, RootPath, Statements ++ ModuleImports}.

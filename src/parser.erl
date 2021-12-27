@@ -46,7 +46,7 @@ parse(Inputs, Options) ->
                                         {ok, Order}     ->
                                             ReOrdered = reorder_modules(Order, TaggedMods),
                                             NoEmptyMods = [M || M <- ReOrdered, not(module:empty(M))],
-                                            {ok, NoEmptyMods}
+                                            expand_macros(NoEmptyMods)
                                     end
                             end
                     end
@@ -134,6 +134,10 @@ link_and_tag({module, ModuleCtx, ModulePath, ModuleImports, Exports, DefMap}, Mo
                     {ok, {Dependencies, normalize_applications(Tagged)}}
             end
     end.
+
+expand_macros(Modules) ->
+    Libs = maps:from_list([{ModPath, Mod} || {module, _, ModPath, _, _, _} = Mod <- Modules]),
+    error:collect([macros:expand(Mod, Libs) || Mod <- Modules]).
 
 % To make it easier to linearize we clearly distinguish between the following types of application:
 % - `application`: Application of anonymous function or internal to the module
