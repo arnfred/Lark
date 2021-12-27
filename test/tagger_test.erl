@@ -347,3 +347,14 @@ beam_symbol_test_() ->
     Defs = tag(Code),
     [?test(#{'t' := {def, _, 't',
                      {beam_symbol, _, [rand], uniform}}}, Defs)].
+
+root_import_test_() ->
+    Code = "module m1 (
+                export {inc}
+                def inc n -> #(n, n))
+
+            import m1/inc
+            def test -> 4.inc",
+    Defs = tag(Code),
+    [?test(#{'test' := {def, _, 'test', _}}, Defs)].
+

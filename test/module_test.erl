@@ -279,3 +279,15 @@ no_fictionous_root_modules_test_() ->
            "module non-empty (export {boolean}
                               def boolean -> True | False)",
     fun({ok, Modules}) -> [?testEqual(maps:is_key([source, test, file, boolean], Modules), false)] end).
+
+module_root_module_self_import_test_() ->
+    % When the root module imports a def in the module, this import shouldn't
+    % also apply to the module itself
+    ?setup("test/file.lark",
+           "module m (export {inc}
+                      def inc n -> #(n, n))
+            import m/inc",
+           fun({ok, Modules}) ->
+                   [?test(#{[m] := {module, _, _, [], _, _}}, Modules)]
+           end).
+

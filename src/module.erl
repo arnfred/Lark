@@ -46,7 +46,9 @@ parse_module({module, Ctx, Path, Statements}, RootStatements) ->
     Exports = lists:append([Exs || {exports, _, Exs} <- Statements]),
     RootImports = [I || I = {import, _, _} <- RootStatements],
     ModuleImports = [I || I = {import, _, _} <- Statements],
-    Imports = [import(I) || I <- utils:unique(RootImports ++ ModuleImports)],
+    Imports = [I || RawImport <- utils:unique(RootImports ++ ModuleImports),
+                            {import, _, P} = I <- [import(RawImport)],
+                            not(lists:prefix(ModulePath, P))],
     DefMap = maps:from_list([{Name, D} || D = {Type, _, Name, _} <- Statements,
                                           Type == def orelse Type == macro]),
     
