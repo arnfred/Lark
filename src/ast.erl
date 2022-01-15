@@ -5,14 +5,17 @@
 -import(utils, [merge/1]).
 -include_lib("eunit/include/eunit.hrl").
 
-traverse(Pre, Post, Scope, ASTs) when is_list(ASTs) -> map_asts(Pre, Post, Scope, ASTs);
-traverse(Pre, Post, Scope, AST)                     -> step({Pre, Post}, top_level, Scope, AST).
-traverse(Pre, Post, ASTs) when is_list(ASTs)        -> map_asts(Pre, Post, #{}, ASTs);
-traverse(Pre, Post, AST)                            -> step({Pre, Post}, top_level, #{}, AST).
-traverse(Post, ASTs) when is_list(ASTs)             -> map_asts(fun(_,_,_) -> ok end, Post, #{}, ASTs);
-traverse(Post, AST)                                 -> step({fun(_, _, _) -> ok end, Post}, top_level, #{}, AST).
+traverse(Pre, Post, Scope, Terms) when is_list(Terms)   -> map_terms(Pre, Post, Scope, Terms);
+traverse(Pre, Post, Scope, Terms) when is_map(Terms)    -> map_terms(Pre, Post, Scope, Terms);
+traverse(Pre, Post, Scope, AST)                         -> step({Pre, Post}, top_level, Scope, AST).
+traverse(Pre, Post, Terms) when is_list(Terms)          -> map_terms(Pre, Post, #{}, Terms);
+traverse(Pre, Post, Terms) when is_map(Terms)           -> map_terms(Pre, Post, #{}, Terms);
+traverse(Pre, Post, AST)                                -> step({Pre, Post}, top_level, #{}, AST).
+traverse(Post, Terms) when is_list(Terms)               -> map_terms(fun(_,_,_) -> ok end, Post, #{}, Terms);
+traverse(Post, Terms) when is_map(Terms)                -> map_terms(fun(_,_,_) -> ok end, Post, #{}, Terms);
+traverse(Post, AST)                                     -> step({fun(_, _, _) -> ok end, Post}, top_level, #{}, AST).
 
-traverse_term(Type, Pre, Post, Scope, Term)         -> in({Pre, Post}, Type, Scope, Term).
+traverse_term(Type, Pre, Post, Scope, Term)             -> in({Pre, Post}, Type, Scope, Term).
 
 in({Pre, Post}, Type, Scope, Term) ->
     case Pre(Type, Scope, Term) of
@@ -226,8 +229,14 @@ map(Meta, Type, Scope, Elements) ->
         {ok, Zipped} -> {ok, lists:unzip(Zipped)}
     end.
 
-map_asts(Pre, Post, Scope, ASTs) ->
-    case error:collect([in({Pre, Post}, top_level, Scope, AST) || AST <- ASTs]) of
+map_terms(Pre, Post, Scope, Terms) when is_map(Terms) ->
+    case map_terms(Pre, Post, Scope, maps:values(Terms)) of
+        {error, Errs}       -> {error, Errs};
+        {ok, {Env, Res}}    -> {ok, {Env, maps:from_list(lists:zip(maps:keys(Terms), Res))}}
+    end;
+
+map_terms(Pre, Post, Scope, Terms) when is_list(Terms) ->
+    case error:collect([in({Pre, Post}, top_level, Scope, T) || T <- Terms]) of
         {error, Errs}   -> {error, Errs};
         {ok, Res}       ->
             {Envs, Outs} = lists:unzip(Res),
