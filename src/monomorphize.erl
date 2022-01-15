@@ -8,11 +8,12 @@ module({module, Ctx, ModulePath, Imports, Exports, Defs}, Libs, _Options) ->
     % Linearize definitions
     case linearize_targets(Targets, Libs) of
         {error, Errs}            -> {error, Errs};
-        {ok, Env, LocalTreeMap}  -> 
-            GlobalTreeMap = maps:from_list([{Name, wrap_in_def(Name, Tree)} || {{Path, _}, Tree} <- maps:to_list(Env),
-                                                                               length(Path) > 1,
-                                                                               Name <- [symbol:tag(Path)]]),
-            Trees = maps:merge(LocalTreeMap, GlobalTreeMap),
+        {ok, Env, LocalTrees}  -> 
+            GlobalDefMap = maps:from_list([{Name, wrap_in_def(Name, Tree)} || {{Path, _}, Tree} <- maps:to_list(Env),
+                                                                              length(Path) > 1,
+                                                                              Name <- [symbol:tag(Path)]]),
+            LocalDefMap = maps:from_list([{Name, wrap_in_def(Name, T)} || {Name, T} <- LocalTrees]),
+            Trees = maps:merge(LocalDefMap, GlobalDefMap),
             NewExports = case maps:is_key(main, Defs) of
                              true   -> maps:put(main, {}, Exports);
                              false  -> Exports
@@ -30,13 +31,15 @@ linearize_targets([{Name, Def} | Rest], Env, Libs, Res) ->
 linearize_targets([], Env, _, Res) -> 
     case error:collect(Res) of
         {error, Errs}           -> {error, Errs};
-        {ok, TreeList}          -> {ok, Env, maps:from_list(TreeList)}
+        {ok, TreeList}          -> {ok, Env, TreeList}
     end.
 
 
 is_target(main, _) -> true;
-is_target(Name, Exports) -> maps:is_key(Name, Exports).
+is_target(Name, Exports) when is_map_key(Name, Exports) -> true;
+is_target(Name, Exports) -> lists:member(hd(symbol:path(Name)), maps:keys(Exports)).
 
+wrap_in_def(Name, {def, _, _, _} = Term) -> Term;
 wrap_in_def(Name, Tree) -> {def, symbol:ctx(Tree), Name, Tree}.
 
 

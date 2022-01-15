@@ -97,6 +97,6 @@
 -define(debugTerm(Term), begin
                              Pre = fun(_, _, T) -> {ok, setelement(2, T, #{})} end,
                              Post = fun(_, _, _) -> ok end,
-                             {ok, {_, NT}} = ast:traverse_term(expr, Pre, Post, #{}, Term),
+                             {ok, {_, NT}} = ast:traverse(Pre, Post, Term),
                              ?debugVal(NT, 100)
                          end).

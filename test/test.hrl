@@ -1,4 +1,5 @@
 -define(TIMEOUT, 3600).
+-include_lib("eunit/include/eunit.hrl").
 
 -define(test(Expected, Actual),
         begin
@@ -70,3 +71,12 @@
               end)())
         end).
 -define(_errorMatch(Err1, Err2, Err3, Expr), ?_test(?errorMatch(Err1, Err2, Err3, Expr))).
+
+-define(debugTerm(Term), begin
+                             Pre = fun(_, _, T) -> {ok, set_element(2, T, #{})} end,
+                             Post = fun(_, _, _) -> ok end,
+                             {ok, {_, NT}} = ast:traverse_term(expr, Pre, Post, #{}, T),
+                             ?debugVal(NT, 100)
+                         end).
+
+

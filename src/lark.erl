@@ -42,15 +42,16 @@ load(Source, Options)  ->
     end.
 
 compile_and_load(Module, Libs, Options) ->
+    %?debugTerm(element(6, Module)),
     case monomorphize:module(Module, Libs, Options) of
         {error, Errs}       -> {error, Errs};
         {ok, Monomorphized} ->
             {module, _Ctx, _Path, _Imports, _Exports, _Defs} = Monomorphized,
-            %?debugTerm(maps:get(main, _Defs)),
+            %?debugVal(_Defs),
             case code_gen:gen(Monomorphized) of
                 {error, Errs}               -> {error, Errs};
                 {ok, ErlangCore}            ->
-                    %?debugVal(ModuleForm, 100),
+                    %?debugVal(ErlangCore, 100),
                     case compile(ErlangCore) of
                         {error, Errs}       -> {error, Errs};
                         {ok, ModuleName}    -> {ok, ModuleName}

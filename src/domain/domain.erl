@@ -1,6 +1,6 @@
 -module(domain).
 -export([diff/2, union/1, union/2, intersection/1, intersection/2, function/1,
-         unroll/2, normalize/1, subset/2, lookup/2, expand/2, is_literal/1, to_term/2]).
+         unroll/2, normalize/1, subset/2, lookup/2, expand/2, is_literal/1, to_term/2, to_literal/2]).
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("test/macros.hrl").
 
@@ -42,7 +42,7 @@ expand_(N, {tagged, Tag, D}) -> {tagged, Tag, expand_(N-1, D)};
 expand_(N, Ds) when is_list(Ds) -> lists:map(fun(D) -> expand_(N-1, D) end, Ds);
 expand_(N, M) when is_map(M) -> maps:map(fun(_K, D) -> expand_(N-1, D) end, M);
 expand_(N, S) -> case ordsets:is_set(S) of
-                     true -> ordsets:map(fun(D) -> expand_(N-1, D) end, S);
+                     true -> lists:map(fun(D) -> expand_(N-1, D) end, S);
                      false -> S
                  end.
 
@@ -63,17 +63,26 @@ is_literal(L) when is_list(L)            -> lists:all(fun(E) -> is_literal(E) en
 is_literal(T) when is_tuple(T)           -> lists:all(fun(E) -> is_literal(E) end, tuple_to_list(T));
 is_literal(M) when is_map(M)             -> lists:all(fun(E) -> is_literal(E) end, maps:values(M)).
 
-to_term(Domain, Ctx) -> to_term_(Domain, maps:put(domain, Domain, Ctx)).
-to_term_({tagged, Path, Val}, Ctx) -> {tagged, Ctx, Path, to_term(Val, Ctx)};
-to_term_({sum, Elems}, Ctx) -> {sum, Ctx, [to_term(E, Ctx) || E <- Elems]};
-to_term_(Domain, Ctx) when is_list(Domain) -> {list, Ctx, [to_term(D, Ctx) || D <- Domain]};
-to_term_(Domain, Ctx) when is_tuple(Domain) -> {tuple, Ctx, [to_term(D, Ctx) || D <- tuple_to_list(Domain)]};
-to_term_(Domain, Ctx) when is_map(Domain) -> {dict, Ctx, [{pair, Ctx, {keyword, Ctx, K}, to_term(D, Ctx)}
+
+to_term(Domain, Ctx) -> to_term_(Domain, maps:put(domain, Domain, Ctx), fun to_term/3).
+to_term(Domain, Ctx, R) -> to_term_(Domain, maps:put(domain, Domain, Ctx), R).
+to_term_({tagged, Path, Val}, Ctx, R) -> {tagged, Ctx, Path, R(Val, Ctx, R)};
+to_term_({sum, Elems}, Ctx, R) -> {sum, Ctx, [R(E, Ctx) || E <- Elems]};
+to_term_(Domain, Ctx, R) when is_list(Domain) -> {list, Ctx, [R(D, Ctx, R) || D <- Domain]};
+to_term_(Domain, Ctx, R) when is_tuple(Domain) -> {tuple, Ctx, [R(D, Ctx, R) || D <- tuple_to_list(Domain)]};
+to_term_(Domain, Ctx, R) when is_map(Domain) -> {dict, Ctx, [{pair, Ctx, {keyword, Ctx, K}, R(D, Ctx, R)}
                                                           || {K, D} <- maps:to_list(Domain)]};
-to_term_(Domain, Ctx) when is_atom(Domain) -> {value, Ctx, atom, Domain};
-to_term_(Domain, Ctx) when is_integer(Domain) -> {value, Ctx, integer, Domain};
-to_term_(Domain, Ctx) when is_float(Domain) -> {value, Ctx, float, Domain};
-to_term_(Domain, Ctx) when is_binary(Domain) -> {value, Ctx, string, Domain}.
+to_term_(Domain, Ctx, _) when is_atom(Domain) -> {value, Ctx, atom, Domain};
+to_term_(Domain, Ctx, _) when is_integer(Domain) -> {value, Ctx, integer, Domain};
+to_term_(Domain, Ctx, _) when is_float(Domain) -> {value, Ctx, float, Domain};
+to_term_(Domain, Ctx, _) when is_binary(Domain) -> {value, Ctx, string, Domain}.
+
+
+% Print out the domain so that the tagged tuple is preserved
+to_literal(Domain, Ctx) -> to_literal(Domain, Ctx, fun to_literal/3).
+to_literal({tagged, Path, Val}, Ctx, R) -> {tuple, Ctx, [{value, Ctx, atom, tagged}, Ctx, Path, to_term(Val, Ctx, R)]};
+to_literal(Domain, Ctx, R) -> to_term(Domain, Ctx, R).
+
 
 -ifdef(TEST).
 
