@@ -8,9 +8,7 @@ term({link, _, _} = Term) -> Term;
 term({keyword, _, _, _} = Term) -> Term;
 term({tagged, Ctx, _, Val} = Term) ->
     Arg = {symbol, symbol:ctx(Val), variable, arg(1)},
-    {def, Ctx, symbol:tag(Term), {'fun', Ctx, [{clause, Ctx, patterns([Arg], [Val], Ctx), Term}]}}.
-
-patterns(Args, Patterns, Ctx) -> [{pair, Ctx, A, sanitize_pattern(P)} || {A, P} <- lists:zip(Args, Patterns)].
+    {def, Ctx, symbol:tag(Term), {'fun', Ctx, [{clause, Ctx, [{pair, Ctx, Arg, Val}], Term}]}}.
 
 % When we substitute an expression for a variable, we use the expression as a
 % pattern guard in the generated function. To give an example, the generated function for `S: Boolean` is:

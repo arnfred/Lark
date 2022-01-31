@@ -18,18 +18,18 @@ empty_module(ImportPath) -> {module, #{}, [test_module], [{import, #{}, ImportPa
 erlang_import_test_() ->
     Mod = empty_module([beam, erlang, atom_to_list]),
     Actual = import:import(Mod, #{[test_module] => Mod}),
-    ?test({ok, {#{atom_to_list := {beam_symbol, _, [erlang], atom_to_list}}, []}}, Actual).
+    ?test({ok, {#{atom_to_list := [{beam_symbol, _, [erlang], atom_to_list}]}, []}}, Actual).
 
 erlang_module_import_test_() ->
     Actual = test_import([beam, lists], #{}),
-    ?test({ok, {#{'lists/reverse' := {beam_symbol, _, [lists], reverse}}, []}}, Actual).
+    ?test({ok, {#{'lists/reverse' := [{beam_symbol, _, [lists], reverse}]}, []}}, Actual).
 
 source_import_test_() ->
     Code = "module test/mod (export {test_fun}
                              def test_fun -> noop)",
     ModuleMap = module_map("test_file", Code),
     Actual = test_import([test, mod, test_fun], ModuleMap),
-    ?test({ok, {#{test_fun := {qualified_symbol, _, [test,mod], test_fun}},
+    ?test({ok, {#{test_fun := [{qualified_symbol, _, [test,mod], test_fun}]},
                 [{dependency, _, [test_module], [test, mod]}]}}, Actual).
 
 source_import_sub_path_test_() ->
@@ -37,7 +37,7 @@ source_import_sub_path_test_() ->
                             def test_fun -> noop)",
     ModuleMap = module_map("test_file", Code),
     Actual = test_import([a, b, c], ModuleMap),
-    ?test({ok, {#{'c/d/test_fun' := {qualified_symbol, _, [a, b, c, d], test_fun}},
+    ?test({ok, {#{'c/d/test_fun' := [{qualified_symbol, _, [a, b, c, d], test_fun}]},
                 [{dependency, _, [test_module], [a, b, c, d]}]}}, Actual).
 
 source_import_sub_path_alias_test_() ->
@@ -45,7 +45,7 @@ source_import_sub_path_alias_test_() ->
                             def test_fun -> noop)",
     ModuleMap = module_map("test_file", Code),
     Actual = test_import([a, b, #{c => alias}], ModuleMap),
-    ?test({ok, {#{'alias/d/test_fun' := {qualified_symbol, _, [a, b, c, d], test_fun}},
+    ?test({ok, {#{'alias/d/test_fun' := [{qualified_symbol, _, [a, b, c, d], test_fun}]},
                 [{dependency, _, [test_module], [a, b, c, d]}]}}, Actual).
 
 source_import_sub_path_multi_mod_test_() ->
@@ -55,18 +55,18 @@ source_import_sub_path_multi_mod_test_() ->
                                 def qworp -> noop)",
     ModuleMap = module_map("test_file", Code),
     Actual = test_import([a, b, c], ModuleMap),
-    ?test({ok, {#{'c/d/test_fun' := {qualified_symbol, _, [a, b, c, d], test_fun},
-                  'c/other/qworp' := {qualified_symbol, _, [a, b, c, other], qworp}},
+    ?test({ok, {#{'c/d/test_fun' := [{qualified_symbol, _, [a, b, c, d], test_fun}],
+                  'c/other/qworp' := [{qualified_symbol, _, [a, b, c, other], qworp}]},
                 [{dependency, _, [test_module], [a, b, c, d]},
                  {dependency, _, [test_module], [a, b, c, other]}]}}, Actual).
 
 
 beam_wildcard_test_() ->
     Actual = test_import([beam, random, '_'], #{}),
-    ?test({ok, {#{seed0 := {beam_symbol, _, [random], seed0},
-                  seed := {beam_symbol, _, [random], seed},
-                  uniform := {beam_symbol, _, [random], uniform},
-                  uniform_s := {beam_symbol, _, [random], uniform_s}}, []}}, Actual).
+    ?test({ok, {#{seed0 := [{beam_symbol, _, [random], seed0}],
+                  seed := [{beam_symbol, _, [random], seed}],
+                  uniform := [{beam_symbol, _, [random], uniform}],
+                  uniform_s := [{beam_symbol, _, [random], uniform_s}]}, []}}, Actual).
 
 source_wildcard_test_() ->
     Code = "module blap (
@@ -76,15 +76,15 @@ source_wildcard_test_() ->
                 def fun3 -> noop)",
     ModuleMap = module_map("test_file", Code),
     Actual = test_import([blap, '_'], ModuleMap),
-    ?test({ok, {#{fun1 := {qualified_symbol, _, [blap], fun1},
-                  fun2 := {qualified_symbol, _, [blap], fun2},
-                  fun3 := {qualified_symbol, _, [blap], fun3}},
+    ?test({ok, {#{fun1 := [{qualified_symbol, _, [blap], fun1}],
+                  fun2 := [{qualified_symbol, _, [blap], fun2}],
+                  fun3 := [{qualified_symbol, _, [blap], fun3}]},
                [{dependency, _, [test_module], [blap]}]}}, Actual).
 
 beam_dict_test_() ->
     Actual = test_import([beam, random, #{seed => glunk, uniform => uniform}], #{}),
-    ?test({ok, {#{glunk := {beam_symbol, _, [random], seed},
-                  uniform := {beam_symbol, _, [random], uniform}}, []}}, Actual).
+    ?test({ok, {#{glunk := [{beam_symbol, _, [random], seed}],
+                  uniform := [{beam_symbol, _, [random], uniform}]}, []}}, Actual).
 
 source_dict_test_() ->
     Code = "module blap (
@@ -94,8 +94,8 @@ source_dict_test_() ->
                 def fun3 -> noop)",
     ModuleMap = module_map("test_file", Code),
     Actual = test_import([blap, #{fun1 => blarg, fun2 => fun2}], ModuleMap),
-    ?test({ok, {#{blarg := {qualified_symbol, _, [blap], fun1},
-                  fun2 := {qualified_symbol, _, [blap], fun2}},
+    ?test({ok, {#{blarg := [{qualified_symbol, _, [blap], fun1}],
+                  fun2 := [{qualified_symbol, _, [blap], fun2}]},
                 [{dependency, _, [test_module], [blap]}]}}, Actual).
 
 module_keyword_test_() ->
@@ -103,8 +103,8 @@ module_keyword_test_() ->
                       def blup -> A)",
     ModuleMap = module_map("blap", Code),
     Actual = test_import([m, 'blup'], ModuleMap),
-    ?test({ok, {#{'blup' := {qualified_symbol, _, [m], 'blup'},
-                  'blup/A' := {keyword, _, [m, blup], 'A'}},
+    ?test({ok, {#{'blup' := [{qualified_symbol, _, [m], 'blup'}],
+                  'blup/A' := [{keyword, _, [m, blup], 'A'}]},
                 [{dependency, _, [test_module], [m]},
                  {dependency, _, [test_module], [m, blup]}]}}, Actual).
 
@@ -113,7 +113,7 @@ module_sub_keyword_test_() ->
                       def blup -> A)",
     ModuleMap = module_map("blap", Code),
     Actual = test_import([m, 'blup', 'A'], ModuleMap),
-    ?test({ok, {#{'A' := {keyword, _, [m, blup], 'A'}},
+    ?test({ok, {#{'A' := [{keyword, _, [m, blup], 'A'}]},
                 [{dependency, _, [test_module], [m, blup]}]}}, Actual).
 
 wildcard_keyword_test_() ->
@@ -121,8 +121,8 @@ wildcard_keyword_test_() ->
                       def blup -> (A | B))",
     ModuleMap = module_map("blap", Code),
     Actual = test_import([m, 'blup', '_'], ModuleMap),
-    ?test({ok, {#{'A' := {keyword, _, [m, blup], 'A'},
-                  'B' := {keyword, _, [m, blup], 'B'}},
+    ?test({ok, {#{'A' := [{keyword, _, [m, blup], 'A'}],
+                  'B' := [{keyword, _, [m, blup], 'B'}]},
                [{dependency, _, [test_module], [m, blup]}]}}, Actual).
 
 transitive_local_keyword_test_() ->
@@ -132,7 +132,7 @@ transitive_local_keyword_test_() ->
     ModuleMap = module_map("root_module", Code),
     #{[test_module] := Mod} = ModuleMap,
     Actual = import:import(Mod, ModuleMap),
-    ?test({ok, {#{'A' := {keyword, _, [m, blup], 'A'}},
+    ?test({ok, {#{'A' := [{keyword, _, [m, blup], 'A'}]},
                 [{dependency, _, [test_module], [m, blup]}]}}, Actual).
 
 transitive_local_keyword_dict_import_test_() ->
@@ -145,12 +145,12 @@ transitive_local_keyword_dict_import_test_() ->
     ModuleMap = module_map("root_module", Code),
     #{[test, module2] := Mod} = ModuleMap,
     Actual = import:import(Mod, ModuleMap),
-    ?test({ok, {#{'A' := {keyword, _, [test, module1, t], 'A'},
-                  'B' := {keyword, _, [test, module1, s], 'B'},
-                  'q' := {qualified_symbol, _, [test, module1], 't'},
-                  'q/A' := {keyword, _, [test, module1, t], 'A'},
-                  's' := {qualified_symbol, _, [test, module1], 's'},
-                  's/B' := {keyword, _, [test, module1, s], 'B'}},
+    ?test({ok, {#{'A' := [{keyword, _, [test, module1, t], 'A'}],
+                  'B' := [{keyword, _, [test, module1, s], 'B'}],
+                  'q' := [{qualified_symbol, _, [test, module1], 't'}],
+                  'q/A' := [{keyword, _, [test, module1, t], 'A'}],
+                  's' := [{qualified_symbol, _, [test, module1], 's'}],
+                  's/B' := [{keyword, _, [test, module1, s], 'B'}]},
                 [{dependency, _, [test,module2], [test, module1]},
                  {dependency, _, [test,module2], [test, module1, s]},
                  {dependency, _, [test,module2], [test, module1, t]}]}}, Actual).
@@ -163,8 +163,8 @@ transitive_path_overlap_test_() ->
     ModuleMap = module_map("test_module", Code), 
     #{[source, test_module] := Mod} = ModuleMap,
     Actual = import:import(Mod, ModuleMap),
-    ?test({ok, {#{'t' := {qualified_symbol, _, [a, b, c], 't'},
-                  't/A' := {keyword, _, [a, b, c, t], 'A'}},
+    ?test({ok, {#{'t' := [{qualified_symbol, _, [a, b, c], 't'}],
+                  't/A' := [{keyword, _, [a, b, c, t], 'A'}]},
                 [{dependency, _, [source, test_module], [a, b, c]},
                  {dependency, _, [source, test_module], [a, b, c, t]}]}}, Actual).
 
@@ -179,7 +179,16 @@ ambigious_transitive_local_keyword_test_() ->
     ModuleMap = module_map("test_file", Code),
     #{[test, module3] := Mod} = ModuleMap,
     Actual = import:import(Mod, ModuleMap),
-    ?testError({duplicate_import, 'blup', 'test/module3', 'test/module2/blup', 'test/module1/blup'}, Actual).
+    ?test({ok, {#{blup := [{qualified_symbol, _, [test, module1], blup},
+                           {qualified_symbol, _, [test, module2], blup}],
+                  'blup/A' := [{keyword, _, [test, module1, blup], 'A'}],
+                  'blup/B' := [{keyword, _, [test, module1, blup], 'B'}],
+                  'blup/C' := [{keyword, _, [test, module2, blup], 'C'}],
+                  'blup/D' := [{keyword, _, [test, module2, blup], 'D'}]},
+                [{dependency,_,[test,module3],[test,module1]},
+                 {dependency,_,[test,module3],[test,module1,blup]},
+                 {dependency,_,[test,module3],[test,module2]},
+                 {dependency,_,[test,module3],[test,module2,blup]}]}}, Actual).
 
 qualified_export_test_() ->
     Code = "module test/module1 (export {t/A}
@@ -188,7 +197,7 @@ qualified_export_test_() ->
     ModuleMap = module_map("test_file", Code),
     #{[test, module2] := Mod} = ModuleMap,
     Actual = import:import(Mod, ModuleMap),
-    ?test({ok, {#{'A' := {keyword, _, [test, module1, t], 'A'}},
+    ?test({ok, {#{'A' := [{keyword, _, [test, module1, t], 'A'}]},
                [{dependency, _, [test, module2], [test, module1, t]}]}}, Actual).
 
 errors_test_() ->
@@ -217,7 +226,7 @@ sandbox_keyword_test_() ->
     ModuleMap = module_map("test_file", Code),
     #{[test, module2] := Mod} = ModuleMap,
     Actual = import:import(Mod, ModuleMap, Options),
-    ?test({ok, {#{'A' := {keyword, _, [test, module1, t], 'A'}},
+    ?test({ok, {#{'A' := [{keyword, _, [test, module1, t], 'A'}]},
                [{dependency, _, [test, module2], [test, module1, t]}]}}, Actual).
 
 
@@ -226,8 +235,8 @@ import_qualified_module_name_test_() ->
                                  def option -> Option)",
     ModuleMap = module_map("test_file", Code),
     Actual = test_import([lark, prelude], ModuleMap),
-    [?test({ok, {#{'prelude/option' := {qualified_symbol, _, [lark, prelude], 'option'},
-                   'prelude/option/Option' := {keyword, _, [lark, prelude, option], 'Option'}},
+    [?test({ok, {#{'prelude/option' := [{qualified_symbol, _, [lark, prelude], 'option'}],
+                   'prelude/option/Option' := [{keyword, _, [lark, prelude, option], 'Option'}]},
                  [{dependency, _, [test_module], [lark, prelude]},
                   {dependency, _, [test_module], [lark, prelude, option]}]}}, Actual)].
 
@@ -240,9 +249,9 @@ nested_link_test_() ->
                       def blonk -> (Blank | Blop))",
     ModuleMap = module_map("test/file.lark", Code),
     Actual = test_import([t, 'blonk'], ModuleMap),
-    [?test({ok, {#{'blonk' := {qualified_symbol, _, [t], 'blonk'},
-                  'blonk/Blank' := {keyword, _, [t, blonk], 'Blank'},
-                  'blonk/Blop' := {keyword, _, [t, blup], 'Blap'}},
+    [?test({ok, {#{'blonk' := [{qualified_symbol, _, [t], 'blonk'}],
+                  'blonk/Blank' := [{keyword, _, [t, blonk], 'Blank'}],
+                  'blonk/Blop' := [{keyword, _, [t, blup], 'Blap'}]},
                  [{dependency, _, [test_module], [t]},
                   {dependency, _, [test_module], [t, blonk]},
                   {dependency, _, [test_module], [t, blup]}]}}, Actual)].
@@ -256,17 +265,17 @@ local_constant_test_() ->
                          def r -> s/A)",
     ModuleMap = module_map("test/file.lark", Code),
     Actual = test_import([test, 's', 'A'], ModuleMap),
-    [?test({ok, {#{'A' := {keyword, _, [test, t], 'A'}},
+    [?test({ok, {#{'A' := [{keyword, _, [test, t], 'A'}]},
                 [{dependency, _, [test_module], [test, t]}]}}, Actual)].
 
-local_import_conflict_test_() ->
+local_import_test_() ->
     Code = "def t -> (A | B)
             import t/_",
     ModuleMap = module_map("test/file.lark", Code),
     #{[source, test, file] := Mod} = ModuleMap,
     Actual = import:import(Mod, ModuleMap),
-    [?test({ok, {#{'A' := {keyword, _, [source, test, file, t], 'A'}}, _}}, Actual),
-     ?test({ok, {#{'B' := {keyword, _, [source, test, file, t], 'B'}}, _}}, Actual)].
+    [?test({ok, {#{'A' := [{keyword, _, [source, test, file, t], 'A'}]}, _}}, Actual),
+     ?test({ok, {#{'B' := [{keyword, _, [source, test, file, t], 'B'}]}, _}}, Actual)].
 
 empty_module_import_test_() ->
     Code = "module test (def boolean -> True | False)",
@@ -281,5 +290,15 @@ root_import_in_module_test_() ->
     ModuleMap = module_map("test/file.lark", Code),
     #{[test] := Mod} = ModuleMap,
     Actual = import:import(Mod, ModuleMap),
-    [?test({ok, {#{'<' := {beam_symbol, _, [erlang], '<'}}, []}}, Actual)].
+    [?test({ok, {#{'<' := [{beam_symbol, _, [erlang], '<'}]}, []}}, Actual)].
+
+overloaded_imports_test_() ->
+    Code = "module test (import beam/lists/map
+                         import beam/maps/map)",
+    ModuleMap = module_map("test/file.lark", Code),
+    #{[test] := Mod} = ModuleMap,
+    Actual = import:import(Mod, ModuleMap),
+    [?test({ok, {#{'map' := [{beam_symbol, _, [lists], map},
+                             {beam_symbol, _, [maps], map}]}, []}}, Actual)].
+    
 

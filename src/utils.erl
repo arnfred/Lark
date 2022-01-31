@@ -1,6 +1,7 @@
 -module(utils).
--export([combinations/1, duplicates/2, group_by/2, group_by/3, unique/1, merge/1, pivot/1,
-         domain_to_term/2, gen_tag/1, print_core/1, get_arity/1, get_arity/3, set/1, mapfun/2, mapfun/3,
+-export([combinations/1, duplicates/2, group_by/1, group_by/2, group_by/3,
+         unique/1, unique/2, merge/1, pivot/1, domain_to_term/2, gen_tag/1,
+         print_core/1, get_arity/1, get_arity/3, set/1, mapfun/2, mapfun/3,
          function/2, get_arities/2, get_min_arity/2, get_max_arity/2]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -29,18 +30,20 @@ duplicates(Elements, GetKey) ->
 
 % Group items in list by key
 % Example result: [(K1, [V1, V2]), (K2, [V3])]
+group_by(L) -> group_by(fun({K,_}) -> K end, fun({_, V}) -> V end, L).
 group_by(KeyF, L) -> group_by(KeyF, fun(X) -> X end, L).
 group_by(KeyF, ValF, L) -> 
-	Dict = lists:foldr(fun({K,V}, D) -> dict:append(K, V, D) end , dict:new(), [ {KeyF(X), ValF(X)} || X <- L ]),
+	Dict = lists:foldl(fun({K,V}, D) -> dict:append(K, V, D) end , dict:new(), [ {KeyF(X), ValF(X)} || X <- L ]),
 	dict:to_list(Dict).
 
 % Keep unique items in list in an order-sensitive way
-unique(L) -> 
-    {Out, _} = lists:foldl(fun(Elem, {Out, Seen}) -> 
-                                      case ordsets:is_element(Elem, Seen) of
+unique(L) -> unique(L, fun(E) -> E end).
+unique(L, F) ->
+    {Out, _} = lists:foldl(fun(Elem, {Out, Seen}) ->
+                                      case maps:is_key(F(Elem), Seen) of
                                           true -> {Out, Seen};
-                                          false -> {[Elem | Out], ordsets:add_element(Elem, Seen)}
-                                      end end, {[], ordsets:new()}, L),
+                                          false -> {[Elem | Out], maps:put(F(Elem), true, Seen)}
+                                      end end, {[], #{}}, L),
     lists:reverse(Out).
 
 % Merge a list of maps

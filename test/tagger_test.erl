@@ -251,22 +251,22 @@ parens_variable_test_() ->
                        [{variable, _, 'a', A}],
                        {variable, _, 'a', A}}]}}}, Defs).
 
-tag_sub_module_test_() ->
-    Code = "def list a -> Nil | (Cons: { head: a, tail: list(a) })",
-    {ok, Parsed} = parser:parse([{text, test_code, Code}], #{include_lark_libraries => false}),
-    ModMap = maps:from_list([{module:lark_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Parsed]),
-    % Should result in `source_test_code` module and `source_test_code_List` module.
-    % We're interested in the latter.
-    #{'source/test_code' := {module, _, _, _, _, #{'list/Cons' := Cons}}} = ModMap,
-    ?test({def, _, 'Cons',
-           {'fun', _,
-            [{clause, _,
-              [{pair, _, {variable, _, _, Sub1}, {variable, _, a, _}},
-               {pair, _, {variable, _, _, Sub2}, {qualified_application, _, [source, test_code], list,
-                                                  [{keyword, _, '_'}]}}],
-              {tagged, _, [source, test_code, 'list', 'Cons'],
-               {dict, _, [{pair, _, {keyword, _, head}, {variable, _, _, Sub1}},
-                          {pair, _, {keyword, _, tail}, {variable, _, _, Sub2}}]}}}]}}, Cons).
+%tag_sub_module_test_() ->
+%    Code = "def list a -> Nil | (Cons: { head: a, tail: list(a) })",
+%    {ok, Parsed} = parser:parse([{text, test_code, Code}], #{include_lark_libraries => false}),
+%    ModMap = maps:from_list([{module:lark_name(Path), Mod} || {module, _, Path, _, _, _} = Mod <- Parsed]),
+%    #{'source/test_code' := {module, _, _, _, _, #{'list/Cons' := Cons}}} = ModMap,
+%    ?test({def, _, 'list/Cons',
+%           {'fun', _,
+%            [{clause, _,
+%              [{pair, _, {variable, _, _, Sub1},
+%                         {dict, _, [{pair, _, {keyword, _, head}, {variable, _, a, _}},
+%                                    {pair, _, {keyword, _, tail}, {qualified_application, _,
+%                                                                   [source, test_code], list,
+%                                                                   [{keyword, _, '_'}]}}]}}],
+%              {tagged, _, [source, test_code, 'list', 'Cons'],
+%               {dict, _, [{pair, _, {keyword, _, head}, {variable, _, _, Sub1}},
+%                          {pair, _, {keyword, _, tail}, {variable, _, _, Sub2}}]}}}]}}, Cons).
 
 local_constant_test_() ->
     Code = "def t -> A
@@ -358,3 +358,21 @@ root_import_test_() ->
     Defs = tag(Code),
     [?test(#{'test' := {def, _, 'test', _}}, Defs)].
 
+overloaded_test_() ->
+    Code = "import beam/lists/map
+            import beam/maps/map
+            def f -> [#(1, 2), #(2, 3)].map(#(a, b) -> #(b, a))",
+    Defs = tag(Code),
+    [?test(#{f := {def, _, f, {application, _, {overloaded, _, map, [{beam_symbol, _, [lists], map},
+                                                                     {beam_symbol, _, [maps], map}]},
+                                               [{list, _, [{tuple, _, _}, {tuple, _, _}]},
+                                                {'fun', _, _}]}}},
+          Defs)].
+
+overloaded_local_test_() ->
+    Code = "import beam/rand/uniform
+            def uniform -> 5
+            def f -> uniform",
+    Defs = tag(Code),
+    [?test(#{'f' := {def, _, 'f', {overloaded, _, uniform, [{qualified_symbol, _, _, _},
+                                                         {beam_symbol, _, [rand], uniform}]}}}, Defs)].

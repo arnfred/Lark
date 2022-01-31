@@ -195,6 +195,13 @@ step(Meta, Type, Scope, {tagged, Ctx, Path, Val}) ->
     error:map(in(Meta, Type, Scope, Val),
 	      fun({ValEnv, TVal}) -> {ValEnv, {tagged, Ctx, Path, TVal}} end);
 
+step(Meta, Type, Scope, {overloaded, Ctx, Key, Values}) ->
+    case map(Meta, expr, Scope, Values) of
+        {error, Errs}           -> {error, Errs};
+        {ok, {Envs, TValues}}   -> Env = merge(Envs),
+                                   {ok, {Env, {overloaded, Ctx, Key, TValues}}}
+    end;
+
 step(Meta, Type, Scope, {TermType, Ctx, Key, Val}) when TermType =:= pair;
                                                         TermType =:= dict_pair ->
     error:map2(in(Meta, Type, Scope, Key),

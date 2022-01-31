@@ -15,12 +15,12 @@ import({module, _, ModulePath, Imports, _, _}, ModuleMap, Options) ->
                 {ok, _Whitelisted}  ->
                     Deps = utils:unique(lists:flatten([dep(ModulePath, A) || A <- Aliases,
                                                                              not(is_local(A, ModulePath))])),
-                    case check_duplicates(Aliases, ModulePath) of
-                        {error, Errs}   -> {error, Errs};
-                        {ok, _}         ->
-                            ImportMap = maps:from_list([{symbol:tag(Alias), Term} || {alias, _, Alias, Term} <- Aliases]),
-                            {ok, {ImportMap, Deps}}
-                    end
+                    AliasGroups = utils:group_by(fun({alias, _, Alias, _}) -> symbol:tag(Alias) end,
+                                                 fun({alias, _, _, Term}) -> Term end,
+                                                 Aliases),
+                    NoCtx = fun(Term) -> setelement(2, Term, #{}) end,
+                    ImportMap = maps:from_list([{K, utils:unique(G, NoCtx)} || {K, G} <- AliasGroups]),
+                    {ok, {ImportMap, Deps}}
             end
     end.
 
@@ -252,21 +252,3 @@ is_whitelisted(Module, Name) ->
                   'persistent_term' => [],
                   'zlib' => []},
     maps:is_key(Module, Whitelist) andalso not(lists:member(Name, maps:get(Module, Whitelist))).
-
-check_duplicates(Aliases, ModulePath) ->
-    ErrFun = fun({alias, ErrorCtx1, Alias, T1},
-                 {alias, ErrorCtx2, _, T2}) ->
-                     error:format({duplicate_import, symbol:tag(Alias), module:lark_name(ModulePath),
-                                   symbol:tag(T1), symbol:tag(T2)},
-                                  {import, ErrorCtx1, ErrorCtx2}) end,
-
-    % We want to pick out duplicate aliases that import different terms
-    % because this is ambigious. On the other hand we don't care if two
-    % separate imports map the same alias to the same term.
-    Duplicates = utils:duplicates(Aliases, fun({alias, _, A, _}) -> A end),
-    DistinctDuplicates = [{D1, D2} || {{alias, _, _, T1} = D1, {alias, _, _, T2} = D2} <- Duplicates,
-                                      not(symbol:tag(T1) =:= symbol:tag(T2))],
-    case DistinctDuplicates of
-        []  -> {ok, Aliases};
-        _   -> error:collect([ErrFun(D1, D2) || {D1, D2} <- DistinctDuplicates])
-    end.
