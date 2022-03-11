@@ -6,9 +6,13 @@
 
 term({link, _, _} = Term) -> Term;
 term({keyword, _, _, _} = Term) -> Term;
-term({tagged, Ctx, _, Val} = Term) ->
+term({tagged, Ctx, Tag, Val} = Term) ->
     Arg = {symbol, symbol:ctx(Val), variable, arg(1)},
-    {def, Ctx, symbol:tag(Term), {'fun', Ctx, [{clause, Ctx, [{pair, Ctx, Arg, Val}], Term}]}}.
+    Tagged = {tagged, Ctx, Tag, Arg},
+    {def, Ctx, symbol:tag(Term), {'fun', Ctx,
+                                  [{clause, Ctx,
+                                    [{pair, Ctx, Arg, sanitize_pattern(Val)}],
+                                    Tagged}]}}.
 
 % When we substitute an expression for a variable, we use the expression as a
 % pattern guard in the generated function. To give an example, the generated function for `S: Boolean` is:
@@ -46,7 +50,7 @@ tagged_tuple_test_() ->
                  [{clause, #{}, [{pair, #{},
                                   {symbol, #{}, variable, substituted_1},
                                   {tuple, #{}, [{keyword, #{}, [tagged, 'A'], 'A'}]}}],
-                   {tagged, #{}, [tagged, 'T'], {tuple, #{}, [{keyword, #{}, [tagged, 'A'], 'A'}]}}}]}},
+                   {tagged, #{}, [tagged, 'T'], {symbol, #{}, variable, substituted_1}}}]}},
     [?test(Expected, term({tagged, #{}, [tagged, 'T'], {tuple, #{}, [{keyword, #{}, [tagged, 'A'], 'A'}]}}))].
 
 sanitized_pattern_test_() ->
@@ -56,8 +60,7 @@ sanitized_pattern_test_() ->
                                   {symbol, #{}, variable, substituted_1},
                                   {application, #{}, {symbol, #{}, variable, test},
                                                  [{symbol, #{}, keyword, '_'}]}}],
-                   {tagged, #{}, [tagged, 'T'], {application, #{}, {symbol, #{}, variable, test},
-                                                 [{symbol, #{}, variable, test}]}}}]}},
+                   {tagged, #{}, [tagged, 'T'], {symbol, #{}, variable, substituted_1}}}]}},
     [?test(Expected, term({tagged, #{}, [tagged, 'T'], {application, #{}, {symbol, #{}, variable, test},
                                                  [{symbol, #{}, variable, test}]}}))].
 -endif.

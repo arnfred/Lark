@@ -164,7 +164,7 @@ subtype_tagged_test_() ->
                              #{'t' := {def, _, 't',
                                        {tagged, _, ['t', 'R'], {symbol, _, keyword, 'A'}}},
                                't/A' := {keyword, _, [source, test, file, t], 'A'},
-                               't/R' := {def, _, 'R',
+                               't/R' := {def, _, 't/R',
                                          {'fun', _,
                                           [{clause, _,
                                             [{pair, _,
