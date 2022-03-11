@@ -1,8 +1,6 @@
 -module(tagger).
 -export([tag/1]).
 
--include_lib("eunit/include/eunit.hrl").
-
 tag({module, _, Path, ImportScope, _Exports, Defs} = Module) ->
     LocalScope = [{Name, tag_def(Name, Def, Path)} || {Name, Def} <- maps:to_list(Defs)],
     ScopePairs = LocalScope ++ [{A, T} || {A, Terms} <- maps:to_list(ImportScope), T <- Terms],

@@ -375,4 +375,16 @@ overloaded_local_test_() ->
             def f -> uniform",
     Defs = tag(Code),
     [?test(#{'f' := {def, _, 'f', {overloaded, _, uniform, [{qualified_symbol, _, _, _},
-                                                         {beam_symbol, _, [rand], uniform}]}}}, Defs)].
+                                                            {beam_symbol, _, [rand], uniform}]}}}, Defs)].
+
+overloaded_local_module_test_() ->
+    Code = "module a (export {f}; def f 'a' -> 'hello')
+            module b (export {f}; def f 'b' -> 'world')
+            import a/_
+            import b/_
+            def t -> f('b')",
+    Defs = tag(Code),
+    [?test(#{t := {def, _, t, {application, _,
+                               {overloaded, _, f, [{qualified_symbol, _, [a], f},
+                                                   {qualified_symbol, _, [b], f}]},
+                               [{value, _, atom, b}]}}}, Defs)].

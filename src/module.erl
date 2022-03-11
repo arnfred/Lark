@@ -37,18 +37,21 @@ root_module(FileName, Statements) ->
     ModuleImports = utils:unique([{import, Ctx, Path} || {module, Ctx, Path, ModStatements} <- Statements,
                                                          {exports, _, Exports} <- ModStatements,
                                                          length(Exports) > 0]),
-    RootName =lark_name([P || {symbol, _, _, P} <- RootPath]),
+    RootName = lark_name([P || {symbol, _, _, P} <- RootPath]),
     Ctx = #{filename => FileName, line => 0, module => RootName},
     {module, Ctx, RootPath, Statements ++ ModuleImports}.
 
 parse_module({module, Ctx, Path, Statements}, RootStatements) ->
-    ModulePath = [S || {symbol, _, _, S} <- Path],
+    ModulePath = path(Path),
+    LocalModules = maps:from_list([{path(M), true} || {module, _, _, _} = M <- RootStatements]),
     Exports = lists:append([Exs || {exports, _, Exs} <- Statements]),
-    RootImports = [I || I = {import, _, _} <- RootStatements],
-    ModuleImports = [I || I = {import, _, _} <- Statements],
-    Imports = [I || RawImport <- utils:unique(RootImports ++ ModuleImports),
-                            {import, _, P} = I <- [import(RawImport)],
-                            not(lists:prefix(ModulePath, P))],
+    RootImports = [I || {import, _, _} = RawImport <- RootStatements,
+                        {import, _, P} = I <- [import(RawImport)],
+                    not(maps:is_key(lists:droplast(P), LocalModules))],
+    ModuleImports = [I || {import, _, _} = RawImport <- Statements,
+                          I <- [import(RawImport)]],
+    Imports = [I || {import, _, P} = I <- utils:unique(RootImports ++ ModuleImports),
+                    not(lists:prefix(ModulePath, P))],
     DefMap = maps:from_list([{Name, D} || D = {Type, _, Name, _} <- Statements,
                                           Type == def orelse Type == macro]),
     
@@ -221,7 +224,12 @@ tag_symbols({module, _, Path, _, _, _} = Mod) ->
 tag_symbols_post(ModulePath, {symbol, _, _, _} = Term)  -> {ok, ast:tag(module, Term, ModulePath)};
 tag_symbols_post(_, _)                                  -> ok.
 
-path({module, _, Path, _, _, _}) -> Path.
+path({module, _, Path, _}) -> path(Path);
+path({module, _, Path, _, _, _}) -> path(Path);
+path([{symbol, _, _, S} | Path]) -> [S | path(Path)];
+path([P | Path]) -> [P | path(Path)];
+path([]) -> [].
+
 beam_name({module, _, _, _, _, _} = Mod) -> beam_name(path(Mod));
 beam_name(Path) ->
     PathString = [atom_to_list(A) || A <- lists:join('_', Path)],

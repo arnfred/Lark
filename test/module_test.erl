@@ -291,3 +291,30 @@ module_root_module_self_import_test_() ->
                    [?test(#{[m] := {module, _, _, [], _, _}}, Modules)]
            end).
 
+local_module_import_test_() ->
+    % Normally any imports in the root module also applies to local modules.
+    % However imports of other local modules should be excluded.
+    ?setup("test/file.lark",
+           "module a ()
+            module b ()
+            import a/_
+            import b/_",
+           fun({ok, Modules}) -> % checking that local module imports is empty
+                   [?test(#{[a] := {module, _, _, [], _, _}}, Modules),
+                    ?test(#{[b] := {module, _, _, [], _, _}}, Modules)]
+           end).
+
+non_root_local_module_import_test_() ->
+    ?setup("test/file.lark",
+           "module a ()
+            module b (import a/_)",
+           fun({ok, Modules}) -> % checking that local module imports is empty
+                   [?test(#{[b] := {module, _, _, [{import, _, [a, '_']}], _, _}}, Modules)]
+           end).
+
+module_dict_import_test_() ->
+    ?setup("test/file.lark",
+           "module a (import b/{t: q, s})",
+           fun({ok, Modules}) ->
+                   [?test(#{[a] := {module, _, _, [{import, _, [b,#{s := s,t := q}]}], _, _}}, Modules)]
+           end).

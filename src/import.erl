@@ -2,6 +2,7 @@
 -export([import/3, import/2, is_whitelisted/2]).
 
 -define(DEFAULT_SANDBOXED, false).
+-include_lib("eunit/include/eunit.hrl").
 
 import(Module, ModuleMap) -> import(Module, ModuleMap, #{}).
 import({module, _, ModulePath, Imports, _, _}, ModuleMap, Options) ->
@@ -26,11 +27,11 @@ import({module, _, ModulePath, Imports, _, _}, ModuleMap, Options) ->
 
 
 
-flatten({import, _, ImportPath} = I)        -> [{Alias, Path, I} || {Alias, Path} <- flatten(ImportPath, [[]])].
-flatten([D], Res) when is_map(D)           -> [{V, lists:reverse([K | R])} || R <- Res, {K, V} <- maps:to_list(D)];
-flatten([E], Res)                           -> [{E, lists:reverse([E | R])} || R <- Res];
-flatten([D | Rest], Res) when is_map(D)    -> flatten(Rest, [[Name | R] || R <- Res, Name <- maps:keys(D)]);
-flatten([E | Rest], Res)                    -> flatten(Rest, [[E | R] || R <- Res]).
+flatten({import, _, ImportPath} = I)    -> [{Alias, Path, I} || {Alias, Path} <- flatten(ImportPath, [[]])].
+flatten([D], Res) when is_map(D)        -> [{V, lists:reverse([K | R])} || R <- Res, {K, V} <- maps:to_list(D)];
+flatten([E], Res)                       -> [{E, lists:reverse([E | R])} || R <- Res];
+flatten([D | Rest], Res) when is_map(D) -> flatten(Rest, [[Name | R] || R <- Res, Name <- maps:keys(D)]);
+flatten([E | Rest], Res)                -> flatten(Rest, [[E | R] || R <- Res]).
 
 
 

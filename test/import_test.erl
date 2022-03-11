@@ -277,6 +277,29 @@ local_import_test_() ->
     [?test({ok, {#{'A' := [{keyword, _, [source, test, file, t], 'A'}]}, _}}, Actual),
      ?test({ok, {#{'B' := [{keyword, _, [source, test, file, t], 'B'}]}, _}}, Actual)].
 
+
+local_module_import_test_() ->
+    Code = "module a (export {f}; def f 'a' -> 'hello')
+            import a/_",
+    ModuleMap = module_map("test/file.lark", Code),
+    #{[source, test, file] := Mod} = ModuleMap,
+    Actual = import:import(Mod, ModuleMap),
+    [?test({ok, {#{'f' := [{qualified_symbol, _, [a], f}]},
+                [{dependency, _, [source, test, file], [a]}]}}, Actual)].
+
+overloaded_local_module_import_test_() ->
+    Code = "module a (export {f}; def f 'a' -> 'hello')
+            module b (export {f}; def f 'b' -> 'world')
+            import a/_
+            import b/_",
+    ModuleMap = module_map("test/file.lark", Code),
+    #{[source, test, file] := Mod} = ModuleMap,
+    Actual = import:import(Mod, ModuleMap),
+    [?test({ok, {#{'f' := [{qualified_symbol, _, [a], f},
+                           {qualified_symbol, _, [b], f}]},
+                 [{dependency, _, [source, test, file], [a]},
+                  {dependency, _, [source, test, file], [b]}]}}, Actual)].
+
 empty_module_import_test_() ->
     Code = "module test (def boolean -> True | False)",
     ModuleMap = module_map("test/file.lark", Code),
