@@ -144,15 +144,18 @@ expand_macros(Modules) ->
 % - `qualified_application`: Application of function exported from different lark module
 % - `beam_application`: Application of function exported from non-lark module
 normalize_applications(Module) ->
-    Pre = fun(_, _, {application, Ctx, {qualified_symbol, _, ModulePath, Name}, Args}) ->
-                  {ok, {qualified_application, Ctx, ModulePath, Name, Args}};
-             (_, _, {application, Ctx, {beam_symbol, _, ModulePath, Name}, Args}) ->
-                  {ok, {beam_application, Ctx, ModulePath, Name, Args}};
+    TermFun = fun({qualified_symbol, _, ModulePath, Name}, Ctx, Args) ->
+                      {qualified_application, Ctx, ModulePath, Name, Args};
+                 ({beam_symbol, _, ModulePath, Name}, Ctx, Args) ->
+                      {beam_application, Ctx, ModulePath, Name, Args};
+                 (Term, Ctx, Args) ->
+                      {application, Ctx, Term, Args}
+              end,
+    Pre = fun(_, _, {application, Ctx, Term, Args}) -> {ok, TermFun(Term, Ctx, Args)};
              (_, _, _) -> ok end,
     Post = fun(_, _, _) -> ok end,
     {ok, {_, Normalized}} = ast:traverse(Pre, Post, Module),
     Normalized.
-
 
 
 % Adapted from http://rosettacode.org/wiki/Topological_sort#Erlang

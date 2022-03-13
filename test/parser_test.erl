@@ -107,58 +107,6 @@ wildcard_beam_def_test_() ->
     "def blap a -> a.reverse",
     ?test({ok, _}, parser:parse([{text, Module}])).
 
-import_conflict_test_() ->
-    Module1 = 
-    "module blup (export {identity}
-                  def identity a -> a)",
-    Module2 = 
-    "module blip (export {identity}
-                  def identity a -> a)",
-    Module3 =
-    "import blup/identity\n"
-    "import blip/_\n"
-    "def blap a -> a.identity",
-    ?testError({duplicate_import, 'identity', 'source/test_code_3', 'blip/identity', 'blup/identity'},
-               parser:parse([{text, test_code_2, Module2}, {text, test_code_1, Module1}, {text, test_code_3, Module3}])).
-
-import_already_defined_test_() ->
-    Module1 = 
-    "module blip (export {identity}
-                  def identity a -> a)",
-    Module2 =
-    "import blip/identity\n"
-    "def identity a -> a",
-    ?testError({import_conflicts_with_local_def, 'identity', 'source/test_code_2', 'blip/identity'},
-               parser:parse([{text, test_code_2, Module2}, {text, test_code_1, Module1}])).
-
-wildcard_import_type_already_defined_test_() ->
-    Module1 = 
-    "module blip (export {t}
-                  def t -> A | B)",
-    Module2 =
-    "import blip/_\n"
-    "def t -> Q | R",
-    ?testError({import_conflicts_with_local_def, 't', 'source/test_code_2', 'blip/t'},
-               parser:parse([{text, test_code_2, Module2}, {text, test_code_1, Module1}])).
-
-import_alias_already_defined_test_() ->
-    Module1 = 
-    "module blip (export {identity}
-                  def identity a -> a)",
-    Module2 =
-    "import blip/{identity: id}\n"
-    "def id a -> a",
-    ?testError({import_conflicts_with_local_def, 'id', 'source/test_code_2', 'blip/identity'},
-               parser:parse([{text, test_code_2, Module2}, {text, test_code_1, Module1}])).
-
-multiple_beam_import_test_() ->
-    Module =
-    "import beam/maps/_
-     import beam/lists/_
-     def blap a -> a.reverse.from_list",
-    ?testError({duplicate_import, merge, 'source/test_code', 'lists/merge','maps/merge' },
-               parser:parse([{text, test_code, Module}], #{include_lark_libraries => false})).
-
 qualified_beam_import_test_() ->
     Module =
     "import beam/lists/_
